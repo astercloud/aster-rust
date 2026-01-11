@@ -83,7 +83,7 @@ impl GeminiCliProvider {
 
         full_prompt.push_str("Assistant: ");
 
-        if std::env::var("GOOSE_GEMINI_CLI_DEBUG").is_ok() {
+        if std::env::var("ASTER_GEMINI_CLI_DEBUG").is_ok() {
             println!("=== GEMINI CLI PROVIDER DEBUG ===");
             println!("Command: {:?}", self.command);
             println!("Full prompt: {}", full_prompt);
@@ -213,7 +213,7 @@ impl GeminiCliProvider {
             })
             .unwrap_or_else(|| "Simple task".to_string());
 
-        if std::env::var("GOOSE_GEMINI_CLI_DEBUG").is_ok() {
+        if std::env::var("ASTER_GEMINI_CLI_DEBUG").is_ok() {
             println!("=== GEMINI CLI PROVIDER DEBUG ===");
             println!("Generated simple session description: {}", description);
             println!("Skipped subprocess call for session description");

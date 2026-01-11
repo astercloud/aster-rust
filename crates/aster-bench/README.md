@@ -1,6 +1,6 @@
-# goose Benchmarking Framework
+# aster Benchmarking Framework
 
-The `goose-bench` crate provides a framework for benchmarking and evaluating LLM models with the goose framework. This tool helps quantify model performance across various tasks and generate structured reports.
+The `aster-bench` crate provides a framework for benchmarking and evaluating LLM models with the aster framework. This tool helps quantify model performance across various tasks and generate structured reports.
 
 ## Features
 
@@ -100,7 +100,7 @@ Benchmark configuration is provided through a JSON file. Here's a sample configu
   "output_dir": "/path/to/output/directory",
   "eval_result_filename": "eval-results.json",
   "run_summary_filename": "run-results-summary.json",
-  "env_file": "/path/to/.goosebench.env"
+  "env_file": "/path/to/.asterbench.env"
 }
 ```
 
@@ -133,7 +133,7 @@ Benchmark configuration is provided through a JSON file. Here's a sample configu
 
 ## Environment Variables
 
-You can provide environment variables through the `env_file` configuration option. This is useful for provider API keys and other sensitive information. Example `.goosebench.env` file:
+You can provide environment variables through the `env_file` configuration option. This is useful for provider API keys and other sensitive information. Example `.asterbench.env` file:
 
 ```bash
 OPENAI_API_KEY=your_openai_api_key_here
@@ -191,7 +191,7 @@ Each model gets its own directory, containing run results and aggregated CSV fil
 
 ## Error Handling and Troubleshooting
 
-**Important**: The current version of goose-bench does not have robust error handling for common issues that can occur during evaluation runs, such as:
+**Important**: The current version of aster-bench does not have robust error handling for common issues that can occur during evaluation runs, such as:
 
 - Rate limiting from inference providers
 - Network timeouts or connection errors

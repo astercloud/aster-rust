@@ -1,4 +1,4 @@
-use super::completion::GooseCompleter;
+use super::completion::AsterCompleter;
 use anyhow::Result;
 use rustyline::Editor;
 use shlex;
@@ -55,7 +55,7 @@ impl rustyline::ConditionalEventHandler for CtrlCHandler {
 }
 
 pub fn get_input(
-    editor: &mut Editor<GooseCompleter, rustyline::history::DefaultHistory>,
+    editor: &mut Editor<AsterCompleter, rustyline::history::DefaultHistory>,
 ) -> Result<InputResult> {
     // Ensure Ctrl-J binding is set for newlines
     editor.bind_sequence(
@@ -280,17 +280,17 @@ fn parse_plan_command(input: String) -> Option<InputResult> {
 }
 
 /// Generates the input prompt string for the CLI interface.
-/// Returns a styled prompt with the goose face "( O)>" followed by a space.
+/// Returns a styled prompt with the aster face "( O)>" followed by a space.
 /// On Windows, returns plain text without ANSI styling for better compatibility.
 /// On other platforms, applies styling using ANSI escape codes.
 fn get_input_prompt_string() -> String {
-    let goose = "( O)>";
+    let aster = "( O)>";
     if cfg!(target_os = "windows") {
         // Use plain text on Windows to avoid ANSI compatibility issues
-        format!("{goose} ")
+        format!("{aster} ")
     } else {
         // On other platforms, use styled prompt with ANSI colors
-        format!("{} ", console::style(goose).cyan().bold())
+        format!("{} ", console::style(aster).cyan().bold())
     }
 }
 
@@ -304,13 +304,13 @@ fn print_help() {
 /builtin <names> - Add builtin extensions by name (comma-separated)
 /prompts [--extension <name>] - List all available prompts, optionally filtered by extension
 /prompt <n> [--info] [key=value...] - Get prompt info or execute a prompt
-/mode <name> - Set the goose mode to use ('auto', 'approve', 'chat', 'smart_approve')
+/mode <name> - Set the aster mode to use ('auto', 'approve', 'chat', 'smart_approve')
 /plan <message_text> -  Enters 'plan' mode with optional message. Create a plan based on the current messages and asks user if they want to act on it.
-                        If user acts on the plan, goose mode is set to 'auto' and returns to 'normal' goose mode.
-                        To warm up goose before using '/plan', we recommend setting '/mode approve' & putting appropriate context into goose.
-                        The model is used based on $GOOSE_PLANNER_PROVIDER and $GOOSE_PLANNER_MODEL environment variables.
+                        If user acts on the plan, aster mode is set to 'auto' and returns to 'normal' aster mode.
+                        To warm up aster before using '/plan', we recommend setting '/mode approve' & putting appropriate context into aster.
+                        The model is used based on $ASTER_PLANNER_PROVIDER and $ASTER_PLANNER_MODEL environment variables.
                         If no model is set, the default model is used.
-/endplan - Exit plan mode and return to 'normal' goose mode.
+/endplan - Exit plan mode and return to 'normal' aster mode.
 /recipe [filepath] - Generate a recipe from the current conversation and save it to the specified filepath (must end with .yaml).
                        If no filepath is provided, it will be saved to ./recipe.yaml.
 /compact - Compact the current conversation to reduce context length while preserving key information.
@@ -556,7 +556,7 @@ mod tests {
         // Prompt should always end with a space
         assert!(prompt.ends_with(" "));
 
-        // Prompt should contain the goose face
+        // Prompt should contain the aster face
         assert!(prompt.contains("( O)>"));
 
         // On Windows, prompt should be plain text without ANSI codes

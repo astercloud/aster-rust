@@ -179,8 +179,8 @@ impl Provider for OllamaProvider {
         tools: &[Tool],
     ) -> Result<(Message, ProviderUsage), ProviderError> {
         let config = crate::config::Config::global();
-        let goose_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
-        let filtered_tools = if goose_mode == AsterMode::Chat {
+        let aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
+        let filtered_tools = if aster_mode == AsterMode::Chat {
             &[]
         } else {
             tools
@@ -248,8 +248,8 @@ impl Provider for OllamaProvider {
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
         let config = crate::config::Config::global();
-        let goose_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
-        let filtered_tools = if goose_mode == AsterMode::Chat {
+        let aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
+        let filtered_tools = if aster_mode == AsterMode::Chat {
             &[]
         } else {
             tools

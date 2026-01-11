@@ -1,4 +1,8 @@
 use anyhow::Result;
+use aster::agents::{Agent, AgentEvent};
+use aster::conversation::message::Message as AsterMessage;
+use aster::session::session_manager::SessionType;
+use aster::session::SessionManager;
 use axum::response::Redirect;
 use axum::{
     extract::{
@@ -13,10 +17,6 @@ use axum::{
 };
 use base64::Engine;
 use futures::{sink::SinkExt, stream::StreamExt};
-use aster::agents::{Agent, AgentEvent};
-use aster::conversation::message::Message as GooseMessage;
-use aster::session::session_manager::SessionType;
-use aster::session::SessionManager;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{net::SocketAddr, sync::Arc};
@@ -120,7 +120,7 @@ async fn auth_middleware(
     *response.status_mut() = StatusCode::UNAUTHORIZED;
     response.headers_mut().insert(
         "WWW-Authenticate",
-        "Basic realm=\"Goose Web Interface\"".parse().unwrap(),
+        "Basic realm=\"Aster Web Interface\"".parse().unwrap(),
     );
     Ok(response)
 }
@@ -218,7 +218,7 @@ pub async fn handle_web(
 
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
 
-    println!("\n🪿 Starting goose web server");
+    println!("\n🪿 Starting aster web server");
     println!("   Provider: {} | Model: {}", provider_name, model);
     println!(
         "   Working directory: {}",
@@ -266,7 +266,7 @@ async fn serve_session(
     let html_with_session = html.replace(
         "<script src=\"/static/script.js\"></script>",
         &format!(
-            "<script>window.GOOSE_SESSION_NAME = '{}'; window.GOOSE_WS_TOKEN = '{}';</script>\n    <script src=\"/static/script.js\"></script>",
+            "<script>window.ASTER_SESSION_NAME = '{}'; window.ASTER_WS_TOKEN = '{}';</script>\n    <script src=\"/static/script.js\"></script>",
             session_name,
             state.ws_token
         )
@@ -288,12 +288,12 @@ async fn serve_static(axum::extract::Path(path): axum::extract::Path<String>) ->
             .into_response(),
         "img/logo_dark.png" => (
             [("content-type", "image/png")],
-            include_bytes!("../../../../documentation/static/img/logo_dark.png").to_vec(),
+            include_bytes!("../../static/img/logo_dark.png").to_vec(),
         )
             .into_response(),
         "img/logo_light.png" => (
             [("content-type", "image/png")],
-            include_bytes!("../../../../documentation/static/img/logo_light.png").to_vec(),
+            include_bytes!("../../static/img/logo_light.png").to_vec(),
         )
             .into_response(),
         _ => (http::StatusCode::NOT_FOUND, "Not found").into_response(),
@@ -481,11 +481,11 @@ async fn process_message_streaming(
     content: String,
     sender: Arc<Mutex<futures::stream::SplitSink<WebSocket, Message>>>,
 ) -> Result<()> {
-    use futures::StreamExt;
     use aster::agents::SessionConfig;
     use aster::conversation::message::MessageContent;
+    use futures::StreamExt;
 
-    let user_message = GooseMessage::user().with_text(content.clone());
+    let user_message = AsterMessage::user().with_text(content.clone());
 
     let provider = agent.provider().await;
     if provider.is_err() {

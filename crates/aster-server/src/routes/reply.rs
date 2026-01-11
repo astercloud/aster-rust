@@ -1,4 +1,8 @@
 use crate::state::AppState;
+use aster::agents::{AgentEvent, SessionConfig};
+use aster::conversation::message::{Message, MessageContent, TokenState};
+use aster::conversation::Conversation;
+use aster::session::SessionManager;
 use axum::{
     extract::{DefaultBodyLimit, State},
     http::{self, StatusCode},
@@ -8,10 +12,6 @@ use axum::{
 };
 use bytes::Bytes;
 use futures::{stream::StreamExt, Stream};
-use aster::agents::{AgentEvent, SessionConfig};
-use aster::conversation::message::{Message, MessageContent, TokenState};
-use aster::conversation::Conversation;
-use aster::session::SessionManager;
 use rmcp::model::ServerNotification;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -463,8 +463,8 @@ mod tests {
 
     mod integration_tests {
         use super::*;
-        use axum::{body::Body, http::Request};
         use aster::conversation::message::Message;
+        use axum::{body::Body, http::Request};
         use tower::ServiceExt;
 
         #[tokio::test(flavor = "multi_thread")]

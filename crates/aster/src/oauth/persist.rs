@@ -2,17 +2,17 @@ use rmcp::transport::auth::{AuthError, CredentialStore, StoredCredentials};
 
 use crate::config::Config;
 
-/// Goose-specific credential store that uses the Config system
+/// Aster-specific credential store that uses the Config system
 ///
-/// This implementation stores OAuth credentials in the goose configuration
+/// This implementation stores OAuth credentials in the aster configuration
 /// system, which handles secure storage (e.g., keychain integration).
 
 #[derive(Clone)]
-pub struct GooseCredentialStore {
+pub struct AsterCredentialStore {
     name: String,
 }
 
-impl GooseCredentialStore {
+impl AsterCredentialStore {
     pub fn new(name: String) -> Self {
         Self { name }
     }
@@ -23,7 +23,7 @@ impl GooseCredentialStore {
 }
 
 #[async_trait::async_trait]
-impl CredentialStore for GooseCredentialStore {
+impl CredentialStore for AsterCredentialStore {
     async fn load(&self) -> Result<Option<StoredCredentials>, AuthError> {
         let config = Config::global();
         let key = self.secret_key();

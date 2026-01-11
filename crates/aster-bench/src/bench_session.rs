@@ -1,6 +1,6 @@
+use aster::conversation::Conversation;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use aster::conversation::Conversation;
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

@@ -1,6 +1,6 @@
 use anyhow::Result;
-use console::style;
 use aster::recipe::validate_recipe::validate_recipe_template_from_file;
+use console::style;
 use std::collections::HashMap;
 
 use crate::recipes::github_recipe::RecipeSource;
@@ -69,7 +69,7 @@ where
             Ok(_) => {
                 writeln!(
                     out,
-                    "{} Opened recipe '{}' in Goose Desktop",
+                    "{} Opened recipe '{}' in Aster Desktop",
                     style("✓").green().bold(),
                     recipe.title
                 )?;
@@ -78,12 +78,12 @@ where
             Err(err) => {
                 writeln!(
                     out,
-                    "{} Failed to open recipe in Goose Desktop: {}",
+                    "{} Failed to open recipe in Aster Desktop: {}",
                     style("✗").red().bold(),
                     err
                 )?;
                 writeln!(out, "Generated deeplink: {}", deeplink_url)?;
-                writeln!(out, "You can manually copy and open the URL above, or ensure Goose Desktop is installed.")?;
+                writeln!(out, "You can manually copy and open the URL above, or ensure Aster Desktop is installed.")?;
                 Err(anyhow::anyhow!("Failed to open recipe: {}", err))
             }
         },
@@ -174,7 +174,7 @@ fn generate_deeplink(
     let recipe = validate_recipe_template_from_file(&recipe_file)?;
     match recipe_deeplink::encode(&recipe) {
         Ok(encoded) => {
-            let mut full_url = format!("goose://recipe?config={}", encoded);
+            let mut full_url = format!("aster://recipe?config={}", encoded);
 
             // Append parameters as additional query parameters
             for (key, value) in params {
@@ -237,8 +237,8 @@ instructions: "Test instructions"
         let result = handle_deeplink(&recipe_path, &[]);
         assert!(result.is_ok());
         let url = result.unwrap();
-        assert!(url.starts_with("goose://recipe?config="));
-        let encoded_part = url.strip_prefix("goose://recipe?config=").unwrap();
+        assert!(url.starts_with("aster://recipe?config="));
+        let encoded_part = url.strip_prefix("aster://recipe?config=").unwrap();
         assert!(!encoded_part.is_empty());
     }
 
@@ -252,7 +252,7 @@ instructions: "Test instructions"
         let result = handle_deeplink(&recipe_path, &params);
         assert!(result.is_ok());
         let url = result.unwrap();
-        assert!(url.starts_with("goose://recipe?config="));
+        assert!(url.starts_with("aster://recipe?config="));
         assert!(url.contains("&name=John"));
         assert!(url.contains("&age=30"));
     }
@@ -327,7 +327,7 @@ instructions: "Test instructions"
         let (result, _, output) = run_handle_open(&recipe_path, &[], Err(opener_err));
 
         assert!(result.is_err());
-        assert!(output.contains("Failed to open recipe in Goose Desktop"));
+        assert!(output.contains("Failed to open recipe in Aster Desktop"));
         assert!(output.contains("desktop not found"));
         assert!(output.contains(&expected_url));
     }
@@ -372,10 +372,10 @@ instructions: "Test instructions"
         let result = generate_deeplink(&recipe_path, HashMap::new());
         assert!(result.is_ok());
         let (url, recipe) = result.unwrap();
-        assert!(url.starts_with("goose://recipe?config="));
+        assert!(url.starts_with("aster://recipe?config="));
         assert_eq!(recipe.title, "Test Recipe with Valid JSON Schema");
         assert_eq!(recipe.description, "A test recipe with valid JSON schema");
-        let encoded_part = url.strip_prefix("goose://recipe?config=").unwrap();
+        let encoded_part = url.strip_prefix("aster://recipe?config=").unwrap();
         assert!(!encoded_part.is_empty());
     }
 
@@ -392,7 +392,7 @@ instructions: "Test instructions"
         let result = generate_deeplink(&recipe_path, params);
         assert!(result.is_ok());
         let (url, recipe) = result.unwrap();
-        assert!(url.starts_with("goose://recipe?config="));
+        assert!(url.starts_with("aster://recipe?config="));
         assert!(url.contains("&name=Alice"));
         assert!(url.contains("&role=developer"));
         assert_eq!(recipe.title, "Test Recipe with Valid JSON Schema");

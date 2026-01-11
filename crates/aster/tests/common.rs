@@ -37,7 +37,7 @@ pub fn build_binary(package: &str, bin_name: &str) -> PathBuf {
 }
 
 #[allow(dead_code)]
-pub static GOOSE_BINARY: LazyLock<PathBuf> = LazyLock::new(|| build_binary("aster-cli", "aster"));
+pub static ASTER_BINARY: LazyLock<PathBuf> = LazyLock::new(|| build_binary("aster-cli", "aster"));
 #[allow(dead_code)]
 pub static CAPTURE_BINARY: LazyLock<PathBuf> =
     LazyLock::new(|| build_binary("aster-test", "capture"));

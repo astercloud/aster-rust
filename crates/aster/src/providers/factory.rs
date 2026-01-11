@@ -128,7 +128,7 @@ async fn get_from_registry(name: &str) -> Result<ProviderEntry> {
 pub async fn create(name: &str, model: ModelConfig) -> Result<Arc<dyn Provider>> {
     let config = crate::config::Config::global();
 
-    if let Ok(lead_model_name) = config.get_param::<String>("GOOSE_LEAD_MODEL") {
+    if let Ok(lead_model_name) = config.get_param::<String>("ASTER_LEAD_MODEL") {
         tracing::info!("Creating lead/worker provider from environment variables");
         return create_lead_worker_from_env(name, &model, &lead_model_name).await;
     }
@@ -160,22 +160,22 @@ async fn create_lead_worker_from_env(
     let config = crate::config::Config::global();
 
     let lead_provider_name = config
-        .get_param::<String>("GOOSE_LEAD_PROVIDER")
+        .get_param::<String>("ASTER_LEAD_PROVIDER")
         .unwrap_or_else(|_| default_provider_name.to_string());
 
     let lead_turns = config
-        .get_param::<usize>("GOOSE_LEAD_TURNS")
+        .get_param::<usize>("ASTER_LEAD_TURNS")
         .unwrap_or(DEFAULT_LEAD_TURNS);
     let failure_threshold = config
-        .get_param::<usize>("GOOSE_LEAD_FAILURE_THRESHOLD")
+        .get_param::<usize>("ASTER_LEAD_FAILURE_THRESHOLD")
         .unwrap_or(DEFAULT_FAILURE_THRESHOLD);
     let fallback_turns = config
-        .get_param::<usize>("GOOSE_LEAD_FALLBACK_TURNS")
+        .get_param::<usize>("ASTER_LEAD_FALLBACK_TURNS")
         .unwrap_or(DEFAULT_FALLBACK_TURNS);
 
     let lead_model_config = ModelConfig::new_with_context_env(
         lead_model_name.to_string(),
-        Some("GOOSE_LEAD_CONTEXT_LIMIT"),
+        Some("ASTER_LEAD_CONTEXT_LIMIT"),
     )?;
 
     let worker_model_config = create_worker_model_config(default_model)?;
@@ -224,9 +224,9 @@ fn create_worker_model_config(default_model: &ModelConfig) -> Result<ModelConfig
 
     let global_config = crate::config::Config::global();
 
-    if let Ok(limit) = global_config.get_param::<usize>("GOOSE_WORKER_CONTEXT_LIMIT") {
+    if let Ok(limit) = global_config.get_param::<usize>("ASTER_WORKER_CONTEXT_LIMIT") {
         worker_config = worker_config.with_context_limit(Some(limit));
-    } else if let Ok(limit) = global_config.get_param::<usize>("GOOSE_CONTEXT_LIMIT") {
+    } else if let Ok(limit) = global_config.get_param::<usize>("ASTER_CONTEXT_LIMIT") {
         worker_config = worker_config.with_context_limit(Some(limit));
     }
 
@@ -249,11 +249,11 @@ mod tests {
         expected_fallback: usize,
     ) {
         let _guard = env_lock::lock_env([
-            ("GOOSE_LEAD_MODEL", Some("gpt-4o")),
-            ("GOOSE_LEAD_PROVIDER", None),
-            ("GOOSE_LEAD_TURNS", lead_turns),
-            ("GOOSE_LEAD_FAILURE_THRESHOLD", failure_threshold),
-            ("GOOSE_LEAD_FALLBACK_TURNS", fallback_turns),
+            ("ASTER_LEAD_MODEL", Some("gpt-4o")),
+            ("ASTER_LEAD_PROVIDER", None),
+            ("ASTER_LEAD_TURNS", lead_turns),
+            ("ASTER_LEAD_FAILURE_THRESHOLD", failure_threshold),
+            ("ASTER_LEAD_FALLBACK_TURNS", fallback_turns),
             ("OPENAI_API_KEY", Some("fake-openai-no-keyring")),
         ]);
 
@@ -273,11 +273,11 @@ mod tests {
     #[tokio::test]
     async fn test_create_regular_provider_without_lead_config() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_LEAD_MODEL", None),
-            ("GOOSE_LEAD_PROVIDER", None),
-            ("GOOSE_LEAD_TURNS", None),
-            ("GOOSE_LEAD_FAILURE_THRESHOLD", None),
-            ("GOOSE_LEAD_FALLBACK_TURNS", None),
+            ("ASTER_LEAD_MODEL", None),
+            ("ASTER_LEAD_PROVIDER", None),
+            ("ASTER_LEAD_TURNS", None),
+            ("ASTER_LEAD_FAILURE_THRESHOLD", None),
+            ("ASTER_LEAD_FALLBACK_TURNS", None),
             ("OPENAI_API_KEY", Some("fake-openai-no-keyring")),
         ]);
 
@@ -297,8 +297,8 @@ mod tests {
         expected_limit: usize,
     ) {
         let _guard = env_lock::lock_env([
-            ("GOOSE_WORKER_CONTEXT_LIMIT", worker_limit),
-            ("GOOSE_CONTEXT_LIMIT", global_limit),
+            ("ASTER_WORKER_CONTEXT_LIMIT", worker_limit),
+            ("ASTER_CONTEXT_LIMIT", global_limit),
         ]);
 
         let default_model =

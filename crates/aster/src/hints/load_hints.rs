@@ -7,7 +7,7 @@ use std::{
 use crate::config::paths::Paths;
 use crate::hints::import_files::read_referenced_files;
 
-pub const GOOSE_HINTS_FILENAME: &str = ".asterhints";
+pub const ASTER_HINTS_FILENAME: &str = ".asterhints";
 pub const AGENTS_MD_FILENAME: &str = "AGENTS.md";
 
 fn find_git_root(start_dir: &Path) -> Option<&Path> {
@@ -102,7 +102,7 @@ pub fn load_hint_files(
 
     let mut hints = String::new();
     if !global_hints_contents.is_empty() {
-        hints.push_str("\n### Global Hints\nThese are my global goose hints.\n");
+        hints.push_str("\n### Global Hints\nThese are my global aster hints.\n");
         hints.push_str(&global_hints_contents.join("\n"));
     }
 
@@ -133,28 +133,28 @@ mod tests {
     }
 
     #[test]
-    fn test_goosehints_when_present() {
+    fn test_asterhints_when_present() {
         let dir = TempDir::new().unwrap();
 
-        fs::write(dir.path().join(GOOSE_HINTS_FILENAME), "Test hint content").unwrap();
+        fs::write(dir.path().join(ASTER_HINTS_FILENAME), "Test hint content").unwrap();
         let gitignore = create_dummy_gitignore();
-        let hints = load_hint_files(dir.path(), &[GOOSE_HINTS_FILENAME.to_string()], &gitignore);
+        let hints = load_hint_files(dir.path(), &[ASTER_HINTS_FILENAME.to_string()], &gitignore);
 
         assert!(hints.contains("Test hint content"));
     }
 
     #[test]
-    fn test_goosehints_when_missing() {
+    fn test_asterhints_when_missing() {
         let dir = TempDir::new().unwrap();
 
         let gitignore = create_dummy_gitignore();
-        let hints = load_hint_files(dir.path(), &[GOOSE_HINTS_FILENAME.to_string()], &gitignore);
+        let hints = load_hint_files(dir.path(), &[ASTER_HINTS_FILENAME.to_string()], &gitignore);
 
         assert!(!hints.contains("Project Hints"));
     }
 
     #[test]
-    fn test_goosehints_multiple_filenames() {
+    fn test_asterhints_multiple_filenames() {
         let dir = TempDir::new().unwrap();
 
         fs::write(
@@ -163,7 +163,7 @@ mod tests {
         )
         .unwrap();
         fs::write(
-            dir.path().join(GOOSE_HINTS_FILENAME),
+            dir.path().join(ASTER_HINTS_FILENAME),
             "Custom hints file content from .asterhints",
         )
         .unwrap();
@@ -171,7 +171,7 @@ mod tests {
         let gitignore = create_dummy_gitignore();
         let hints = load_hint_files(
             dir.path(),
-            &["CLAUDE.md".to_string(), GOOSE_HINTS_FILENAME.to_string()],
+            &["CLAUDE.md".to_string(), ASTER_HINTS_FILENAME.to_string()],
             &gitignore,
         );
 
@@ -180,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn test_goosehints_configurable_filename() {
+    fn test_asterhints_configurable_filename() {
         let dir = TempDir::new().unwrap();
 
         fs::write(dir.path().join("CLAUDE.md"), "Custom hints file content").unwrap();
@@ -192,24 +192,24 @@ mod tests {
     }
 
     #[test]
-    fn test_nested_goosehints_with_git_root() {
+    fn test_nested_asterhints_with_git_root() {
         let temp_dir = TempDir::new().unwrap();
         let project_root = temp_dir.path();
 
         fs::create_dir(project_root.join(".git")).unwrap();
         fs::write(
-            project_root.join(GOOSE_HINTS_FILENAME),
+            project_root.join(ASTER_HINTS_FILENAME),
             "Root hints content",
         )
         .unwrap();
 
         let subdir = project_root.join("subdir");
         fs::create_dir(&subdir).unwrap();
-        fs::write(subdir.join(GOOSE_HINTS_FILENAME), "Subdir hints content").unwrap();
+        fs::write(subdir.join(ASTER_HINTS_FILENAME), "Subdir hints content").unwrap();
         let current_dir = subdir.join("current_dir");
         fs::create_dir(&current_dir).unwrap();
         fs::write(
-            current_dir.join(GOOSE_HINTS_FILENAME),
+            current_dir.join(ASTER_HINTS_FILENAME),
             "current_dir hints content",
         )
         .unwrap();
@@ -217,7 +217,7 @@ mod tests {
         let gitignore = create_dummy_gitignore();
         let hints = load_hint_files(
             &current_dir,
-            &[GOOSE_HINTS_FILENAME.to_string()],
+            &[ASTER_HINTS_FILENAME.to_string()],
             &gitignore,
         );
 
@@ -227,20 +227,20 @@ mod tests {
     }
 
     #[test]
-    fn test_nested_goosehints_without_git_root() {
+    fn test_nested_asterhints_without_git_root() {
         let temp_dir = TempDir::new().unwrap();
         let base_dir = temp_dir.path();
 
-        fs::write(base_dir.join(GOOSE_HINTS_FILENAME), "Base hints content").unwrap();
+        fs::write(base_dir.join(ASTER_HINTS_FILENAME), "Base hints content").unwrap();
 
         let subdir = base_dir.join("subdir");
         fs::create_dir(&subdir).unwrap();
-        fs::write(subdir.join(GOOSE_HINTS_FILENAME), "Subdir hints content").unwrap();
+        fs::write(subdir.join(ASTER_HINTS_FILENAME), "Subdir hints content").unwrap();
 
         let current_dir = subdir.join("current_dir");
         fs::create_dir(&current_dir).unwrap();
         fs::write(
-            current_dir.join(GOOSE_HINTS_FILENAME),
+            current_dir.join(ASTER_HINTS_FILENAME),
             "Current dir hints content",
         )
         .unwrap();
@@ -248,7 +248,7 @@ mod tests {
         let gitignore = create_dummy_gitignore();
         let hints = load_hint_files(
             &current_dir,
-            &[GOOSE_HINTS_FILENAME.to_string()],
+            &[ASTER_HINTS_FILENAME.to_string()],
             &gitignore,
         );
 
@@ -259,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn test_nested_goosehints_mixed_filenames() {
+    fn test_nested_asterhints_mixed_filenames() {
         let temp_dir = TempDir::new().unwrap();
         let project_root = temp_dir.path();
 
@@ -269,7 +269,7 @@ mod tests {
         let subdir = project_root.join("subdir");
         fs::create_dir(&subdir).unwrap();
         fs::write(
-            subdir.join(GOOSE_HINTS_FILENAME),
+            subdir.join(ASTER_HINTS_FILENAME),
             "Subdir .asterhints content",
         )
         .unwrap();
@@ -280,7 +280,7 @@ mod tests {
         let gitignore = create_dummy_gitignore();
         let hints = load_hint_files(
             &current_dir,
-            &["CLAUDE.md".to_string(), GOOSE_HINTS_FILENAME.to_string()],
+            &["CLAUDE.md".to_string(), ASTER_HINTS_FILENAME.to_string()],
             &gitignore,
         );
 
@@ -302,12 +302,12 @@ mod tests {
 @README.md
 @config.md
 Additional instructions here."#;
-        fs::write(project_root.join(GOOSE_HINTS_FILENAME), hints_content).unwrap();
+        fs::write(project_root.join(ASTER_HINTS_FILENAME), hints_content).unwrap();
 
         let gitignore = create_dummy_gitignore();
         let hints = load_hint_files(
             project_root,
-            &[GOOSE_HINTS_FILENAME.to_string()],
+            &[ASTER_HINTS_FILENAME.to_string()],
             &gitignore,
         );
 
@@ -359,7 +359,7 @@ Additional instructions here."#;
         let root_hints_content = r#"Project root hints
 @docs/api.md
 Root level instructions"#;
-        fs::write(project_root.join(GOOSE_HINTS_FILENAME), root_hints_content).unwrap();
+        fs::write(project_root.join(ASTER_HINTS_FILENAME), root_hints_content).unwrap();
 
         let nested_hints_content = r#"Nested directory hints
 @local_file.md
@@ -369,7 +369,7 @@ Root level instructions"#;
 @../../../forbidden.md
 End of nested hints"#;
         fs::write(
-            components_dir.join(GOOSE_HINTS_FILENAME),
+            components_dir.join(ASTER_HINTS_FILENAME),
             nested_hints_content,
         )
         .unwrap();
@@ -377,7 +377,7 @@ End of nested hints"#;
         let gitignore = create_dummy_gitignore();
         let hints = load_hint_files(
             &components_dir,
-            &[GOOSE_HINTS_FILENAME.to_string()],
+            &[ASTER_HINTS_FILENAME.to_string()],
             &gitignore,
         );
         println!("======{}", hints);
@@ -426,12 +426,12 @@ End of nested hints"#;
 @local.md
 @../parent.md
 End of hints"#;
-        fs::write(current_dir.join(GOOSE_HINTS_FILENAME), hints_content).unwrap();
+        fs::write(current_dir.join(ASTER_HINTS_FILENAME), hints_content).unwrap();
 
         let gitignore = create_dummy_gitignore();
         let hints = load_hint_files(
             &current_dir,
-            &[GOOSE_HINTS_FILENAME.to_string()],
+            &[ASTER_HINTS_FILENAME.to_string()],
             &gitignore,
         );
 
@@ -455,10 +455,10 @@ End of hints"#;
 @local_file.md
 @../root_file.md
 End of hints"#;
-        fs::write(subdir.join(GOOSE_HINTS_FILENAME), hints_content).unwrap();
+        fs::write(subdir.join(ASTER_HINTS_FILENAME), hints_content).unwrap();
         let gitignore = create_dummy_gitignore();
 
-        let hints = load_hint_files(&subdir, &[GOOSE_HINTS_FILENAME.to_string()], &gitignore);
+        let hints = load_hint_files(&subdir, &[ASTER_HINTS_FILENAME.to_string()], &gitignore);
 
         assert!(hints.contains("Local file content"));
         assert!(hints.contains("--- Content from local_file.md ---"));

@@ -7,12 +7,12 @@ mod routes;
 mod state;
 mod tunnel;
 
-use clap::{Parser, Subcommand};
 use aster::config::paths::Paths;
 use aster_mcp::{
     mcp_server_runner::{serve, McpCommand},
     AutoVisualiserRouter, ComputerControllerServer, DeveloperServer, MemoryServer, TutorialServer,
 };
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

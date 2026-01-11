@@ -5,7 +5,7 @@ use rmcp::model::{
     Content, CreateElicitationRequestParam, CreateElicitationResult, ElicitationAction, ErrorCode,
     JsonObject,
 };
-/// MCP client implementation for Goose
+/// MCP client implementation for Aster
 use rmcp::{
     model::{
         CallToolRequest, CallToolRequestParam, CallToolResult, CancelledNotification,
@@ -86,24 +86,24 @@ pub trait McpClientTrait: Send + Sync {
     }
 }
 
-pub struct GooseClient {
+pub struct AsterClient {
     notification_handlers: Arc<Mutex<Vec<Sender<ServerNotification>>>>,
     provider: SharedProvider,
 }
 
-impl GooseClient {
+impl AsterClient {
     pub fn new(
         handlers: Arc<Mutex<Vec<Sender<ServerNotification>>>>,
         provider: SharedProvider,
     ) -> Self {
-        GooseClient {
+        AsterClient {
             notification_handlers: handlers,
             provider,
         }
     }
 }
 
-impl ClientHandler for GooseClient {
+impl ClientHandler for AsterClient {
     async fn on_progress(
         &self,
         params: rmcp::model::ProgressNotificationParam,
@@ -180,7 +180,7 @@ impl ClientHandler for GooseClient {
         let system_prompt = params
             .system_prompt
             .as_deref()
-            .unwrap_or("You are a general-purpose AI agent called goose");
+            .unwrap_or("You are a general-purpose AI agent called aster");
 
         let (response, usage) = provider
             .complete(system_prompt, &provider_ready_messages, &[])
@@ -200,7 +200,7 @@ impl ClientHandler for GooseClient {
                 role: Role::Assistant,
                 // TODO(alexhancock): MCP sampling currently only supports one content on each SamplingMessage
                 // https://modelcontextprotocol.io/specification/draft/client/sampling#messages
-                // This doesn't mesh well with goose's approach which has Vec<MessageContent>
+                // This doesn't mesh well with aster's approach which has Vec<MessageContent>
                 // There is a proposal to MCP which is agreed to go in the next version to have SamplingMessages support multiple content parts
                 // https://github.com/modelcontextprotocol/modelcontextprotocol/pull/198
                 // Until that is formalized, we can take the first message content from the provider and use it
@@ -212,7 +212,7 @@ impl ClientHandler for GooseClient {
                         crate::conversation::message::MessageContent::Image(img) => {
                             Content::image(&img.data, &img.mime_type)
                         }
-                        // TODO(alexhancock) - Content::Audio? goose's messages don't currently have it
+                        // TODO(alexhancock) - Content::Audio? aster's messages don't currently have it
                         _ => Content::text(""),
                     }
                 } else {
@@ -264,7 +264,7 @@ impl ClientHandler for GooseClient {
                 .build(),
             client_info: Implementation {
                 name: "aster".to_string(),
-                version: std::env::var("GOOSE_MCP_CLIENT_VERSION")
+                version: std::env::var("ASTER_MCP_CLIENT_VERSION")
                     .unwrap_or(env!("CARGO_PKG_VERSION").to_owned()),
                 icons: None,
                 title: None,
@@ -276,7 +276,7 @@ impl ClientHandler for GooseClient {
 
 /// The MCP client is the interface for MCP operations.
 pub struct McpClient {
-    client: Mutex<RunningService<RoleClient, GooseClient>>,
+    client: Mutex<RunningService<RoleClient, AsterClient>>,
     notification_subscribers: Arc<Mutex<Vec<mpsc::Sender<ServerNotification>>>>,
     server_info: Option<InitializeResult>,
     timeout: std::time::Duration,
@@ -295,8 +295,8 @@ impl McpClient {
         let notification_subscribers =
             Arc::new(Mutex::new(Vec::<mpsc::Sender<ServerNotification>>::new()));
 
-        let client = GooseClient::new(notification_subscribers.clone(), provider);
-        let client: rmcp::service::RunningService<rmcp::RoleClient, GooseClient> =
+        let client = AsterClient::new(notification_subscribers.clone(), provider);
+        let client: rmcp::service::RunningService<rmcp::RoleClient, AsterClient> =
             client.serve(transport).await?;
         let server_info = client.peer_info().cloned();
 
@@ -613,8 +613,8 @@ mod tests {
             let mut extensions = Extensions::new();
             extensions.insert(
                 from_value::<Meta>(json!({
-                    "GOOSE-SESSION-ID": "old-session-1",
-                    "Goose-Session-Id": "old-session-2",
+                    "ASTER-SESSION-ID": "old-session-1",
+                    "Aster-Session-Id": "old-session-2",
                     "other-key": "preserve-me"
                 }))
                 .unwrap(),

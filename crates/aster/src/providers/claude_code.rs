@@ -13,7 +13,7 @@ use super::errors::ProviderError;
 use super::utils::{filter_extensions_from_system_prompt, RequestLog};
 use crate::config::base::ClaudeCodeCommand;
 use crate::config::search_path::SearchPaths;
-use crate::config::{Config, AsterMode};
+use crate::config::{AsterMode, Config};
 use crate::conversation::message::{Message, MessageContent};
 use crate::model::ModelConfig;
 use crate::subprocess::configure_command_no_window;
@@ -44,7 +44,7 @@ impl ClaudeCodeProvider {
         })
     }
 
-    /// Convert goose messages to the format expected by claude CLI
+    /// Convert aster messages to the format expected by claude CLI
     fn messages_to_claude_format(&self, _system: &str, messages: &[Message]) -> Result<Value> {
         let mut claude_messages = Vec::new();
 
@@ -113,9 +113,9 @@ impl ClaudeCodeProvider {
     /// Parse the JSON response from claude CLI
     fn apply_permission_flags(cmd: &mut Command) -> Result<(), ProviderError> {
         let config = Config::global();
-        let goose_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
+        let aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
 
-        match goose_mode {
+        match aster_mode {
             AsterMode::Auto => {
                 cmd.arg("--dangerously-skip-permissions");
             }
@@ -252,7 +252,7 @@ impl ClaudeCodeProvider {
 
         let filtered_system = filter_extensions_from_system_prompt(system);
 
-        if std::env::var("GOOSE_CLAUDE_CODE_DEBUG").is_ok() {
+        if std::env::var("ASTER_CLAUDE_CODE_DEBUG").is_ok() {
             println!("=== CLAUDE CODE PROVIDER DEBUG ===");
             println!("Command: {:?}", self.command);
             println!("Original system prompt length: {} chars", system.len());
@@ -283,7 +283,7 @@ impl ClaudeCodeProvider {
 
         cmd.arg("--verbose").arg("--output-format").arg("json");
 
-        // Add permission mode based on GOOSE_MODE setting
+        // Add permission mode based on ASTER_MODE setting
         Self::apply_permission_flags(&mut cmd)?;
 
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -366,7 +366,7 @@ impl ClaudeCodeProvider {
             })
             .unwrap_or_else(|| "Simple task".to_string());
 
-        if std::env::var("GOOSE_CLAUDE_CODE_DEBUG").is_ok() {
+        if std::env::var("ASTER_CLAUDE_CODE_DEBUG").is_ok() {
             println!("=== CLAUDE CODE PROVIDER DEBUG ===");
             println!("Generated simple session description: {}", description);
             println!("Skipped subprocess call for session description");

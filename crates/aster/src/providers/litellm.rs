@@ -232,7 +232,7 @@ impl Provider for LiteLLMProvider {
 #[async_trait]
 impl EmbeddingCapable for LiteLLMProvider {
     async fn create_embeddings(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, anyhow::Error> {
-        let embedding_model = std::env::var("GOOSE_EMBEDDING_MODEL")
+        let embedding_model = std::env::var("ASTER_EMBEDDING_MODEL")
             .unwrap_or_else(|_| "text-embedding-3-small".to_string());
 
         let payload = json!({

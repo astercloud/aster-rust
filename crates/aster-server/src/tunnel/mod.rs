@@ -4,8 +4,8 @@ pub mod lapstone;
 mod lapstone_test;
 
 use crate::configuration::Settings;
-use fs2::FileExt as _;
 use aster::config::{paths::Paths, Config};
+use fs2::FileExt as _;
 use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -36,7 +36,7 @@ fn try_acquire_tunnel_lock() -> anyhow::Result<File> {
         .open(&lock_path)?;
 
     file.try_lock_exclusive()
-        .map_err(|_| anyhow::anyhow!("Another goose instance is already running the tunnel"))?;
+        .map_err(|_| anyhow::anyhow!("Another aster instance is already running the tunnel"))?;
 
     writeln!(file, "{}", std::process::id())?;
     file.sync_all()?;
@@ -132,7 +132,7 @@ impl TunnelManager {
         if auto_start && state == TunnelState::Idle {
             if is_tunnel_locked_by_another() {
                 tracing::info!(
-                    "Tunnel already running on another goose instance, skipping auto-start"
+                    "Tunnel already running on another aster instance, skipping auto-start"
                 );
                 return;
             }
@@ -150,7 +150,7 @@ impl TunnelManager {
     }
 
     fn is_tunnel_disabled() -> bool {
-        if let Ok(val) = std::env::var("GOOSE_TUNNEL") {
+        if let Ok(val) = std::env::var("ASTER_TUNNEL") {
             let val = val.to_lowercase();
             val == "no" || val == "none"
         } else {
@@ -215,7 +215,7 @@ impl TunnelManager {
         let server_port = get_server_port()?;
         let tunnel_secret = Self::get_secret().unwrap_or_else(generate_secret);
         let server_secret =
-            std::env::var("GOOSE_SERVER__SECRET_KEY").unwrap_or_else(|_| "test".to_string());
+            std::env::var("ASTER_SERVER__SECRET_KEY").unwrap_or_else(|_| "test".to_string());
         let agent_id = Self::get_agent_id().unwrap_or_else(generate_agent_id);
 
         Self::set_secret(&tunnel_secret)?;
@@ -242,7 +242,7 @@ impl TunnelManager {
 
     pub async fn start(&self) -> anyhow::Result<TunnelInfo> {
         if Self::is_tunnel_disabled() {
-            anyhow::bail!("Tunnel is disabled via GOOSE_TUNNEL environment variable");
+            anyhow::bail!("Tunnel is disabled via ASTER_TUNNEL environment variable");
         }
 
         let mut state = self.state.write().await;

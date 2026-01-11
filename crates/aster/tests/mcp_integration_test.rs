@@ -16,10 +16,10 @@ use aster::model::ModelConfig;
 
 use test_case::test_case;
 
-use async_trait::async_trait;
 use aster::conversation::message::Message;
 use aster::providers::base::{Provider, ProviderMetadata, ProviderUsage, Usage};
 use aster::providers::errors::ProviderError;
+use async_trait::async_trait;
 
 #[derive(Clone)]
 pub struct MockProvider {
@@ -102,24 +102,24 @@ enum TestMode {
     vec![
         CallToolRequestParam { name: "text_editor".into(), arguments: Some(object!({
             "command": "view",
-            "path": "/tmp/aster_test/goose.txt"
+            "path": "/tmp/aster_test/aster.txt"
         }))},
         CallToolRequestParam { name: "text_editor".into(), arguments: Some(object!({
             "command": "str_replace",
-            "path": "/tmp/aster_test/goose.txt",
-            "old_str": "# goose",
-            "new_str": "# goose (modified by test)"
+            "path": "/tmp/aster_test/aster.txt",
+            "old_str": "# aster",
+            "new_str": "# aster (modified by test)"
         }))},
         // Test shell command to verify file was modified
         CallToolRequestParam { name: "shell".into(), arguments: Some(object!({
-            "command": "cat /tmp/aster_test/goose.txt"
+            "command": "cat /tmp/aster_test/aster.txt"
         })) },
         // Test text_editor tool to restore original content
         CallToolRequestParam { name: "text_editor".into(), arguments: Some(object!({
             "command": "str_replace",
-            "path": "/tmp/aster_test/goose.txt",
-            "old_str": "# goose (modified by test)",
-            "new_str": "# goose"
+            "path": "/tmp/aster_test/aster.txt",
+            "old_str": "# aster (modified by test)",
+            "new_str": "# aster"
         }))},
         CallToolRequestParam { name: "list_windows".into(), arguments: Some(object!({})) },
     ],
@@ -131,14 +131,14 @@ async fn test_replayed_session(
     tool_calls: Vec<CallToolRequestParam>,
     required_envs: Vec<&str>,
 ) {
-    std::env::set_var("GOOSE_MCP_CLIENT_VERSION", "0.0.0");
+    std::env::set_var("ASTER_MCP_CLIENT_VERSION", "0.0.0");
 
     // Setup test file for developer extension tests
-    let test_file_path = "/tmp/aster_test/goose.txt";
+    let test_file_path = "/tmp/aster_test/aster.txt";
     if let Some(parent) = std::path::Path::new(test_file_path).parent() {
         fs::create_dir_all(parent).ok();
     }
-    fs::write(test_file_path, "# goose\n").ok();
+    fs::write(test_file_path, "# aster\n").ok();
     let replay_file_name = command
         .iter()
         .map(|s| s.replace("/", "_"))
@@ -150,7 +150,7 @@ async fn test_replayed_session(
     replay_file_path.push("mcp_replays");
     replay_file_path.push(&replay_file_name);
 
-    let mode = if env::var("GOOSE_RECORD_MCP").is_ok() {
+    let mode = if env::var("ASTER_RECORD_MCP").is_ok() {
         TestMode::Record
     } else {
         assert!(replay_file_path.exists(), "replay file doesn't exist");

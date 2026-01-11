@@ -1,9 +1,9 @@
+use aster::config::ConfigError;
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
 };
-use aster::config::ConfigError;
 use serde::Serialize;
 use utoipa::ToSchema;
 

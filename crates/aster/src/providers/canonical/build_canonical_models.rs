@@ -8,11 +8,11 @@
 ///   cargo run --bin build_canonical_models --no-check   # Build only, skip checker
 ///
 use anyhow::{Context, Result};
-use clap::Parser;
 use aster::providers::canonical::{
     canonical_name, CanonicalModel, CanonicalModelRegistry, Pricing,
 };
 use aster::providers::{canonical::ModelMapping, create_with_named_model};
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -296,7 +296,7 @@ async fn build_canonical_models() -> Result<()> {
     let client = reqwest::Client::new();
     let response = client
         .get(OPENROUTER_API_URL)
-        .header("User-Agent", "goose/canonical-builder")
+        .header("User-Agent", "aster/canonical-builder")
         .send()
         .await
         .context("Failed to fetch from OpenRouter API")?;

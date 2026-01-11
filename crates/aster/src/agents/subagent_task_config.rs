@@ -9,7 +9,7 @@ use std::sync::Arc;
 pub const DEFAULT_SUBAGENT_MAX_TURNS: usize = 25;
 
 /// Environment variable name for configuring max turns
-pub const GOOSE_SUBAGENT_MAX_TURNS_ENV_VAR: &str = "GOOSE_SUBAGENT_MAX_TURNS";
+pub const ASTER_SUBAGENT_MAX_TURNS_ENV_VAR: &str = "ASTER_SUBAGENT_MAX_TURNS";
 
 /// Configuration for task execution with all necessary dependencies
 #[derive(Clone)]
@@ -46,7 +46,7 @@ impl TaskConfig {
             parent_working_dir: parent_working_dir.to_owned(),
             extensions,
             max_turns: Some(
-                env::var(GOOSE_SUBAGENT_MAX_TURNS_ENV_VAR)
+                env::var(ASTER_SUBAGENT_MAX_TURNS_ENV_VAR)
                     .ok()
                     .and_then(|val| val.parse::<usize>().ok())
                     .unwrap_or(DEFAULT_SUBAGENT_MAX_TURNS),

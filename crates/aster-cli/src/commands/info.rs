@@ -1,8 +1,8 @@
 use anyhow::Result;
-use console::style;
 use aster::config::paths::Paths;
 use aster::config::Config;
 use aster::session::session_manager::{DB_NAME, SESSIONS_FOLDER};
+use console::style;
 use serde_yaml;
 
 fn print_aligned(label: &str, value: &str, width: usize) {
@@ -55,7 +55,7 @@ pub fn handle_info(verbose: bool) -> Result<()> {
         .unwrap_or(0)
         + 4;
 
-    println!("{}", style("goose Version:").cyan().bold());
+    println!("{}", style("aster Version:").cyan().bold());
     print_aligned("Version:", env!("CARGO_PKG_VERSION"), label_padding);
     println!();
 
@@ -70,12 +70,12 @@ pub fn handle_info(verbose: bool) -> Result<()> {
     }
 
     if verbose {
-        println!("\n{}", style("goose Configuration:").cyan().bold());
+        println!("\n{}", style("aster Configuration:").cyan().bold());
         let values = config.all_values()?;
         if values.is_empty() {
             println!("  No configuration values set");
             println!(
-                "  Run '{}' to configure goose",
+                "  Run '{}' to configure aster",
                 style("aster configure").cyan()
             );
         } else {

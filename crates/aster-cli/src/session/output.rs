@@ -1,12 +1,12 @@
 use anstream::println;
-use bat::WrappingMode;
-use console::{measure_text_width, style, Color, Term};
 use aster::config::Config;
 use aster::conversation::message::{
     ActionRequiredData, Message, MessageContent, ToolRequest, ToolResponse,
 };
 use aster::providers::canonical::maybe_get_canonical_model;
 use aster::utils::safe_truncate;
+use bat::WrappingMode;
+use console::{measure_text_width, style, Color, Term};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rmcp::model::{CallToolRequestParam, JsonObject, PromptArgument};
 use serde_json::Value;
@@ -55,10 +55,10 @@ impl Theme {
 
 thread_local! {
     static CURRENT_THEME: RefCell<Theme> = RefCell::new(
-        std::env::var("GOOSE_CLI_THEME").ok()
+        std::env::var("ASTER_CLI_THEME").ok()
             .map(|val| Theme::from_config_str(&val))
             .unwrap_or_else(||
-                Config::global().get_param::<String>("GOOSE_CLI_THEME").ok()
+                Config::global().get_param::<String>("ASTER_CLI_THEME").ok()
                     .map(|val| Theme::from_config_str(&val))
                     .unwrap_or(Theme::Ansi)
             )
@@ -68,7 +68,7 @@ thread_local! {
 pub fn set_theme(theme: Theme) {
     let config = Config::global();
     config
-        .set_param("GOOSE_CLI_THEME", theme.as_config_string())
+        .set_param("ASTER_CLI_THEME", theme.as_config_string())
         .expect("Failed to set theme");
     CURRENT_THEME.with(|t| *t.borrow_mut() = theme);
 
@@ -79,7 +79,7 @@ pub fn set_theme(theme: Theme) {
         Theme::Ansi => "ansi",
     };
 
-    if let Err(e) = config.set_param("GOOSE_CLI_THEME", theme_str) {
+    if let Err(e) = config.set_param("ASTER_CLI_THEME", theme_str) {
         eprintln!("Failed to save theme setting to config: {}", e);
     }
 }
@@ -184,7 +184,7 @@ pub fn render_message(message: &Message, debug: bool) {
                 println!("Image: [data: {}, type: {}]", image.data, image.mime_type);
             }
             MessageContent::Thinking(thinking) => {
-                if std::env::var("GOOSE_CLI_SHOW_THINKING").is_ok()
+                if std::env::var("ASTER_CLI_SHOW_THINKING").is_ok()
                     && std::io::stdout().is_terminal()
                 {
                     println!("\n{}", style("Thinking:").dim().italic());
@@ -262,7 +262,7 @@ pub fn render_exit_plan_mode() {
     println!("\n{}\n", style("Exiting plan mode.").green().bold());
 }
 
-pub fn goose_mode_message(text: &str) {
+pub fn aster_mode_message(text: &str) {
     println!("\n{}", style(text).yellow(),);
 }
 
@@ -293,7 +293,7 @@ fn render_tool_response(resp: &ToolResponse, theme: Theme, debug: bool) {
                 }
 
                 let min_priority = config
-                    .get_param::<f32>("GOOSE_CLI_MIN_PRIORITY")
+                    .get_param::<f32>("ASTER_CLI_MIN_PRIORITY")
                     .ok()
                     .unwrap_or(0.5);
 
@@ -807,7 +807,7 @@ pub fn display_session_info(
 }
 
 pub fn display_greeting() {
-    println!("\ngoose is running! Enter your instructions, or try asking what goose can do.\n");
+    println!("\naster is running! Enter your instructions, or try asking what aster can do.\n");
 }
 
 /// Display context window usage with both current and session totals

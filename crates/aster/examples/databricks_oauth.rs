@@ -1,8 +1,8 @@
 use anyhow::Result;
-use dotenvy::dotenv;
 use aster::conversation::message::Message;
 use aster::providers::databricks::DATABRICKS_DEFAULT_MODEL;
 use aster::providers::{base::Usage, create_with_named_model};
+use dotenvy::dotenv;
 use tokio_stream::StreamExt;
 
 #[tokio::main]

@@ -1,5 +1,4 @@
 use anyhow::Result;
-use dotenvy::dotenv;
 use aster::conversation::message::{Message, MessageContent};
 use aster::providers::anthropic::ANTHROPIC_DEFAULT_MODEL;
 use aster::providers::azure::AZURE_DEFAULT_MODEL;
@@ -15,6 +14,7 @@ use aster::providers::openai::OPEN_AI_DEFAULT_MODEL;
 use aster::providers::sagemaker_tgi::SAGEMAKER_TGI_DEFAULT_MODEL;
 use aster::providers::snowflake::SNOWFLAKE_DEFAULT_MODEL;
 use aster::providers::xai::XAI_DEFAULT_MODEL;
+use dotenvy::dotenv;
 use rmcp::model::{AnnotateAble, Content, RawImageContent};
 use rmcp::model::{CallToolRequestParam, Tool};
 use rmcp::object;
@@ -256,11 +256,11 @@ impl ProviderTester {
     }
 
     async fn test_image_content_support(&self) -> Result<()> {
-        use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
         use aster::conversation::message::Message;
+        use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
         use std::fs;
 
-        let image_path = "crates/goose/examples/test_assets/test_image.png";
+        let image_path = "crates/aster/examples/test_assets/test_image.png";
         let image_data = match fs::read(image_path) {
             Ok(data) => data,
             Err(_) => {

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
 use aster::config::paths::Paths;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -13,7 +13,7 @@ pub struct ProjectInfo {
     pub path: String,
     /// Last time the project was accessed
     pub last_accessed: DateTime<Utc>,
-    /// Last instruction sent to goose (if available)
+    /// Last instruction sent to aster (if available)
     pub last_instruction: Option<String>,
     /// Last session ID associated with this project
     pub last_session_id: Option<String>,
@@ -32,7 +32,7 @@ pub struct ProjectInfoDisplay {
     pub path: String,
     /// Last time the project was accessed
     pub last_accessed: DateTime<Utc>,
-    /// Last instruction sent to goose (if available)
+    /// Last instruction sent to aster (if available)
     pub last_instruction: Option<String>,
     /// Last session ID associated with this project
     pub last_session_id: Option<String>,
@@ -80,7 +80,7 @@ impl ProjectTracker {
     ///
     /// # Arguments
     /// * `project_dir` - The project directory to update
-    /// * `instruction` - Optional instruction that was sent to goose
+    /// * `instruction` - Optional instruction that was sent to aster
     /// * `session_id` - Optional session ID associated with this project
     pub fn update_project(
         &mut self,
@@ -133,7 +133,7 @@ impl ProjectTracker {
 /// Update the project tracker with the current directory and optional instruction
 ///
 /// # Arguments
-/// * `instruction` - Optional instruction that was sent to goose
+/// * `instruction` - Optional instruction that was sent to aster
 /// * `session_id` - Optional session ID associated with this project
 pub fn update_project_tracker(instruction: Option<&str>, session_id: Option<&str>) -> Result<()> {
     let current_dir = std::env::current_dir()?;

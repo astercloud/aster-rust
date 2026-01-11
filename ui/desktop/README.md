@@ -1,4 +1,4 @@
-# goose Desktop App
+# Aster Desktop App
 
 Native desktop app for goose built with [Electron](https://www.electronjs.org/) and [ReactJS](https://react.dev/). 
 
@@ -36,22 +36,22 @@ sudo dnf install dpkg-dev fakeroot
 
 # Building notes
 
-This is an electron forge app, using vite and react.js. `goosed` runs as multi process binaries on each window/tab similar to chrome.
+This is an electron forge app, using vite and react.js. `asterd` runs as multi process binaries on each window/tab similar to chrome.
 
 ## Building for different platforms
 
 ### macOS
-`npm run bundle:default` will give you a goose.app/zip which is signed/notarized but only if you setup the env vars as per `forge.config.ts` (you can empty out the section on osxSign if you don't want to sign it) - this will have all defaults.
+`npm run bundle:default` will give you a aster.app/zip which is signed/notarized but only if you setup the env vars as per `forge.config.ts` (you can empty out the section on osxSign if you don't want to sign it) - this will have all defaults.
 
-`npm run bundle:preconfigured` will make a goose.app/zip signed and notarized, but use the following:
+`npm run bundle:preconfigured` will make a aster.app/zip signed and notarized, but use the following:
 
 ```python
-            f"        process.env.GOOSE_PROVIDER__TYPE = '{os.getenv("GOOSE_BUNDLE_TYPE")}';",
-            f"        process.env.GOOSE_PROVIDER__HOST = '{os.getenv("GOOSE_BUNDLE_HOST")}';",
-            f"        process.env.GOOSE_PROVIDER__MODEL = '{os.getenv("GOOSE_BUNDLE_MODEL")}';"
+            f"        process.env.ASTER_PROVIDER__TYPE = '{os.getenv("GOOSE_BUNDLE_TYPE")}';",
+            f"        process.env.ASTER_PROVIDER__HOST = '{os.getenv("GOOSE_BUNDLE_HOST")}';",
+            f"        process.env.ASTER_PROVIDER__MODEL = '{os.getenv("GOOSE_BUNDLE_MODEL")}';"
 ```
 
-This allows you to set for example GOOSE_PROVIDER__TYPE to be "databricks" by default if you want (so when people start goose.app - they will get that out of the box). There is no way to set an api key in that bundling as that would be a terrible idea, so only use providers that can do oauth (like databricks can), otherwise stick to default goose.
+This allows you to set for example ASTER_PROVIDER__TYPE to be "databricks" by default if you want (so when people start aster.app - they will get that out of the box). There is no way to set an api key in that bundling as that would be a terrible idea, so only use providers that can do oauth (like databricks can), otherwise stick to default goose.
 
 ### Linux
 For Linux builds, first ensure you have the required system dependencies installed (see above), then:
@@ -59,13 +59,13 @@ For Linux builds, first ensure you have the required system dependencies install
 1. Build the Rust backend:
 ```bash
 cd ../..  # Go to project root
-cargo build --release -p goose-server
+cargo build --release -p aster-server
 ```
 
 2. Copy the server binary to the expected location:
 ```bash
 mkdir -p src/bin
-cp ../../target/release/goosed src/bin/
+cp ../../target/release/asterd src/bin/
 ```
 
 3. Build the application:
@@ -86,9 +86,9 @@ The built application will be available in:
 Use the existing Windows build process as documented.
 
 
-# Running with goosed server from source
+# Running with asterd server from source
 
 Set `VITE_START_EMBEDDED_SERVER=yes` to no in `.env`.
-Run `cargo run -p goose-server` from parent dir.
+Run `cargo run -p aster-server` from parent dir.
 `npm run start` will then run against this.
 You can try server directly with `./test.sh`

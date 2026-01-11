@@ -33,14 +33,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 use url::Url;
 
-struct GooseAcpSession {
+struct AsterAcpSession {
     messages: Conversation,
     tool_requests: HashMap<String, aster::conversation::message::ToolRequest>,
     cancel_token: Option<CancellationToken>,
 }
 
-struct GooseAcpAgent {
-    sessions: Arc<Mutex<HashMap<String, GooseAcpSession>>>,
+struct AsterAcpAgent {
+    sessions: Arc<Mutex<HashMap<String, AsterAcpSession>>>,
     agent: Arc<Agent>,
 }
 
@@ -266,7 +266,7 @@ async fn add_builtins(agent: &Agent, builtins: Vec<String>) {
     }
 }
 
-impl GooseAcpAgent {
+impl AsterAcpAgent {
     async fn new(builtins: Vec<String>) -> Result<Self> {
         let config = Config::global();
 
@@ -364,7 +364,7 @@ impl GooseAcpAgent {
                     user_message = user_message.with_text(&text.text);
                 }
                 ContentBlock::Image(image) => {
-                    // Goose supports images via base64 encoded data
+                    // Aster supports images via base64 encoded data
                     // The ACP ImageContent has data as a String directly
                     user_message = user_message.with_image(&image.data, &image.mime_type);
                 }
@@ -398,7 +398,7 @@ impl GooseAcpAgent {
         &self,
         content_item: &MessageContent,
         session_id: &SessionId,
-        session: &mut GooseAcpSession,
+        session: &mut AsterAcpSession,
         cx: &JrConnectionCx<AgentToClient>,
     ) -> Result<(), sacp::Error> {
         match content_item {
@@ -457,7 +457,7 @@ impl GooseAcpAgent {
         &self,
         tool_request: &aster::conversation::message::ToolRequest,
         session_id: &SessionId,
-        session: &mut GooseAcpSession,
+        session: &mut AsterAcpSession,
         cx: &JrConnectionCx<AgentToClient>,
     ) -> Result<(), sacp::Error> {
         // Store the tool request for later use in response handling
@@ -490,7 +490,7 @@ impl GooseAcpAgent {
         &self,
         tool_response: &aster::conversation::message::ToolResponse,
         session_id: &SessionId,
-        session: &mut GooseAcpSession,
+        session: &mut AsterAcpSession,
         cx: &JrConnectionCx<AgentToClient>,
     ) -> Result<(), sacp::Error> {
         // Determine if the tool call succeeded or failed
@@ -683,14 +683,14 @@ fn build_tool_call_content(tool_result: &ToolResult<CallToolResult>) -> Vec<Tool
     }
 }
 
-impl GooseAcpAgent {
+impl AsterAcpAgent {
     async fn on_initialize(
         &self,
         args: InitializeRequest,
     ) -> Result<InitializeResponse, sacp::Error> {
         debug!(?args, "initialize request");
 
-        // Advertise Goose's capabilities
+        // Advertise Aster's capabilities
         let capabilities = AgentCapabilities::new()
             .load_session(true)
             .prompt_capabilities(
@@ -709,7 +709,7 @@ impl GooseAcpAgent {
     ) -> Result<NewSessionResponse, sacp::Error> {
         debug!(?args, "new session request");
 
-        let goose_session = SessionManager::create_session(
+        let aster_session = SessionManager::create_session(
             std::env::current_dir().unwrap_or_default(),
             "ACP Session".to_string(), // just an initial name - may be replaced by maybe_update_name
             SessionType::User,
@@ -722,14 +722,14 @@ impl GooseAcpAgent {
             )
         })?;
 
-        let session = GooseAcpSession {
+        let session = AsterAcpSession {
             messages: Conversation::new_unvalidated(Vec::new()),
             tool_requests: HashMap::new(),
             cancel_token: None,
         };
 
         let mut sessions = self.sessions.lock().await;
-        sessions.insert(goose_session.id.clone(), session);
+        sessions.insert(aster_session.id.clone(), session);
 
         // Add MCP servers specified in the session request
         for mcp_server in args.mcp_servers {
@@ -749,12 +749,12 @@ impl GooseAcpAgent {
         }
 
         info!(
-            session_id = %goose_session.id,
+            session_id = %aster_session.id,
             session_type = "acp",
             "Session started"
         );
 
-        Ok(NewSessionResponse::new(SessionId::new(goose_session.id)))
+        Ok(NewSessionResponse::new(SessionId::new(aster_session.id)))
     }
 
     async fn on_load_session(
@@ -766,7 +766,7 @@ impl GooseAcpAgent {
 
         let session_id = args.session_id.0.to_string();
 
-        let goose_session = SessionManager::get_session(&session_id, true)
+        let aster_session = SessionManager::get_session(&session_id, true)
             .await
             .map_err(|e| {
                 sacp::Error::new(
@@ -775,7 +775,7 @@ impl GooseAcpAgent {
                 )
             })?;
 
-        let conversation = goose_session.conversation.ok_or_else(|| {
+        let conversation = aster_session.conversation.ok_or_else(|| {
             sacp::Error::new(
                 sacp::ErrorCode::InternalError.into(),
                 format!("Session {} has no conversation data", session_id),
@@ -793,7 +793,7 @@ impl GooseAcpAgent {
                 )
             })?;
 
-        let mut session = GooseAcpSession {
+        let mut session = AsterAcpSession {
             messages: conversation.clone(),
             tool_requests: HashMap::new(),
             cancel_token: None,
@@ -968,11 +968,11 @@ impl GooseAcpAgent {
     }
 }
 
-struct GooseAcpHandler {
-    agent: Arc<GooseAcpAgent>,
+struct AsterAcpHandler {
+    agent: Arc<AsterAcpAgent>,
 }
 
-impl JrMessageHandler for GooseAcpHandler {
+impl JrMessageHandler for AsterAcpHandler {
     type Link = AgentToClient;
 
     fn describe_chain(&self) -> impl std::fmt::Debug {
@@ -1047,8 +1047,8 @@ pub async fn run_acp_agent(builtins: Vec<String>) -> Result<()> {
     let outgoing = tokio::io::stdout().compat_write();
     let incoming = tokio::io::stdin().compat();
 
-    let agent = Arc::new(GooseAcpAgent::new(builtins).await?);
-    let handler = GooseAcpHandler { agent };
+    let agent = Arc::new(AsterAcpAgent::new(builtins).await?);
+    let handler = AsterAcpHandler { agent };
 
     AgentToClient::builder()
         .name("aster-acp")

@@ -8,7 +8,7 @@ use crate::recipe::read_recipe_file_content::{read_recipe_file, RecipeFile};
 use crate::recipe::Recipe;
 use crate::recipe::RECIPE_FILE_EXTENSIONS;
 
-const GOOSE_RECIPE_PATH_ENV_VAR: &str = "GOOSE_RECIPE_PATH";
+const ASTER_RECIPE_PATH_ENV_VAR: &str = "ASTER_RECIPE_PATH";
 
 pub fn get_recipe_library_dir(is_global: bool) -> PathBuf {
     if is_global {
@@ -21,7 +21,7 @@ pub fn get_recipe_library_dir(is_global: bool) -> PathBuf {
 fn local_recipe_dirs() -> Vec<PathBuf> {
     let mut local_dirs = vec![PathBuf::from(".")];
 
-    if let Ok(recipe_path_env) = env::var(GOOSE_RECIPE_PATH_ENV_VAR) {
+    if let Ok(recipe_path_env) = env::var(ASTER_RECIPE_PATH_ENV_VAR) {
         let path_separator = if cfg!(windows) { ';' } else { ':' };
         local_dirs.extend(recipe_path_env.split(path_separator).map(PathBuf::from));
     }

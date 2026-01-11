@@ -536,10 +536,10 @@ derive_utoipa!(Icon as IconSchema);
         super::tunnel::TunnelInfo,
         super::tunnel::TunnelState,
         super::routes::telemetry::TelemetryEventRequest,
-        aster::goose_apps::McpAppResource,
-        aster::goose_apps::CspMetadata,
-        aster::goose_apps::UiMetadata,
-        aster::goose_apps::ResourceMetadata,
+        aster::aster_apps::McpAppResource,
+        aster::aster_apps::CspMetadata,
+        aster::aster_apps::UiMetadata,
+        aster::aster_apps::ResourceMetadata,
     ))
 )]
 pub struct ApiDoc;

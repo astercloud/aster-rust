@@ -5,7 +5,7 @@ pub struct Paths;
 
 impl Paths {
     fn get_dir(dir_type: DirType) -> PathBuf {
-        if let Ok(test_root) = std::env::var("GOOSE_PATH_ROOT") {
+        if let Ok(test_root) = std::env::var("ASTER_PATH_ROOT") {
             let base = PathBuf::from(test_root);
             match dir_type {
                 DirType::Config => base.join("config"),
@@ -18,7 +18,7 @@ impl Paths {
                 author: "Block".to_string(),
                 app_name: "aster".to_string(),
             })
-            .expect("goose requires a home dir");
+            .expect("aster requires a home dir");
 
             match dir_type {
                 DirType::Config => strategy.config_dir(),

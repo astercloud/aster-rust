@@ -1814,7 +1814,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_goose_ignore_basic_patterns() {
+    async fn test_aster_ignore_basic_patterns() {
         let temp_dir = tempfile::tempdir().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();
 

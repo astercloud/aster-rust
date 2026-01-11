@@ -1,6 +1,5 @@
 use super::output;
 use super::CliSession;
-use console::style;
 use aster::agents::types::{RetryConfig, SessionConfig};
 use aster::agents::Agent;
 use aster::config::{
@@ -9,6 +8,7 @@ use aster::config::{
 };
 use aster::providers::create;
 use aster::recipe::{Response, SubRecipe};
+use console::style;
 
 use aster::agents::extension::PlatformExtensionContext;
 use aster::session::session_manager::SessionType;
@@ -20,7 +20,7 @@ use std::process;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 
-/// Configuration for building a new Goose session
+/// Configuration for building a new Aster session
 ///
 /// This struct contains all the parameters needed to create a new session,
 /// including session identification, extension configuration, and debug settings.
@@ -42,7 +42,7 @@ pub struct SessionBuilderConfig {
     pub extensions_override: Option<Vec<ExtensionConfig>>,
     /// Any additional system prompt to append to the default
     pub additional_system_prompt: Option<String>,
-    /// Settings to override the global Goose settings
+    /// Settings to override the global Aster settings
     pub settings: Option<SessionSettings>,
     /// Provider override from CLI arguments
     pub provider: Option<String>,
@@ -316,7 +316,7 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
                 "Error {}.\n\
                 Please check your system keychain and run 'aster configure' again.\n\
                 If your system is unable to use the keyring, please try setting secret key(s) via environment variables.\n\
-                For more info, see: https://block.github.io/goose/docs/troubleshooting/#keychainkeyring-errors",
+                For more info, see: https://astercloud.github.io/aster-rust/docs/troubleshooting/#keychainkeyring-errors",
                 e
             ));
             process::exit(1);
@@ -509,7 +509,7 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
             }
         });
 
-    let debug_mode = session_config.debug || config.get_param("GOOSE_DEBUG").unwrap_or(false);
+    let debug_mode = session_config.debug || config.get_param("ASTER_DEBUG").unwrap_or(false);
 
     // Create new session
     let mut session = CliSession::new(
@@ -631,7 +631,7 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
     }
 
     // Only override system prompt if a system override exists
-    let system_prompt_file: Option<String> = config.get_param("GOOSE_SYSTEM_PROMPT_FILE_PATH").ok();
+    let system_prompt_file: Option<String> = config.get_param("ASTER_SYSTEM_PROMPT_FILE_PATH").ok();
     if let Some(ref path) = system_prompt_file {
         let override_prompt =
             std::fs::read_to_string(path).expect("Failed to read system prompt file");

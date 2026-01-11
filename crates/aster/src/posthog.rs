@@ -15,10 +15,10 @@ use uuid::Uuid;
 const POSTHOG_API_KEY: &str = "phc_RyX5CaY01VtZJCQyhSR5KFh6qimUy81YwxsEpotAftT";
 
 /// Config key for telemetry opt-out preference
-pub const TELEMETRY_ENABLED_KEY: &str = "GOOSE_TELEMETRY_ENABLED";
+pub const TELEMETRY_ENABLED_KEY: &str = "ASTER_TELEMETRY_ENABLED";
 
 static TELEMETRY_DISABLED_BY_ENV: Lazy<AtomicBool> = Lazy::new(|| {
-    std::env::var("GOOSE_TELEMETRY_OFF")
+    std::env::var("ASTER_TELEMETRY_OFF")
         .map(|v| v == "1" || v.to_lowercase() == "true")
         .unwrap_or(false)
         .into()
@@ -27,8 +27,8 @@ static TELEMETRY_DISABLED_BY_ENV: Lazy<AtomicBool> = Lazy::new(|| {
 /// Check if telemetry is enabled.
 ///
 /// Returns false if:
-/// - GOOSE_TELEMETRY_OFF environment variable is set to "1" or "true"
-/// - GOOSE_TELEMETRY_ENABLED config value is set to false
+/// - ASTER_TELEMETRY_OFF environment variable is set to "1" or "true"
+/// - ASTER_TELEMETRY_ENABLED config value is set to false
 ///
 /// Returns true otherwise (telemetry is opt-out, enabled by default)
 pub fn is_telemetry_enabled() -> bool {
@@ -161,7 +161,7 @@ fn detect_install_method() -> String {
         }
     }
 
-    if std::env::var("GOOSE_DESKTOP").is_ok() {
+    if std::env::var("ASTER_DESKTOP").is_ok() {
         return "desktop".to_string();
     }
 
@@ -290,10 +290,10 @@ async fn send_error_event(
     }
 
     let config = Config::global();
-    if let Ok(provider) = config.get_param::<String>("GOOSE_PROVIDER") {
+    if let Ok(provider) = config.get_param::<String>("ASTER_PROVIDER") {
         event.insert_prop("provider", provider).ok();
     }
-    if let Ok(model) = config.get_param::<String>("GOOSE_MODEL") {
+    if let Ok(model) = config.get_param::<String>("ASTER_MODEL") {
         event.insert_prop("model", model).ok();
     }
 
@@ -350,37 +350,37 @@ async fn send_session_event(installation: &InstallationData) -> Result<(), Strin
         .ok();
 
     let config = Config::global();
-    if let Ok(provider) = config.get_param::<String>("GOOSE_PROVIDER") {
+    if let Ok(provider) = config.get_param::<String>("ASTER_PROVIDER") {
         event.insert_prop("provider", provider).ok();
     }
-    if let Ok(model) = config.get_param::<String>("GOOSE_MODEL") {
+    if let Ok(model) = config.get_param::<String>("ASTER_MODEL") {
         event.insert_prop("model", model).ok();
     }
 
-    if let Ok(mode) = config.get_param::<String>("GOOSE_MODE") {
+    if let Ok(mode) = config.get_param::<String>("ASTER_MODE") {
         event.insert_prop("setting_mode", mode).ok();
     }
-    if let Ok(max_turns) = config.get_param::<i64>("GOOSE_MAX_TURNS") {
+    if let Ok(max_turns) = config.get_param::<i64>("ASTER_MAX_TURNS") {
         event.insert_prop("setting_max_turns", max_turns).ok();
     }
 
-    if let Ok(lead_model) = config.get_param::<String>("GOOSE_LEAD_MODEL") {
+    if let Ok(lead_model) = config.get_param::<String>("ASTER_LEAD_MODEL") {
         event.insert_prop("setting_lead_model", lead_model).ok();
     }
-    if let Ok(lead_provider) = config.get_param::<String>("GOOSE_LEAD_PROVIDER") {
+    if let Ok(lead_provider) = config.get_param::<String>("ASTER_LEAD_PROVIDER") {
         event
             .insert_prop("setting_lead_provider", lead_provider)
             .ok();
     }
-    if let Ok(lead_turns) = config.get_param::<i64>("GOOSE_LEAD_TURNS") {
+    if let Ok(lead_turns) = config.get_param::<i64>("ASTER_LEAD_TURNS") {
         event.insert_prop("setting_lead_turns", lead_turns).ok();
     }
-    if let Ok(lead_failure_threshold) = config.get_param::<i64>("GOOSE_LEAD_FAILURE_THRESHOLD") {
+    if let Ok(lead_failure_threshold) = config.get_param::<i64>("ASTER_LEAD_FAILURE_THRESHOLD") {
         event
             .insert_prop("setting_lead_failure_threshold", lead_failure_threshold)
             .ok();
     }
-    if let Ok(lead_fallback_turns) = config.get_param::<i64>("GOOSE_LEAD_FALLBACK_TURNS") {
+    if let Ok(lead_fallback_turns) = config.get_param::<i64>("ASTER_LEAD_FALLBACK_TURNS") {
         event
             .insert_prop("setting_lead_fallback_turns", lead_fallback_turns)
             .ok();

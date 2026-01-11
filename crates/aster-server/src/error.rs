@@ -32,9 +32,9 @@ mod tests {
 
     #[test]
     fn test_env_var_conversion() {
-        assert_eq!(to_env_var("type"), "GOOSE_PROVIDER__TYPE");
-        assert_eq!(to_env_var("api_key"), "GOOSE_PROVIDER__API_KEY");
-        assert_eq!(to_env_var("provider.host"), "GOOSE_PROVIDER__HOST");
-        assert_eq!(to_env_var("provider.api_key"), "GOOSE_PROVIDER__API_KEY");
+        assert_eq!(to_env_var("type"), "ASTER_PROVIDER__TYPE");
+        assert_eq!(to_env_var("api_key"), "ASTER_PROVIDER__API_KEY");
+        assert_eq!(to_env_var("provider.host"), "ASTER_PROVIDER__HOST");
+        assert_eq!(to_env_var("provider.api_key"), "ASTER_PROVIDER__API_KEY");
     }
 }

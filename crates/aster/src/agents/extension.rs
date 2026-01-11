@@ -48,7 +48,7 @@ pub static PLATFORM_EXTENSIONS: Lazy<HashMap<&'static str, PlatformExtensionDef>
             PlatformExtensionDef {
                 name: todo_extension::EXTENSION_NAME,
                 description:
-                    "Enable a todo list for goose so it can keep track of what it is doing",
+                    "Enable a todo list for aster so it can keep track of what it is doing",
                 default_enabled: true,
                 client_factory: |ctx| Box::new(todo_extension::TodoClient::new(ctx).unwrap()),
             },
@@ -267,7 +267,7 @@ pub enum ExtensionConfig {
         #[serde(default)]
         available_tools: Vec<String>,
     },
-    /// Built-in extension that is part of the bundled goose MCP server
+    /// Built-in extension that is part of the bundled aster MCP server
     #[serde(rename = "builtin")]
     Builtin {
         /// The name used to identify this extension

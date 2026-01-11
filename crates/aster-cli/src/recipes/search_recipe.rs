@@ -4,7 +4,7 @@ use aster::recipe::read_recipe_file_content::RecipeFile;
 
 use super::github_recipe::{
     list_github_recipes, retrieve_recipe_from_github, RecipeInfo, RecipeSource,
-    GOOSE_RECIPE_GITHUB_REPO_CONFIG_KEY,
+    ASTER_RECIPE_GITHUB_REPO_CONFIG_KEY,
 };
 use aster::recipe::local_recipes::{list_local_recipes, load_local_recipe_file};
 
@@ -20,7 +20,7 @@ pub fn load_recipe_file(recipe_name: &str) -> Result<RecipeFile> {
 
 fn configured_github_recipe_repo() -> Option<String> {
     let config = Config::global();
-    match config.get_param(GOOSE_RECIPE_GITHUB_REPO_CONFIG_KEY) {
+    match config.get_param(ASTER_RECIPE_GITHUB_REPO_CONFIG_KEY) {
         Ok(Some(recipe_repo_full_name)) => Some(recipe_repo_full_name),
         _ => None,
     }

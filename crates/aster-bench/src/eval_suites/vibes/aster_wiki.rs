@@ -5,17 +5,17 @@ use crate::eval_suites::{
     ExtensionRequirements,
 };
 use crate::register_evaluation;
-use async_trait::async_trait;
 use aster::conversation::message::MessageContent;
+use async_trait::async_trait;
 use rmcp::model::Role;
 use serde_json::{self, Value};
 use std::fs;
 
-pub struct GooseWiki {}
+pub struct AsterWiki {}
 
-impl GooseWiki {
+impl AsterWiki {
     pub fn new() -> Self {
-        GooseWiki {}
+        AsterWiki {}
     }
 
     fn check_html_implementation(&self, content: &str) -> bool {
@@ -39,13 +39,13 @@ impl GooseWiki {
 }
 
 #[async_trait]
-impl Evaluation for GooseWiki {
+impl Evaluation for AsterWiki {
     async fn run(
         &self,
         agent: &mut BenchAgent,
         _run_loc: &mut BenchmarkWorkDir,
     ) -> anyhow::Result<Vec<(String, EvalMetricValue)>> {
-        println!("GooseWiki - run");
+        println!("AsterWiki - run");
 
         // Collect baseline metrics (execution time, token usage, tool calls)
         let (messages, perf_metrics) = collect_baseline_metrics(
@@ -133,4 +133,4 @@ impl Evaluation for GooseWiki {
     }
 }
 
-register_evaluation!(GooseWiki);
+register_evaluation!(AsterWiki);

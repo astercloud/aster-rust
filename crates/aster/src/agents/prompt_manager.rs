@@ -6,9 +6,9 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::agents::extension::ExtensionInfo;
-use crate::hints::load_hints::{load_hint_files, AGENTS_MD_FILENAME, GOOSE_HINTS_FILENAME};
+use crate::hints::load_hints::{load_hint_files, AGENTS_MD_FILENAME, ASTER_HINTS_FILENAME};
 use crate::{
-    config::{Config, AsterMode},
+    config::{AsterMode, Config},
     prompt_template,
     utils::sanitize_unicode_tags,
 };
@@ -35,7 +35,7 @@ struct SystemPromptContext {
     current_date_time: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     extension_tool_limits: Option<(usize, usize)>,
-    goose_mode: AsterMode,
+    aster_mode: AsterMode,
     is_autonomous: bool,
     enable_subagents: bool,
     max_extensions: usize,
@@ -92,7 +92,7 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
             .get_param::<Vec<String>>("CONTEXT_FILE_NAMES")
             .unwrap_or_else(|_| {
                 vec![
-                    GOOSE_HINTS_FILENAME.to_string(),
+                    ASTER_HINTS_FILENAME.to_string(),
                     AGENTS_MD_FILENAME.to_string(),
                 ]
             });
@@ -141,7 +141,7 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
             .collect();
 
         let config = Config::global();
-        let goose_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
+        let aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
 
         let extension_tool_limits = self
             .extension_tool_count
@@ -151,8 +151,8 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
             extensions: sanitized_extensions_info,
             current_date_time: self.manager.current_date_timestamp.clone(),
             extension_tool_limits,
-            goose_mode,
-            is_autonomous: goose_mode == AsterMode::Auto,
+            aster_mode,
+            is_autonomous: aster_mode == AsterMode::Auto,
             enable_subagents: self.subagents_enabled,
             max_extensions: MAX_EXTENSIONS,
             max_tools: MAX_TOOLS,
@@ -166,7 +166,7 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
             prompt_template::render_global_file("system.md", &context)
         }
         .unwrap_or_else(|_| {
-            "You are a general-purpose AI agent called goose, created by Block".to_string()
+            "You are a general-purpose AI agent called aster, created by Block".to_string()
         });
 
         let mut system_prompt_extras = self.manager.system_prompt_extras.clone();
@@ -176,7 +176,7 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
             system_prompt_extras.push(hints);
         }
 
-        if goose_mode == AsterMode::Chat {
+        if aster_mode == AsterMode::Chat {
             system_prompt_extras.push(
                 "Right now you are in the chat only mode, no access to any tool use and system."
                     .to_string(),

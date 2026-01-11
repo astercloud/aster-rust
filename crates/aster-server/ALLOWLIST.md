@@ -1,6 +1,6 @@
-IMPORTANT: currently GOOSE_ALLOWLIST is used in main.ts in ui/desktop, and not in goose-server. The following is for reference in case it is used on the server side for launch time enforcement.
+IMPORTANT: currently GOOSE_ALLOWLIST is used in main.ts in ui/desktop, and not in aster-server. The following is for reference in case it is used on the server side for launch time enforcement.
 
-# goose Extension Allowlist
+# aster Extension Allowlist
 
 The allowlist feature provides a security mechanism for controlling which MCP commands can be used by goose. 
 By default, goose will let you run any MCP via any command, which isn't always desired.

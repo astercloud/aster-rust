@@ -91,7 +91,7 @@ impl Extension {
     }
 }
 
-/// Manages goose extensions / MCP clients and their interactions
+/// Manages aster extensions / MCP clients and their interactions
 pub struct ExtensionManager {
     extensions: Mutex<HashMap<String, Extension>>,
     context: Mutex<PlatformExtensionContext>,

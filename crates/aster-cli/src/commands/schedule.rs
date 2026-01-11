@@ -258,7 +258,7 @@ pub async fn handle_schedule_run_now(schedule_id: String) -> Result<()> {
 pub async fn handle_schedule_services_status() -> Result<()> {
     println!("Service management has been removed as Temporal scheduler is no longer supported.");
     println!(
-        "The built-in scheduler runs within the goose process and requires no external services."
+        "The built-in scheduler runs within the aster process and requires no external services."
     );
     Ok(())
 }
@@ -266,13 +266,13 @@ pub async fn handle_schedule_services_status() -> Result<()> {
 pub async fn handle_schedule_services_stop() -> Result<()> {
     println!("Service management has been removed as Temporal scheduler is no longer supported.");
     println!(
-        "The built-in scheduler runs within the goose process and requires no external services."
+        "The built-in scheduler runs within the aster process and requires no external services."
     );
     Ok(())
 }
 
 pub async fn handle_schedule_cron_help() -> Result<()> {
-    println!("📅 Cron Expression Guide for goose Scheduler");
+    println!("📅 Cron Expression Guide for aster Scheduler");
     println!("===========================================\\n");
 
     println!("🕐 HOURLY SCHEDULES (Most Common Request):");
@@ -324,12 +324,12 @@ pub async fn handle_schedule_cron_help() -> Result<()> {
 
     println!("💡 EXAMPLES:");
     println!(
-        "  goose schedule add --schedule-id hourly-report --cron \"0 * * * *\" --recipe-source report.yaml"
+        "  aster schedule add --schedule-id hourly-report --cron \"0 * * * *\" --recipe-source report.yaml"
     );
     println!(
-        "  goose schedule add --schedule-id daily-backup --cron \"@daily\" --recipe-source backup.yaml"
+        "  aster schedule add --schedule-id daily-backup --cron \"@daily\" --recipe-source backup.yaml"
     );
-    println!("  goose schedule add --schedule-id weekly-summary --cron \"0 9 * * 1\" --recipe-source summary.yaml");
+    println!("  aster schedule add --schedule-id weekly-summary --cron \"0 9 * * 1\" --recipe-source summary.yaml");
 
     Ok(())
 }

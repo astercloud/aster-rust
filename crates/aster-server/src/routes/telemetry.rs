@@ -1,5 +1,5 @@
-use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use aster::posthog::emit_event;
+use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;

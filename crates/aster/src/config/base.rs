@@ -53,7 +53,7 @@ impl From<keyring::Error> for ConfigError {
     }
 }
 
-/// Configuration management for goose.
+/// Configuration management for aster.
 ///
 /// This module provides a flexible configuration system that supports:
 /// - Dynamic configuration keys
@@ -98,7 +98,7 @@ impl From<keyring::Error> for ConfigError {
 /// checking for environment overrides. e.g. openai_api_key will check for an
 /// environment variable OPENAI_API_KEY
 ///
-/// For goose-specific configuration, consider prefixing with "goose_" to avoid conflicts.
+/// For aster-specific configuration, consider prefixing with "aster_" to avoid conflicts.
 pub struct Config {
     config_path: PathBuf,
     secrets: SecretStorage,

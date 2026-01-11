@@ -4,9 +4,9 @@
       {
         "type": "resource",
         "resource": {
-          "uri": "file:///tmp/goose_test/goose.txt",
+          "uri": "file:///tmp/goose_test/aster.txt",
           "mimeType": "text",
-          "text": "# goose\n"
+          "text": "# aster\n"
         },
         "annotations": {
           "audience": [
@@ -16,7 +16,7 @@
       },
       {
         "type": "text",
-        "text": "### /tmp/goose_test/goose.txt\n```\n1: # goose\n```\n",
+        "text": "### /tmp/goose_test/aster.txt\n```\n1: # aster\n```\n",
         "annotations": {
           "audience": [
             "user"
@@ -31,7 +31,7 @@
     "content": [
       {
         "type": "text",
-        "text": "The file /tmp/goose_test/goose.txt has been edited, and the section now reads:\n```\n# goose (modified by test)\n```\n\nReview the changes above for errors. Undo and edit the file again if necessary!\n",
+        "text": "The file /tmp/goose_test/aster.txt has been edited, and the section now reads:\n```\n# aster (modified by test)\n```\n\nReview the changes above for errors. Undo and edit the file again if necessary!\n",
         "annotations": {
           "audience": [
             "assistant"
@@ -40,7 +40,7 @@
       },
       {
         "type": "text",
-        "text": "```\n# goose (modified by test)\n```\n",
+        "text": "```\n# aster (modified by test)\n```\n",
         "annotations": {
           "audience": [
             "user"
@@ -55,7 +55,7 @@
     "content": [
       {
         "type": "text",
-        "text": "# goose (modified by test)\n",
+        "text": "# aster (modified by test)\n",
         "annotations": {
           "audience": [
             "assistant"
@@ -64,7 +64,7 @@
       },
       {
         "type": "text",
-        "text": "# goose (modified by test)\n",
+        "text": "# aster (modified by test)\n",
         "annotations": {
           "audience": [
             "user"
@@ -79,7 +79,7 @@
     "content": [
       {
         "type": "text",
-        "text": "The file /tmp/goose_test/goose.txt has been edited, and the section now reads:\n```\n# goose\n```\n\nReview the changes above for errors. Undo and edit the file again if necessary!\n",
+        "text": "The file /tmp/goose_test/aster.txt has been edited, and the section now reads:\n```\n# aster\n```\n\nReview the changes above for errors. Undo and edit the file again if necessary!\n",
         "annotations": {
           "audience": [
             "assistant"
@@ -88,7 +88,7 @@
       },
       {
         "type": "text",
-        "text": "```\n# goose\n```\n",
+        "text": "```\n# aster\n```\n",
         "annotations": {
           "audience": [
             "user"

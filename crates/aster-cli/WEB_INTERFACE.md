@@ -1,4 +1,4 @@
-# goose Web Interface
+# aster Web Interface
 
 The `goose web` command provides a (preview) web-based chat interface for interacting with goose.
 Do not expose this publicly - this is in a preview state as an option.

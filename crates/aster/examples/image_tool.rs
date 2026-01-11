@@ -1,11 +1,11 @@
 use anyhow::Result;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use dotenvy::dotenv;
 use aster::conversation::message::Message;
 use aster::providers::anthropic::ANTHROPIC_DEFAULT_MODEL;
 use aster::providers::create_with_named_model;
 use aster::providers::databricks::DATABRICKS_DEFAULT_MODEL;
 use aster::providers::openai::OPEN_AI_DEFAULT_MODEL;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use dotenvy::dotenv;
 use rmcp::model::{CallToolRequestParam, Content, Tool};
 use rmcp::object;
 use std::fs;
@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
     ];
     for provider in providers {
         // Read and encode test image
-        let image_data = fs::read("crates/goose/examples/test_assets/test_image.png")?;
+        let image_data = fs::read("crates/aster/examples/test_assets/test_image.png")?;
         let base64_image = BASE64.encode(image_data);
 
         // Create a message sequence that includes a tool response with both text and image

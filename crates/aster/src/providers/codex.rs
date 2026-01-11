@@ -14,7 +14,7 @@ use crate::config::base::{
     CodexCommand, CodexEnableSkills, CodexReasoningEffort, CodexSkipGitCheck,
 };
 use crate::config::search_path::SearchPaths;
-use crate::config::{Config, AsterMode};
+use crate::config::{AsterMode, Config};
 use crate::conversation::message::{Message, MessageContent};
 use crate::model::ModelConfig;
 use crate::subprocess::configure_command_no_window;
@@ -92,7 +92,7 @@ impl CodexProvider {
         })
     }
 
-    /// Convert goose messages to a simple text prompt format
+    /// Convert aster messages to a simple text prompt format
     /// Similar to Gemini CLI, we use Human:/Assistant: prefixes
     fn messages_to_prompt(&self, system: &str, messages: &[Message]) -> String {
         let mut full_prompt = String::new();
@@ -124,12 +124,12 @@ impl CodexProvider {
         full_prompt
     }
 
-    /// Apply permission flags based on GOOSE_MODE setting
+    /// Apply permission flags based on ASTER_MODE setting
     fn apply_permission_flags(cmd: &mut Command) -> Result<(), ProviderError> {
         let config = Config::global();
-        let goose_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
+        let aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
 
-        match goose_mode {
+        match aster_mode {
             AsterMode::Auto => {
                 // --yolo is shorthand for --dangerously-bypass-approvals-and-sandbox
                 cmd.arg("--yolo");
@@ -159,7 +159,7 @@ impl CodexProvider {
     ) -> Result<Vec<String>, ProviderError> {
         let prompt = self.messages_to_prompt(system, messages);
 
-        if std::env::var("GOOSE_CODEX_DEBUG").is_ok() {
+        if std::env::var("ASTER_CODEX_DEBUG").is_ok() {
             println!("=== CODEX PROVIDER DEBUG ===");
             println!("Command: {:?}", self.command);
             println!("Model: {}", self.model.model_name);
@@ -178,7 +178,7 @@ impl CodexProvider {
         cmd.arg("exec");
 
         // Only pass model parameter if it's in the known models list
-        // This allows users to set GOOSE_PROVIDER=codex without needing to specify a model
+        // This allows users to set ASTER_PROVIDER=codex without needing to specify a model
         if CODEX_KNOWN_MODELS.contains(&self.model.model_name.as_str()) {
             cmd.arg("-m").arg(&self.model.model_name);
         }
@@ -197,7 +197,7 @@ impl CodexProvider {
         // JSON output format for structured parsing
         cmd.arg("--json");
 
-        // Apply permission mode based on GOOSE_MODE
+        // Apply permission mode based on ASTER_MODE
         Self::apply_permission_flags(&mut cmd)?;
 
         // Skip git repo check if configured
@@ -452,7 +452,7 @@ impl CodexProvider {
             })
             .unwrap_or_else(|| "Simple task".to_string());
 
-        if std::env::var("GOOSE_CODEX_DEBUG").is_ok() {
+        if std::env::var("ASTER_CODEX_DEBUG").is_ok() {
             println!("=== CODEX PROVIDER DEBUG ===");
             println!("Generated simple session description: {}", description);
             println!("Skipped subprocess call for session description");

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use anstream::println;
-use console::style;
 use aster::recipe::{Recipe, BUILT_IN_RECIPE_DIR_PARAM};
+use console::style;
 
 pub fn print_recipe_explanation(recipe: &Recipe) {
     println!(

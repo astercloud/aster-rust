@@ -75,9 +75,9 @@ pub fn create_editor_model() -> Option<EditorModel> {
     }
 
     // Check if basic editor API variables are set
-    let api_key = std::env::var("GOOSE_EDITOR_API_KEY").ok()?;
-    let host = std::env::var("GOOSE_EDITOR_HOST").ok()?;
-    let model = std::env::var("GOOSE_EDITOR_MODEL").ok()?;
+    let api_key = std::env::var("ASTER_EDITOR_API_KEY").ok()?;
+    let host = std::env::var("ASTER_EDITOR_HOST").ok()?;
+    let model = std::env::var("ASTER_EDITOR_MODEL").ok()?;
 
     if api_key.is_empty() || host.is_empty() || model.is_empty() {
         return None;

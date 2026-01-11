@@ -182,7 +182,7 @@ impl MemoryServer {
             "#};
 
         // Check for .aster/memory in current directory
-        let local_memory_dir = std::env::var("GOOSE_WORKING_DIR")
+        let local_memory_dir = std::env::var("ASTER_WORKING_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| std::env::current_dir().unwrap())
             .join(".aster")
@@ -190,7 +190,7 @@ impl MemoryServer {
 
         // choose_app_strategy().config_dir()
         // - macOS/Linux: ~/.config/aster/memory/
-        // - Windows:     ~\AppData\Roaming\Block\goose\config\memory
+        // - Windows:     ~\AppData\Roaming\AsterCloud\aster\config\memory
         // if it fails, fall back to `.config/aster/memory` (relative to the current dir)
         let global_memory_dir = choose_app_strategy(crate::APP_STRATEGY.clone())
             .map(|strategy| strategy.in_config_dir("memory"))

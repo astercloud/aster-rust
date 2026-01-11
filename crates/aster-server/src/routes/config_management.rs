@@ -1,11 +1,5 @@
 use crate::routes::utils::check_provider_configured;
 use crate::state::AppState;
-use axum::routing::put;
-use axum::{
-    extract::Path,
-    routing::{delete, get, post},
-    Json, Router,
-};
 use aster::config::declarative_providers::LoadedProvider;
 use aster::config::paths::Paths;
 use aster::config::ExtensionEntry;
@@ -21,6 +15,12 @@ use aster::providers::{retry_operation, RetryConfig};
 use aster::{
     agents::execute_commands, agents::ExtensionConfig, config::permission::PermissionLevel,
     slash_commands,
+};
+use axum::routing::put;
+use axum::{
+    extract::Path,
+    routing::{delete, get, post},
+    Json, Router,
 };
 use http::StatusCode;
 use serde::{Deserialize, Serialize};

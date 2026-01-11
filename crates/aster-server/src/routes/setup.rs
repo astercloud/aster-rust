@@ -1,8 +1,8 @@
 use crate::state::AppState;
-use axum::{http::StatusCode, routing::post, Json, Router};
 use aster::config::signup_openrouter::OpenRouterAuth;
 use aster::config::signup_tetrate::{configure_tetrate, TetrateAuth};
 use aster::config::{configure_openrouter, Config};
+use axum::{http::StatusCode, routing::post, Json, Router};
 use serde::Serialize;
 use std::sync::Arc;
 use utoipa::ToSchema;

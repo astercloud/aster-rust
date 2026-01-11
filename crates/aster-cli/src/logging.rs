@@ -70,9 +70,9 @@ fn setup_logging_internal(
                 EnvFilter::new("")
                     // Set mcp-client to DEBUG
                     .add_directive("mcp_client=debug".parse().unwrap())
-                    // Set goose module to DEBUG
+                    // Set aster module to DEBUG
                     .add_directive("aster=debug".parse().unwrap())
-                    // Set goose-cli to INFO
+                    // Set aster-cli to INFO
                     .add_directive("aster_cli=info".parse().unwrap())
                     // Set everything else to WARN
                     .add_directive(LevelFilter::WARN.into())

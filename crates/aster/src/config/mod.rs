@@ -1,8 +1,8 @@
+pub mod aster_mode;
 pub mod base;
 pub mod declarative_providers;
 mod experiments;
 pub mod extensions;
-pub mod aster_mode;
 pub mod paths;
 pub mod permission;
 pub mod search_path;
@@ -10,6 +10,7 @@ pub mod signup_openrouter;
 pub mod signup_tetrate;
 
 pub use crate::agents::ExtensionConfig;
+pub use aster_mode::AsterMode;
 pub use base::{Config, ConfigError};
 pub use declarative_providers::DeclarativeProviderConfig;
 pub use experiments::ExperimentManager;
@@ -18,7 +19,6 @@ pub use extensions::{
     get_warnings, is_extension_enabled, remove_extension, set_extension, set_extension_enabled,
     ExtensionEntry,
 };
-pub use aster_mode::AsterMode;
 pub use permission::PermissionManager;
 pub use signup_openrouter::configure_openrouter;
 pub use signup_tetrate::configure_tetrate;

@@ -3,6 +3,7 @@ use crate::routes::recipe_utils::{
     apply_recipe_to_agent, build_recipe_with_parameter_values, load_recipe_by_id, validate_recipe,
 };
 use crate::state::AppState;
+use aster::config::PermissionManager;
 use axum::response::IntoResponse;
 use axum::{
     extract::{Query, State},
@@ -10,11 +11,9 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use aster::config::PermissionManager;
 
-use base64::Engine;
 use aster::agents::ExtensionConfig;
-use aster::config::{Config, AsterMode};
+use aster::config::{AsterMode, Config};
 use aster::model::ModelConfig;
 use aster::prompt_template::render_global_file;
 use aster::providers::create;
@@ -26,6 +25,7 @@ use aster::{
     agents::{extension::ToolInfo, extension_manager::get_parameter_names},
     config::permission::PermissionLevel,
 };
+use base64::Engine;
 use rmcp::model::{CallToolRequestParam, Content};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -410,7 +410,7 @@ async fn get_tools(
     Query(query): Query<GetToolsQuery>,
 ) -> Result<Json<Vec<ToolInfo>>, StatusCode> {
     let config = Config::global();
-    let goose_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
+    let aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
     let agent = state.get_agent_for_route(query.session_id).await?;
     let permission_manager = PermissionManager::default();
 
@@ -422,9 +422,9 @@ async fn get_tools(
             let permission = permission_manager
                 .get_user_permission(&tool.name)
                 .or_else(|| {
-                    if goose_mode == AsterMode::SmartApprove {
+                    if aster_mode == AsterMode::SmartApprove {
                         permission_manager.get_smart_approve_permission(&tool.name)
-                    } else if goose_mode == AsterMode::Approve {
+                    } else if aster_mode == AsterMode::Approve {
                         Some(PermissionLevel::AskBefore)
                     } else {
                         None

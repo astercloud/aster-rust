@@ -296,8 +296,8 @@ impl Default for ComputerControllerServer {
 impl ComputerControllerServer {
     pub fn new() -> Self {
         // choose_app_strategy().cache_dir()
-        // - macOS/Linux: ~/.cache/goose/computer_controller/
-        // - Windows:     ~\AppData\Local\Block\goose\cache\computer_controller\
+        // - macOS/Linux: ~/.cache/aster/computer_controller/
+        // - Windows:     ~\AppData\Local\AsterCloud\aster\cache\computer_controller\
         // keep previous behavior of defaulting to /tmp/
         let cache_dir = choose_app_strategy(crate::APP_STRATEGY.clone())
             .map(|strategy| strategy.in_cache_dir("computer_controller"))
@@ -417,7 +417,7 @@ impl ComputerControllerServer {
             tool_router: Self::tool_router(),
             cache_dir,
             active_resources: Arc::new(Mutex::new(HashMap::new())),
-            http_client: Client::builder().user_agent("goose/1.0").build().unwrap(),
+            http_client: Client::builder().user_agent("aster/1.0").build().unwrap(),
             instructions,
             system_automation,
         }
@@ -708,7 +708,7 @@ impl ComputerControllerServer {
                     .arg("-NonInteractive")
                     .arg("-File")
                     .arg(&command)
-                    .env("GOOSE_TERMINAL", "1")
+                    .env("ASTER_TERMINAL", "1")
                     .output()
                     .await
                     .map_err(|e| {
@@ -722,7 +722,7 @@ impl ComputerControllerServer {
             _ => Command::new(shell)
                 .arg(shell_arg)
                 .arg(&command)
-                .env("GOOSE_TERMINAL", "1")
+                .env("ASTER_TERMINAL", "1")
                 .output()
                 .await
                 .map_err(|e| {

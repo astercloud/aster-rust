@@ -125,8 +125,8 @@ impl ModelConfig {
                 return Self::validate_context_limit(&val, env_var).map(Some);
             }
         }
-        if let Ok(val) = std::env::var("GOOSE_CONTEXT_LIMIT") {
-            return Self::validate_context_limit(&val, "GOOSE_CONTEXT_LIMIT").map(Some);
+        if let Ok(val) = std::env::var("ASTER_CONTEXT_LIMIT") {
+            return Self::validate_context_limit(&val, "ASTER_CONTEXT_LIMIT").map(Some);
         }
 
         // Get the model's limit
@@ -168,17 +168,17 @@ impl ModelConfig {
     }
 
     fn parse_temperature() -> Result<Option<f32>, ConfigError> {
-        if let Ok(val) = std::env::var("GOOSE_TEMPERATURE") {
+        if let Ok(val) = std::env::var("ASTER_TEMPERATURE") {
             let temp = val.parse::<f32>().map_err(|_| {
                 ConfigError::InvalidValue(
-                    "GOOSE_TEMPERATURE".to_string(),
+                    "ASTER_TEMPERATURE".to_string(),
                     val.clone(),
                     "must be a valid number".to_string(),
                 )
             })?;
             if temp < 0.0 {
                 return Err(ConfigError::InvalidRange(
-                    "GOOSE_TEMPERATURE".to_string(),
+                    "ASTER_TEMPERATURE".to_string(),
                     val,
                 ));
             }
@@ -189,11 +189,11 @@ impl ModelConfig {
     }
 
     fn parse_max_tokens() -> Result<Option<i32>, ConfigError> {
-        match crate::config::Config::global().get_param::<i32>("GOOSE_MAX_TOKENS") {
+        match crate::config::Config::global().get_param::<i32>("ASTER_MAX_TOKENS") {
             Ok(tokens) => {
                 if tokens <= 0 {
                     return Err(ConfigError::InvalidRange(
-                        "goose_max_tokens".to_string(),
+                        "aster_max_tokens".to_string(),
                         "must be greater than 0".to_string(),
                     ));
                 }
@@ -201,7 +201,7 @@ impl ModelConfig {
             }
             Err(crate::config::ConfigError::NotFound(_)) => Ok(None),
             Err(e) => Err(ConfigError::InvalidValue(
-                "goose_max_tokens".to_string(),
+                "aster_max_tokens".to_string(),
                 String::new(),
                 e.to_string(),
             )),
@@ -209,12 +209,12 @@ impl ModelConfig {
     }
 
     fn parse_toolshim() -> Result<bool, ConfigError> {
-        if let Ok(val) = std::env::var("GOOSE_TOOLSHIM") {
+        if let Ok(val) = std::env::var("ASTER_TOOLSHIM") {
             match val.to_lowercase().as_str() {
                 "1" | "true" | "yes" | "on" => Ok(true),
                 "0" | "false" | "no" | "off" => Ok(false),
                 _ => Err(ConfigError::InvalidValue(
-                    "GOOSE_TOOLSHIM".to_string(),
+                    "ASTER_TOOLSHIM".to_string(),
                     val,
                     "must be one of: 1, true, yes, on, 0, false, no, off".to_string(),
                 )),
@@ -225,9 +225,9 @@ impl ModelConfig {
     }
 
     fn parse_toolshim_model() -> Result<Option<String>, ConfigError> {
-        match std::env::var("GOOSE_TOOLSHIM_OLLAMA_MODEL") {
+        match std::env::var("ASTER_TOOLSHIM_OLLAMA_MODEL") {
             Ok(val) if val.trim().is_empty() => Err(ConfigError::InvalidValue(
-                "GOOSE_TOOLSHIM_OLLAMA_MODEL".to_string(),
+                "ASTER_TOOLSHIM_OLLAMA_MODEL".to_string(),
                 val,
                 "cannot be empty if set".to_string(),
             )),
@@ -327,21 +327,21 @@ mod tests {
 
     #[test]
     fn test_parse_max_tokens_valid() {
-        let _guard = env_lock::lock_env([("GOOSE_MAX_TOKENS", Some("4096"))]);
+        let _guard = env_lock::lock_env([("ASTER_MAX_TOKENS", Some("4096"))]);
         let result = ModelConfig::parse_max_tokens().unwrap();
         assert_eq!(result, Some(4096));
     }
 
     #[test]
     fn test_parse_max_tokens_not_set() {
-        let _guard = env_lock::lock_env([("GOOSE_MAX_TOKENS", None::<&str>)]);
+        let _guard = env_lock::lock_env([("ASTER_MAX_TOKENS", None::<&str>)]);
         let result = ModelConfig::parse_max_tokens().unwrap();
         assert_eq!(result, None);
     }
 
     #[test]
     fn test_parse_max_tokens_invalid_string() {
-        let _guard = env_lock::lock_env([("GOOSE_MAX_TOKENS", Some("not_a_number"))]);
+        let _guard = env_lock::lock_env([("ASTER_MAX_TOKENS", Some("not_a_number"))]);
         let result = ModelConfig::parse_max_tokens();
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ConfigError::InvalidValue(..)));
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn test_parse_max_tokens_zero() {
-        let _guard = env_lock::lock_env([("GOOSE_MAX_TOKENS", Some("0"))]);
+        let _guard = env_lock::lock_env([("ASTER_MAX_TOKENS", Some("0"))]);
         let result = ModelConfig::parse_max_tokens();
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ConfigError::InvalidRange(..)));
@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn test_parse_max_tokens_negative() {
-        let _guard = env_lock::lock_env([("GOOSE_MAX_TOKENS", Some("-100"))]);
+        let _guard = env_lock::lock_env([("ASTER_MAX_TOKENS", Some("-100"))]);
         let result = ModelConfig::parse_max_tokens();
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ConfigError::InvalidRange(..)));
@@ -366,11 +366,11 @@ mod tests {
     #[test]
     fn test_model_config_with_max_tokens_env() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_MAX_TOKENS", Some("8192")),
-            ("GOOSE_TEMPERATURE", None::<&str>),
-            ("GOOSE_CONTEXT_LIMIT", None::<&str>),
-            ("GOOSE_TOOLSHIM", None::<&str>),
-            ("GOOSE_TOOLSHIM_OLLAMA_MODEL", None::<&str>),
+            ("ASTER_MAX_TOKENS", Some("8192")),
+            ("ASTER_TEMPERATURE", None::<&str>),
+            ("ASTER_CONTEXT_LIMIT", None::<&str>),
+            ("ASTER_TOOLSHIM", None::<&str>),
+            ("ASTER_TOOLSHIM_OLLAMA_MODEL", None::<&str>),
         ]);
         let config = ModelConfig::new("test-model").unwrap();
         assert_eq!(config.max_tokens, Some(8192));
@@ -379,11 +379,11 @@ mod tests {
     #[test]
     fn test_model_config_without_max_tokens_env() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_MAX_TOKENS", None::<&str>),
-            ("GOOSE_TEMPERATURE", None::<&str>),
-            ("GOOSE_CONTEXT_LIMIT", None::<&str>),
-            ("GOOSE_TOOLSHIM", None::<&str>),
-            ("GOOSE_TOOLSHIM_OLLAMA_MODEL", None::<&str>),
+            ("ASTER_MAX_TOKENS", None::<&str>),
+            ("ASTER_TEMPERATURE", None::<&str>),
+            ("ASTER_CONTEXT_LIMIT", None::<&str>),
+            ("ASTER_TOOLSHIM", None::<&str>),
+            ("ASTER_TOOLSHIM_OLLAMA_MODEL", None::<&str>),
         ]);
         let config = ModelConfig::new("test-model").unwrap();
         assert_eq!(config.max_tokens, None);

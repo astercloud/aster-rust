@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
-use chrono;
 use aster::conversation::message::{Message, MessageContent, MessageMetadata};
 use aster::session::SessionManager;
 use aster::session::SessionType;
+use chrono;
 use rmcp::model::Role;
 
 use crate::session::{build_session, SessionBuilderConfig};
@@ -35,7 +35,7 @@ impl Shell {
 }
 
 static BASH_CONFIG: ShellConfig = ShellConfig {
-    script_template: r#"export GOOSE_SESSION_ID="{session_id}"
+    script_template: r#"export ASTER_SESSION_ID="{session_id}"
 alias @aster='{aster_bin} term run'
 alias @g='{aster_bin} term run'
 
@@ -53,7 +53,7 @@ fi{command_not_found_handler}"#,
         r#"
 
 command_not_found_handle() {
-    echo "🪿 Command '$1' not found. Asking goose..."
+    echo "🪿 Command '$1' not found. Asking aster..."
     '{aster_bin}' term run "$@"
     return 0
 }"#,
@@ -61,7 +61,7 @@ command_not_found_handle() {
 };
 
 static ZSH_CONFIG: ShellConfig = ShellConfig {
-    script_template: r#"export GOOSE_SESSION_ID="{session_id}"
+    script_template: r#"export ASTER_SESSION_ID="{session_id}"
 alias @aster='{aster_bin} term run'
 alias @g='{aster_bin} term run'
 
@@ -77,7 +77,7 @@ add-zsh-hook preexec aster_preexec{command_not_found_handler}"#,
         r#"
 
 command_not_found_handler() {
-    echo "🪿 Command '$1' not found. Asking goose..."
+    echo "🪿 Command '$1' not found. Asking aster..."
     '{aster_bin}' term run "$@"
     return 0
 }"#,
@@ -85,7 +85,7 @@ command_not_found_handler() {
 };
 
 static FISH_CONFIG: ShellConfig = ShellConfig {
-    script_template: r#"set -gx GOOSE_SESSION_ID "{session_id}"
+    script_template: r#"set -gx ASTER_SESSION_ID "{session_id}"
 function @aster; {aster_bin} term run $argv; end
 function @g; {aster_bin} term run $argv; end
 
@@ -98,7 +98,7 @@ end"#,
 };
 
 static POWERSHELL_CONFIG: ShellConfig = ShellConfig {
-    script_template: r#"$env:GOOSE_SESSION_ID = "{session_id}"
+    script_template: r#"$env:ASTER_SESSION_ID = "{session_id}"
 function @aster {{ & '{aster_bin}' term run @args }}
 function @g {{ & '{aster_bin}' term run @args }}
 
@@ -133,7 +133,7 @@ pub async fn handle_term_init(
         None => {
             let session = SessionManager::create_session(
                 working_dir,
-                "Goose Term Session".to_string(),
+                "Aster Term Session".to_string(),
                 SessionType::Terminal,
             )
             .await?;
@@ -173,8 +173,8 @@ pub async fn handle_term_init(
 }
 
 pub async fn handle_term_log(command: String) -> Result<()> {
-    let session_id = std::env::var("GOOSE_SESSION_ID").map_err(|_| {
-        anyhow!("GOOSE_SESSION_ID not set. Run 'eval \"$(aster term init <shell>)\"' first.")
+    let session_id = std::env::var("ASTER_SESSION_ID").map_err(|_| {
+        anyhow!("ASTER_SESSION_ID not set. Run 'eval \"$(aster term init <shell>)\"' first.")
     })?;
 
     let message = Message::new(
@@ -191,9 +191,9 @@ pub async fn handle_term_log(command: String) -> Result<()> {
 
 pub async fn handle_term_run(prompt: Vec<String>) -> Result<()> {
     let prompt = prompt.join(" ");
-    let session_id = std::env::var("GOOSE_SESSION_ID").map_err(|_| {
+    let session_id = std::env::var("ASTER_SESSION_ID").map_err(|_| {
         anyhow!(
-            "GOOSE_SESSION_ID not set.\n\n\
+            "ASTER_SESSION_ID not set.\n\n\
              Add to your shell config (~/.zshrc or ~/.bashrc):\n    \
              eval \"$(aster term init zsh)\"\n\n\
              Then restart your terminal or run: source ~/.zshrc"
@@ -255,7 +255,7 @@ pub async fn handle_term_run(prompt: Vec<String>) -> Result<()> {
 
 /// Handle `aster term info` - print compact session info for prompt integration
 pub async fn handle_term_info() -> Result<()> {
-    let session_id = match std::env::var("GOOSE_SESSION_ID") {
+    let session_id = match std::env::var("ASTER_SESSION_ID") {
         Ok(id) => id,
         Err(_) => return Ok(()),
     };

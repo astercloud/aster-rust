@@ -49,8 +49,8 @@ use uuid::Uuid;
 pub const DEFAULT_INTERPRETER_MODEL_OLLAMA: &str = "mistral-nemo";
 
 /// Environment variables that affect behavior:
-/// - GOOSE_TOOLSHIM: When set to "true" or "1", enables using the tool shim in the standard OllamaProvider (default: false)
-/// - GOOSE_TOOLSHIM_OLLAMA_MODEL: Ollama model to use as the tool interpreter (default: DEFAULT_INTERPRETER_MODEL)
+/// - ASTER_TOOLSHIM: When set to "true" or "1", enables using the tool shim in the standard OllamaProvider (default: false)
+/// - ASTER_TOOLSHIM_OLLAMA_MODEL: Ollama model to use as the tool interpreter (default: DEFAULT_INTERPRETER_MODEL)
 /// A trait for models that can interpret text into structured tool call JSON format
 #[async_trait::async_trait]
 pub trait ToolInterpreter {
@@ -283,7 +283,7 @@ Otherwise, if no JSON tool requests are provided, use the no-op tool:
         let format_schema = OllamaInterpreter::tool_structured_ouput_format_schema();
 
         // Determine which model to use for interpretation (from env var or default)
-        let interpreter_model = std::env::var("GOOSE_TOOLSHIM_OLLAMA_MODEL")
+        let interpreter_model = std::env::var("ASTER_TOOLSHIM_OLLAMA_MODEL")
             .unwrap_or_else(|_| DEFAULT_INTERPRETER_MODEL_OLLAMA.to_string());
 
         // Make a call to ollama with structured output

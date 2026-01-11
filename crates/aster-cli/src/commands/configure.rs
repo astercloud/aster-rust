@@ -1,6 +1,4 @@
-use crate::recipes::github_recipe::GOOSE_RECIPE_GITHUB_REPO_CONFIG_KEY;
-use cliclack::spinner;
-use console::style;
+use crate::recipes::github_recipe::ASTER_RECIPE_GITHUB_REPO_CONFIG_KEY;
 use aster::agents::extension::ToolInfo;
 use aster::agents::extension_manager::get_parameter_names;
 use aster::agents::Agent;
@@ -14,7 +12,7 @@ use aster::config::paths::Paths;
 use aster::config::permission::PermissionLevel;
 use aster::config::signup_tetrate::TetrateAuth;
 use aster::config::{
-    configure_tetrate, Config, ConfigError, ExperimentManager, ExtensionEntry, AsterMode,
+    configure_tetrate, AsterMode, Config, ConfigError, ExperimentManager, ExtensionEntry,
     PermissionManager,
 };
 use aster::conversation::message::Message;
@@ -22,6 +20,8 @@ use aster::model::ModelConfig;
 use aster::providers::provider_test::test_provider_configuration;
 use aster::providers::{create, providers, retry_operation, RetryConfig};
 use aster::session::{SessionManager, SessionType};
+use cliclack::spinner;
+use console::style;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -43,14 +43,14 @@ async fn handle_first_time_setup(config: &Config) -> anyhow::Result<()> {
     println!();
     println!(
         "{}",
-        style("Welcome to goose! Let's get you set up with a provider.").dim()
+        style("Welcome to aster! Let's get you set up with a provider.").dim()
     );
     println!(
         "{}",
         style("  you can rerun this command later to update your configuration").dim()
     );
     println!();
-    cliclack::intro(style(" goose-configure ").on_cyan().black())?;
+    cliclack::intro(style(" aster-configure ").on_cyan().black())?;
 
     let setup_method = cliclack::select("How would you like to set up your provider?")
         .item(
@@ -113,7 +113,7 @@ async fn handle_manual_provider_setup(config: &Config) {
         Ok(false) => {
             let _ = config.clear();
             println!(
-                "\n  {}: We did not save your config, inspect your credentials\n   and run '{}' again to ensure goose can connect",
+                "\n  {}: We did not save your config, inspect your credentials\n   and run '{}' again to ensure aster can connect",
                 style("Warning").yellow().italic(),
                 style("aster configure").cyan()
             );
@@ -164,7 +164,7 @@ fn print_manual_config_error(e: &anyhow::Error) {
         }
         _ => {
             println!(
-                "\n  {} {} \n  We did not save your config, inspect your credentials\n   and run '{}' again to ensure goose can connect",
+                "\n  {} {} \n  We did not save your config, inspect your credentials\n   and run '{}' again to ensure aster can connect",
                 style("Error").red().italic(),
                 e,
                 style("aster configure").cyan()
@@ -218,7 +218,7 @@ async fn handle_existing_config() -> anyhow::Result<()> {
     );
     println!();
 
-    cliclack::intro(style(" goose-configure ").on_cyan().black())?;
+    cliclack::intro(style(" aster-configure ").on_cyan().black())?;
     let action = cliclack::select("What would you like to configure?")
         .item(
             "providers",
@@ -239,8 +239,8 @@ async fn handle_existing_config() -> anyhow::Result<()> {
         .item("remove", "Remove Extension", "Remove an extension")
         .item(
             "settings",
-            "goose settings",
-            "Set the goose mode, Tool Output, Tool Permissions, Experiment, goose recipe github repo and more",
+            "aster settings",
+            "Set the aster mode, Tool Output, Tool Permissions, Experiment, aster recipe github repo and more",
         )
         .interact()?;
 
@@ -432,7 +432,7 @@ fn try_store_secret(config: &Config, key_name: &str, value: String) -> anyhow::R
         Ok(_) => Ok(true),
         Err(e) => {
             cliclack::outro(style(format!(
-                "Failed to store {} securely: {}. Please ensure your system's secure storage is accessible. Alternatively you can run with GOOSE_DISABLE_KEYRING=true or set the key in your environment variables",
+                "Failed to store {} securely: {}. Please ensure your system's secure storage is accessible. Alternatively you can run with ASTER_DISABLE_KEYRING=true or set the key in your environment variables",
                 key_name, e
             )).on_red().white())?;
             Ok(false)
@@ -598,7 +598,7 @@ pub async fn configure_provider_dialog() -> anyhow::Result<bool> {
         Ok(Some(models)) => select_model_from_list(&models, provider_meta)?,
         Ok(None) => {
             let default_model =
-                std::env::var("GOOSE_MODEL").unwrap_or(provider_meta.default_model.clone());
+                std::env::var("ASTER_MODEL").unwrap_or(provider_meta.default_model.clone());
             cliclack::input("Enter a model from that provider:")
                 .default_input(&default_model)
                 .interact()?
@@ -609,10 +609,10 @@ pub async fn configure_provider_dialog() -> anyhow::Result<bool> {
     let spin = spinner();
     spin.start("Checking your configuration...");
 
-    let toolshim_enabled = std::env::var("GOOSE_TOOLSHIM")
+    let toolshim_enabled = std::env::var("ASTER_TOOLSHIM")
         .map(|val| val == "1" || val.to_lowercase() == "true")
         .unwrap_or(false);
-    let toolshim_model = std::env::var("GOOSE_TOOLSHIM_OLLAMA_MODEL").ok();
+    let toolshim_model = std::env::var("ASTER_TOOLSHIM_OLLAMA_MODEL").ok();
 
     match test_provider_configuration(provider_name, &model, toolshim_enabled, toolshim_model).await
     {
@@ -630,7 +630,7 @@ pub async fn configure_provider_dialog() -> anyhow::Result<bool> {
     }
 }
 
-/// Configure extensions that can be used with goose
+/// Configure extensions that can be used with aster
 /// Dialog for toggling which extensions are enabled/disabled
 pub fn toggle_extensions_dialog() -> anyhow::Result<()> {
     for warning in aster::config::get_warnings() {
@@ -942,7 +942,7 @@ pub fn configure_extensions_dialog() -> anyhow::Result<()> {
         .item(
             "built-in",
             "Built-in Extension",
-            "Use an extension that comes with goose",
+            "Use an extension that comes with aster",
         )
         .item(
             "stdio",
@@ -1030,7 +1030,7 @@ pub fn remove_extension_dialog() -> anyhow::Result<()> {
 
 pub async fn configure_settings_dialog() -> anyhow::Result<()> {
     let setting_type = cliclack::select("What setting would you like to configure?")
-        .item("goose_mode", "goose mode", "Configure goose mode")
+        .item("aster_mode", "aster mode", "Configure aster mode")
         .item(
             "tool_permission",
             "Tool Permission",
@@ -1058,16 +1058,16 @@ pub async fn configure_settings_dialog() -> anyhow::Result<()> {
         )
         .item(
             "recipe",
-            "goose recipe github repo",
-            "goose will pull recipes from this repo if not found locally.",
+            "aster recipe github repo",
+            "aster will pull recipes from this repo if not found locally.",
         )
         .interact()?;
 
     let mut should_print_config_path = true;
 
     match setting_type {
-        "goose_mode" => {
-            configure_goose_mode_dialog()?;
+        "aster_mode" => {
+            configure_aster_mode_dialog()?;
         }
         "tool_permission" => {
             configure_tool_permissions_dialog().await.and(Ok(()))?;
@@ -1099,14 +1099,14 @@ pub async fn configure_settings_dialog() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn configure_goose_mode_dialog() -> anyhow::Result<()> {
+pub fn configure_aster_mode_dialog() -> anyhow::Result<()> {
     let config = Config::global();
 
-    if std::env::var("GOOSE_MODE").is_ok() {
-        let _ = cliclack::log::info("Notice: GOOSE_MODE environment variable is set and will override the configuration here.");
+    if std::env::var("ASTER_MODE").is_ok() {
+        let _ = cliclack::log::info("Notice: ASTER_MODE environment variable is set and will override the configuration here.");
     }
 
-    let mode = cliclack::select("Which goose mode would you like to configure?")
+    let mode = cliclack::select("Which aster mode would you like to configure?")
         .item(
             AsterMode::Auto,
             "Auto Mode",
@@ -1143,8 +1143,8 @@ pub fn configure_goose_mode_dialog() -> anyhow::Result<()> {
 pub fn configure_tool_output_dialog() -> anyhow::Result<()> {
     let config = Config::global();
 
-    if std::env::var("GOOSE_CLI_MIN_PRIORITY").is_ok() {
-        let _ = cliclack::log::info("Notice: GOOSE_CLI_MIN_PRIORITY environment variable is set and will override the configuration here.");
+    if std::env::var("ASTER_CLI_MIN_PRIORITY").is_ok() {
+        let _ = cliclack::log::info("Notice: ASTER_CLI_MIN_PRIORITY environment variable is set and will override the configuration here.");
     }
     let tool_log_level = cliclack::select("Which tool output would you like to show?")
         .item("high", "High Importance", "")
@@ -1154,15 +1154,15 @@ pub fn configure_tool_output_dialog() -> anyhow::Result<()> {
 
     match tool_log_level {
         "high" => {
-            config.set_param("GOOSE_CLI_MIN_PRIORITY", 0.8)?;
+            config.set_param("ASTER_CLI_MIN_PRIORITY", 0.8)?;
             cliclack::outro("Showing tool output of high importance only.")?;
         }
         "medium" => {
-            config.set_param("GOOSE_CLI_MIN_PRIORITY", 0.2)?;
+            config.set_param("ASTER_CLI_MIN_PRIORITY", 0.2)?;
             cliclack::outro("Showing tool output of medium importance.")?;
         }
         "all" => {
-            config.set_param("GOOSE_CLI_MIN_PRIORITY", 0.0)?;
+            config.set_param("ASTER_CLI_MIN_PRIORITY", 0.0)?;
             cliclack::outro("Showing all tool output.")?;
         }
         _ => unreachable!(),
@@ -1174,11 +1174,11 @@ pub fn configure_tool_output_dialog() -> anyhow::Result<()> {
 pub fn configure_keyring_dialog() -> anyhow::Result<()> {
     let config = Config::global();
 
-    if std::env::var("GOOSE_DISABLE_KEYRING").is_ok() {
-        let _ = cliclack::log::info("Notice: GOOSE_DISABLE_KEYRING environment variable is set and will override the configuration here.");
+    if std::env::var("ASTER_DISABLE_KEYRING").is_ok() {
+        let _ = cliclack::log::info("Notice: ASTER_DISABLE_KEYRING environment variable is set and will override the configuration here.");
     }
 
-    let currently_disabled = config.get_param::<String>("GOOSE_DISABLE_KEYRING").is_ok();
+    let currently_disabled = config.get_param::<String>("ASTER_DISABLE_KEYRING").is_ok();
 
     let current_status = if currently_disabled {
         "Disabled (using file-based storage)"
@@ -1205,19 +1205,19 @@ pub fn configure_keyring_dialog() -> anyhow::Result<()> {
     match storage_option {
         "keyring" => {
             // Set to empty string to enable keyring (absence or empty = enabled)
-            config.set_param("GOOSE_DISABLE_KEYRING", Value::String("".to_string()))?;
+            config.set_param("ASTER_DISABLE_KEYRING", Value::String("".to_string()))?;
             cliclack::outro("Secret storage set to system keyring (secure)")?;
             let _ =
-                cliclack::log::info("You may need to restart goose for this change to take effect");
+                cliclack::log::info("You may need to restart aster for this change to take effect");
         }
         "file" => {
             // Set the disable flag to use file storage
-            config.set_param("GOOSE_DISABLE_KEYRING", Value::String("true".to_string()))?;
+            config.set_param("ASTER_DISABLE_KEYRING", Value::String("true".to_string()))?;
             cliclack::outro(
                 "Secret storage set to file (~/.config/aster/secrets.yaml). Keep this file secure!",
             )?;
             let _ =
-                cliclack::log::info("You may need to restart goose for this change to take effect");
+                cliclack::log::info("You may need to restart aster for this change to take effect");
         }
         _ => unreachable!(),
     };
@@ -1225,7 +1225,7 @@ pub fn configure_keyring_dialog() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Configure experiment features that can be used with goose
+/// Configure experiment features that can be used with aster
 /// Dialog for toggling which experiments are enabled/disabled
 pub fn toggle_experiments_dialog() -> anyhow::Result<()> {
     let experiments = ExperimentManager::get_all()?;
@@ -1426,13 +1426,13 @@ pub async fn configure_tool_permissions_dialog() -> anyhow::Result<()> {
 }
 
 fn configure_recipe_dialog() -> anyhow::Result<()> {
-    let key_name = GOOSE_RECIPE_GITHUB_REPO_CONFIG_KEY;
+    let key_name = ASTER_RECIPE_GITHUB_REPO_CONFIG_KEY;
     let config = Config::global();
     let default_recipe_repo = std::env::var(key_name)
         .ok()
         .or_else(|| config.get_param(key_name).unwrap_or(None));
     let mut recipe_repo_input = cliclack::input(
-        "Enter your goose recipe Github repo (owner/repo): eg: my_org/goose-recipes",
+        "Enter your aster recipe Github repo (owner/repo): eg: my_org/aster-recipes",
     )
     .required(false);
     if let Some(recipe_repo) = default_recipe_repo {
@@ -1450,7 +1450,7 @@ fn configure_recipe_dialog() -> anyhow::Result<()> {
 pub fn configure_max_turns_dialog() -> anyhow::Result<()> {
     let config = Config::global();
 
-    let current_max_turns: u32 = config.get_param("GOOSE_MAX_TURNS").unwrap_or(1000);
+    let current_max_turns: u32 = config.get_param("ASTER_MAX_TURNS").unwrap_or(1000);
 
     let max_turns_input: String =
         cliclack::input("Set maximum number of agent turns without user input:")
@@ -1469,10 +1469,10 @@ pub fn configure_max_turns_dialog() -> anyhow::Result<()> {
             .interact()?;
 
     let max_turns: u32 = max_turns_input.parse()?;
-    config.set_param("GOOSE_MAX_TURNS", max_turns)?;
+    config.set_param("ASTER_MAX_TURNS", max_turns)?;
 
     cliclack::outro(format!(
-        "Set maximum turns to {} - goose will ask for input after {} consecutive actions",
+        "Set maximum turns to {} - aster will ask for input after {} consecutive actions",
         max_turns, max_turns
     ))?;
 
@@ -1517,7 +1517,7 @@ pub async fn handle_openrouter_auth() -> anyhow::Result<()> {
             // Simple test request
             let test_result = provider
                 .complete(
-                    "You are goose, an AI assistant.",
+                    "You are aster, an AI assistant.",
                     &[Message::user().with_text("Say 'Configuration test successful!'")],
                     &[],
                 )
@@ -1548,7 +1548,7 @@ pub async fn handle_openrouter_auth() -> anyhow::Result<()> {
                         println!("✓ Developer extension enabled");
                     }
 
-                    cliclack::outro("OpenRouter setup complete! You can now use goose.")?;
+                    cliclack::outro("OpenRouter setup complete! You can now use aster.")?;
                 }
                 Err(e) => {
                     eprintln!("⚠️  Configuration test failed: {}", e);
@@ -1594,7 +1594,7 @@ pub async fn handle_tetrate_auth() -> anyhow::Result<()> {
         Ok(provider) => {
             let test_result = provider
                 .complete(
-                    "You are goose, an AI assistant.",
+                    "You are aster, an AI assistant.",
                     &[Message::user().with_text("Say 'Configuration test successful!'")],
                     &[],
                 )
@@ -1625,7 +1625,7 @@ pub async fn handle_tetrate_auth() -> anyhow::Result<()> {
                     }
 
                     cliclack::outro(
-                        "Tetrate Agent Router Service setup complete! You can now use goose.",
+                        "Tetrate Agent Router Service setup complete! You can now use aster.",
                     )?;
                 }
                 Err(e) => {

@@ -25,7 +25,7 @@ use crate::agents::subagent_tool::{
 };
 use crate::agents::types::SessionConfig;
 use crate::agents::types::{FrontendTool, SharedProvider, ToolResultReceiver};
-use crate::config::{get_enabled_extensions, Config, AsterMode};
+use crate::config::{get_enabled_extensions, AsterMode, Config};
 use crate::context_mgmt::{
     check_if_compaction_needed, compact_messages, DEFAULT_COMPACTION_THRESHOLD,
 };
@@ -59,7 +59,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
 const DEFAULT_MAX_TURNS: u32 = 1000;
-const COMPACTION_THINKING_TEXT: &str = "goose is compacting the conversation...";
+const COMPACTION_THINKING_TEXT: &str = "aster is compacting the conversation...";
 
 /// Context needed for the reply function
 pub struct ReplyContext {
@@ -67,7 +67,7 @@ pub struct ReplyContext {
     pub tools: Vec<Tool>,
     pub toolshim_tools: Vec<Tool>,
     pub system_prompt: String,
-    pub goose_mode: AsterMode,
+    pub aster_mode: AsterMode,
     pub initial_messages: Vec<Message>,
 }
 
@@ -77,7 +77,7 @@ pub struct ToolCategorizeResult {
     pub filtered_response: Message,
 }
 
-/// The main goose Agent
+/// The main aster Agent
 pub struct Agent {
     pub(super) provider: SharedProvider,
 
@@ -264,10 +264,10 @@ impl Agent {
 
         let (tools, toolshim_tools, system_prompt) =
             self.prepare_tools_and_prompt(working_dir).await?;
-        let goose_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
+        let aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
 
         self.tool_inspection_manager
-            .update_permission_inspector_mode(goose_mode)
+            .update_permission_inspector_mode(aster_mode)
             .await;
 
         Ok(ReplyContext {
@@ -275,7 +275,7 @@ impl Agent {
             tools,
             toolshim_tools,
             system_prompt,
-            goose_mode,
+            aster_mode,
             initial_messages,
         })
     }
@@ -815,7 +815,7 @@ impl Agent {
             } else {
                 let config = Config::global();
                 let threshold = config
-                    .get_param::<f64>("GOOSE_AUTO_COMPACT_THRESHOLD")
+                    .get_param::<f64>("ASTER_AUTO_COMPACT_THRESHOLD")
                     .unwrap_or(DEFAULT_COMPACTION_THRESHOLD);
                 let threshold_percentage = (threshold * 100.0) as u32;
 
@@ -887,7 +887,7 @@ impl Agent {
             mut tools,
             mut toolshim_tools,
             mut system_prompt,
-            goose_mode,
+            aster_mode,
             initial_messages,
         } = context;
         let reply_span = tracing::Span::current();
@@ -1024,7 +1024,7 @@ impl Agent {
                                         yield AgentEvent::Message(msg);
                                     }
                                 }
-                                if goose_mode == AsterMode::Chat {
+                                if aster_mode == AsterMode::Chat {
                                     // Skip all remaining tool calls in chat mode
                                     for request in remaining_requests.iter() {
                                         if let Some(response_msg) = request_to_response_map.get(&request.id) {

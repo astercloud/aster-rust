@@ -158,13 +158,13 @@ pub trait ProviderRetry {
                             _ => config.delay_for_attempt(attempts),
                         };
 
-                        let skip_backoff = std::env::var("GOOSE_PROVIDER_SKIP_BACKOFF")
+                        let skip_backoff = std::env::var("ASTER_PROVIDER_SKIP_BACKOFF")
                             .unwrap_or_default()
                             .parse::<bool>()
                             .unwrap_or(false);
 
                         if skip_backoff {
-                            tracing::info!("Skipping backoff due to GOOSE_PROVIDER_SKIP_BACKOFF");
+                            tracing::info!("Skipping backoff due to ASTER_PROVIDER_SKIP_BACKOFF");
                         } else {
                             tracing::info!("Backing off for {:?} before retry", delay);
                             sleep(delay).await;

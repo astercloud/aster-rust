@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use futures::StreamExt;
 use aster::agents::{Agent, AgentEvent};
 use aster::config::extensions::{set_extension, ExtensionEntry};
+use futures::StreamExt;
 
 #[cfg(test)]
 mod tests {
@@ -12,12 +12,12 @@ mod tests {
     #[cfg(test)]
     mod schedule_tool_tests {
         use super::*;
-        use async_trait::async_trait;
-        use chrono::{DateTime, Utc};
         use aster::agents::platform_tools::PLATFORM_MANAGE_SCHEDULE_TOOL_NAME;
         use aster::scheduler::{ScheduledJob, SchedulerError};
         use aster::scheduler_trait::SchedulerTrait;
         use aster::session::Session;
+        use async_trait::async_trait;
+        use chrono::{DateTime, Utc};
         use std::path::PathBuf;
         use std::sync::Arc;
 
@@ -296,7 +296,6 @@ mod tests {
     #[cfg(test)]
     mod max_turns_tests {
         use super::*;
-        use async_trait::async_trait;
         use aster::agents::SessionConfig;
         use aster::conversation::message::{Message, MessageContent};
         use aster::model::ModelConfig;
@@ -304,6 +303,7 @@ mod tests {
         use aster::providers::errors::ProviderError;
         use aster::session::session_manager::SessionType;
         use aster::session::SessionManager;
+        use async_trait::async_trait;
         use rmcp::model::{CallToolRequestParam, Tool};
         use rmcp::object;
         use std::path::PathBuf;
@@ -460,7 +460,7 @@ mod tests {
                 config: ExtensionConfig::Platform {
                     name: "todo".to_string(),
                     description:
-                        "Enable a todo list for Goose so it can keep track of what it is doing"
+                        "Enable a todo list for Aster so it can keep track of what it is doing"
                             .to_string(),
                     bundled: Some(true),
                     available_tools: vec![],

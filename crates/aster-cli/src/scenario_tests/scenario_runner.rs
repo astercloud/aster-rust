@@ -1,5 +1,5 @@
-use dotenvy::dotenv;
 use aster::conversation::Conversation;
+use dotenvy::dotenv;
 
 use crate::scenario_tests::message_generator::MessageGenerator;
 use crate::scenario_tests::mock_client::weather_client;
@@ -51,7 +51,7 @@ pub async fn run_scenario<F>(
 where
     F: Fn(&ScenarioResult) -> Result<()> + Send + Sync + 'static,
 {
-    if let Ok(only_provider) = std::env::var("GOOSE_TEST_PROVIDER") {
+    if let Ok(only_provider) = std::env::var("ASTER_TEST_PROVIDER") {
         let active_providers = get_provider_configs();
         let config = active_providers
             .iter()

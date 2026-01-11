@@ -35,7 +35,7 @@ const CONNECTION_TIMEOUT_SECS: u64 = 30;
 const MAX_WS_SIZE: usize = 900_000;
 
 fn get_worker_url() -> String {
-    std::env::var("GOOSE_TUNNEL_WORKER_URL")
+    std::env::var("ASTER_TUNNEL_WORKER_URL")
         .ok()
         .unwrap_or_else(|| WORKER_URL.to_string())
 }

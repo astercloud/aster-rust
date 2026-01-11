@@ -8,14 +8,14 @@ use std::sync::Arc;
 
 use super::CompletionCache;
 
-/// Completer for goose CLI commands
-pub struct GooseCompleter {
+/// Completer for aster CLI commands
+pub struct AsterCompleter {
     completion_cache: Arc<std::sync::RwLock<CompletionCache>>,
     filename_completer: FilenameCompleter,
 }
 
-impl GooseCompleter {
-    /// Create a new GooseCompleter with a reference to the Session's completion cache
+impl AsterCompleter {
+    /// Create a new AsterCompleter with a reference to the Session's completion cache
     pub fn new(completion_cache: Arc<std::sync::RwLock<CompletionCache>>) -> Self {
         Self {
             completion_cache,
@@ -289,7 +289,7 @@ impl GooseCompleter {
     }
 }
 
-impl Completer for GooseCompleter {
+impl Completer for AsterCompleter {
     type Candidate = Pair;
 
     fn complete(
@@ -381,10 +381,10 @@ impl Completer for GooseCompleter {
 }
 
 // Implement the Helper trait which is required by rustyline
-impl Helper for GooseCompleter {}
+impl Helper for AsterCompleter {}
 
 // Implement required traits with default implementations
-impl Hinter for GooseCompleter {
+impl Hinter for AsterCompleter {
     type Hint = String;
 
     fn hint(&self, line: &str, _pos: usize, _ctx: &Context<'_>) -> Option<Self::Hint> {
@@ -397,7 +397,7 @@ impl Hinter for GooseCompleter {
     }
 }
 
-impl Highlighter for GooseCompleter {
+impl Highlighter for AsterCompleter {
     fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
         &'s self,
         prompt: &'p str,
@@ -421,7 +421,7 @@ impl Highlighter for GooseCompleter {
     }
 }
 
-impl Validator for GooseCompleter {
+impl Validator for AsterCompleter {
     fn validate(
         &self,
         _ctx: &mut rustyline::validate::ValidationContext,
@@ -504,7 +504,7 @@ mod tests {
     #[test]
     fn test_complete_slash_commands() {
         let cache = create_test_cache();
-        let completer = GooseCompleter::new(cache);
+        let completer = AsterCompleter::new(cache);
 
         // Test complete match
         let (pos, candidates) = completer.complete_slash_commands("/exit").unwrap();
@@ -532,7 +532,7 @@ mod tests {
     #[test]
     fn test_complete_prompt_names() {
         let cache = create_test_cache();
-        let completer = GooseCompleter::new(cache);
+        let completer = AsterCompleter::new(cache);
 
         // Test with just "/prompt "
         let (pos, candidates) = completer.complete_prompt_names("/prompt ").unwrap();
@@ -563,7 +563,7 @@ mod tests {
     #[test]
     fn test_complete_prompt_flags() {
         let cache = create_test_cache();
-        let completer = GooseCompleter::new(cache);
+        let completer = AsterCompleter::new(cache);
 
         // Test with partial flag
         let (_pos, candidates) = completer
@@ -595,7 +595,7 @@ mod tests {
     #[test]
     fn test_complete_argument_keys() {
         let cache = create_test_cache();
-        let completer = GooseCompleter::new(cache);
+        let completer = AsterCompleter::new(cache);
 
         // Test with just a prompt name (no space after)
         // This case doesn't return any candidates in the current implementation

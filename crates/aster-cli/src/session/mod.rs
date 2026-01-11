@@ -18,22 +18,22 @@ use tokio::signal::ctrl_c;
 use tokio_util::task::AbortOnDropHandle;
 
 pub use self::export::message_to_markdown;
-pub use builder::{build_session, SessionBuilderConfig, SessionSettings};
-use console::Color;
 use aster::agents::AgentEvent;
 use aster::permission::permission_confirmation::PrincipalType;
 use aster::permission::Permission;
 use aster::permission::PermissionConfirmation;
 use aster::providers::base::Provider;
 use aster::utils::safe_truncate;
+pub use builder::{build_session, SessionBuilderConfig, SessionSettings};
+use console::Color;
 
 use anyhow::{Context, Result};
-use completion::GooseCompleter;
 use aster::agents::extension::{Envs, ExtensionConfig, PLATFORM_EXTENSIONS};
 use aster::agents::types::RetryConfig;
 use aster::agents::{Agent, SessionConfig, COMPACT_TRIGGERS};
-use aster::config::{Config, AsterMode};
+use aster::config::{AsterMode, Config};
 use aster::session::SessionManager;
+use completion::AsterCompleter;
 use input::InputResult;
 use rmcp::model::PromptMessage;
 use rmcp::model::ServerNotification;
@@ -120,7 +120,7 @@ impl HistoryManager {
 
     fn load(
         &self,
-        editor: &mut rustyline::Editor<GooseCompleter, rustyline::history::DefaultHistory>,
+        editor: &mut rustyline::Editor<AsterCompleter, rustyline::history::DefaultHistory>,
     ) {
         if let Some(parent) = self.history_file.parent() {
             if !parent.exists() {
@@ -140,7 +140,7 @@ impl HistoryManager {
 
     fn save(
         &self,
-        editor: &mut rustyline::Editor<GooseCompleter, rustyline::history::DefaultHistory>,
+        editor: &mut rustyline::Editor<AsterCompleter, rustyline::history::DefaultHistory>,
     ) {
         if let Err(err) = editor.save_history(&self.history_file) {
             eprintln!("Warning: Failed to save command history: {}", err);
@@ -461,7 +461,7 @@ impl CliSession {
 
     fn create_editor(
         &self,
-    ) -> Result<rustyline::Editor<GooseCompleter, rustyline::history::DefaultHistory>> {
+    ) -> Result<rustyline::Editor<AsterCompleter, rustyline::history::DefaultHistory>> {
         let builder =
             rustyline::Config::builder().completion_type(rustyline::CompletionType::Circular);
         let builder = match self.edit_mode {
@@ -470,10 +470,10 @@ impl CliSession {
         };
         let config = builder.build();
         let mut editor =
-            rustyline::Editor::<GooseCompleter, rustyline::history::DefaultHistory>::with_config(
+            rustyline::Editor::<AsterCompleter, rustyline::history::DefaultHistory>::with_config(
                 config,
             )?;
-        let completer = GooseCompleter::new(self.completion_cache.clone());
+        let completer = AsterCompleter::new(self.completion_cache.clone());
         editor.set_helper(Some(completer));
         Ok(editor)
     }
@@ -482,7 +482,7 @@ impl CliSession {
         &mut self,
         input: InputResult,
         history: &HistoryManager,
-        editor: &mut rustyline::Editor<GooseCompleter, rustyline::history::DefaultHistory>,
+        editor: &mut rustyline::Editor<AsterCompleter, rustyline::history::DefaultHistory>,
     ) -> Result<()> {
         match input {
             InputResult::Message(content) => {
@@ -521,7 +521,7 @@ impl CliSession {
             }
             InputResult::AsterMode(mode) => {
                 history.save(editor);
-                self.handle_goose_mode(&mode)?;
+                self.handle_aster_mode(&mode)?;
             }
             InputResult::Plan(options) => {
                 self.handle_plan_mode(options).await?;
@@ -554,7 +554,7 @@ impl CliSession {
         &mut self,
         content: &str,
         history: &HistoryManager,
-        editor: &mut rustyline::Editor<GooseCompleter, rustyline::history::DefaultHistory>,
+        editor: &mut rustyline::Editor<AsterCompleter, rustyline::history::DefaultHistory>,
     ) -> Result<()> {
         match self.run_mode {
             RunMode::Normal => {
@@ -635,7 +635,7 @@ impl CliSession {
         output::set_theme(new_theme);
     }
 
-    fn handle_goose_mode(&self, mode: &str) -> Result<()> {
+    fn handle_aster_mode(&self, mode: &str) -> Result<()> {
         let config = Config::global();
         let mode = match AsterMode::from_str(&mode.to_lowercase()) {
             Ok(mode) => mode,
@@ -648,7 +648,7 @@ impl CliSession {
             }
         };
         config.set_aster_mode(mode)?;
-        output::goose_mode_message(&format!("Goose mode set to '{:?}'", mode));
+        output::aster_mode_message(&format!("Aster mode set to '{:?}'", mode));
         Ok(())
     }
 
@@ -785,7 +785,7 @@ impl CliSession {
                 if should_act {
                     output::render_act_on_plan();
                     self.run_mode = RunMode::Normal;
-                    // set goose mode: auto if that isn't already the case
+                    // set aster mode: auto if that isn't already the case
                     let config = Config::global();
                     let curr_aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
                     if curr_aster_mode != AsterMode::Auto {
@@ -803,7 +803,7 @@ impl CliSession {
                         .await?;
                     output::hide_thinking();
 
-                    // Reset run & goose mode
+                    // Reset run & aster mode
                     if curr_aster_mode != AsterMode::Auto {
                         config.set_aster_mode(curr_aster_mode)?;
                     }
@@ -916,7 +916,7 @@ impl CliSession {
                                     println!("\n{}", security_message);
                                     "Do you allow this tool call?".to_string()
                                 } else {
-                                    "Goose would like to call the above tool, do you allow?".to_string()
+                                    "Aster would like to call the above tool, do you allow?".to_string()
                                 };
 
                                 // Get confirmation from user
@@ -1095,7 +1095,7 @@ impl CliSession {
                                                         // Check verbosity setting for subagent response content
                                                         let config = Config::global();
                                                         let min_priority = config
-                                                            .get_param::<f32>("GOOSE_CLI_MIN_PRIORITY")
+                                                            .get_param::<f32>("ASTER_CLI_MIN_PRIORITY")
                                                             .ok()
                                                             .unwrap_or(0.5);
 
@@ -1475,7 +1475,7 @@ impl CliSession {
 
         let config = Config::global();
         let show_cost = config
-            .get_param::<bool>("GOOSE_CLI_SHOW_COST")
+            .get_param::<bool>("ASTER_CLI_SHOW_COST")
             .unwrap_or(false);
 
         let provider_name = config
@@ -1624,27 +1624,27 @@ async fn get_reasoner() -> Result<Arc<dyn Provider>, anyhow::Error> {
     let config = Config::global();
 
     // Try planner-specific provider first, fallback to default provider
-    let provider = if let Ok(provider) = config.get_param::<String>("GOOSE_PLANNER_PROVIDER") {
+    let provider = if let Ok(provider) = config.get_param::<String>("ASTER_PLANNER_PROVIDER") {
         provider
     } else {
-        println!("WARNING: GOOSE_PLANNER_PROVIDER not found. Using default provider...");
+        println!("WARNING: ASTER_PLANNER_PROVIDER not found. Using default provider...");
         config
             .get_aster_provider()
             .expect("No provider configured. Run 'aster configure' first")
     };
 
     // Try planner-specific model first, fallback to default model
-    let model = if let Ok(model) = config.get_param::<String>("GOOSE_PLANNER_MODEL") {
+    let model = if let Ok(model) = config.get_param::<String>("ASTER_PLANNER_MODEL") {
         model
     } else {
-        println!("WARNING: GOOSE_PLANNER_MODEL not found. Using default model...");
+        println!("WARNING: ASTER_PLANNER_MODEL not found. Using default model...");
         config
             .get_aster_model()
             .expect("No model configured. Run 'aster configure' first")
     };
 
     let model_config =
-        ModelConfig::new_with_context_env(model, Some("GOOSE_PLANNER_CONTEXT_LIMIT"))?;
+        ModelConfig::new_with_context_env(model, Some("ASTER_PLANNER_CONTEXT_LIMIT"))?;
     let reasoner = create(&provider, model_config).await?;
 
     Ok(reasoner)

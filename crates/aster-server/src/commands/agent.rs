@@ -1,8 +1,8 @@
 use crate::configuration;
 use crate::state;
 use anyhow::Result;
-use axum::middleware;
 use aster_server::auth::check_token;
+use axum::middleware;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
@@ -31,7 +31,7 @@ pub async fn run() -> Result<()> {
     let settings = configuration::Settings::new()?;
 
     let secret_key =
-        std::env::var("GOOSE_SERVER__SECRET_KEY").unwrap_or_else(|_| "test".to_string());
+        std::env::var("ASTER_SERVER__SECRET_KEY").unwrap_or_else(|_| "test".to_string());
 
     let app_state = state::AppState::new().await?;
 

@@ -797,17 +797,17 @@ Global claude content
         .unwrap();
 
         // Simulate ~/.config/aster/skills (global, medium priority)
-        let global_goose = temp_dir.path().join("global-goose");
-        fs::create_dir(&global_goose).unwrap();
-        let skill_global_goose = global_goose.join("my-skill");
-        fs::create_dir(&skill_global_goose).unwrap();
+        let global_aster = temp_dir.path().join("global-aster");
+        fs::create_dir(&global_aster).unwrap();
+        let skill_global_aster = global_aster.join("my-skill");
+        fs::create_dir(&skill_global_aster).unwrap();
         fs::write(
-            skill_global_goose.join("SKILL.md"),
+            skill_global_aster.join("SKILL.md"),
             r#"---
 name: my-skill
-description: From global goose config
+description: From global aster config
 ---
-Global goose config content
+Global aster config content
 "#,
         )
         .unwrap();
@@ -829,40 +829,40 @@ Working dir claude content
         .unwrap();
 
         // Simulate $PWD/.aster/skills (working dir, highest priority)
-        let working_goose = temp_dir.path().join("working-goose");
-        fs::create_dir(&working_goose).unwrap();
-        let skill_working_goose = working_goose.join("my-skill");
-        fs::create_dir(&skill_working_goose).unwrap();
+        let working_aster = temp_dir.path().join("working-aster");
+        fs::create_dir(&working_aster).unwrap();
+        let skill_working_aster = working_aster.join("my-skill");
+        fs::create_dir(&skill_working_aster).unwrap();
         fs::write(
-            skill_working_goose.join("SKILL.md"),
+            skill_working_aster.join("SKILL.md"),
             r#"---
 name: my-skill
-description: From working dir goose
+description: From working dir aster
 ---
-Working dir goose content
+Working dir aster content
 "#,
         )
         .unwrap();
 
-        // Test priority order: global_claude < global_goose < working_claude < working_goose
+        // Test priority order: global_claude < global_aster < working_claude < working_aster
         let skills = SkillsClient::discover_skills_in_directories(&[
             global_claude,
-            global_goose,
+            global_aster,
             working_claude,
-            working_goose,
+            working_aster,
         ]);
 
         assert_eq!(skills.len(), 1);
         assert!(skills.contains_key("my-skill"));
-        // The last directory (working_goose) should win
+        // The last directory (working_aster) should win
         assert_eq!(
             skills.get("my-skill").unwrap().metadata.description,
-            "From working dir goose"
+            "From working dir aster"
         );
         assert!(skills
             .get("my-skill")
             .unwrap()
             .body
-            .contains("Working dir goose content"));
+            .contains("Working dir aster content"));
     }
 }

@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::process::Command;
 
 const DOWNLOAD_SCRIPT_URL: &str =
-    "https://github.com/block/goose/releases/download/stable/download_cli.sh";
+    "https://github.com/astercloud/aster-rust/releases/download/stable/download_cli.sh";
 
 pub fn update(canary: bool, reconfigure: bool) -> Result<()> {
     if cfg!(feature = "disable-update") {
@@ -29,7 +29,7 @@ pub fn update(canary: bool, reconfigure: bool) -> Result<()> {
         .arg(shell_str)
         .env("CANARY", canary.to_string())
         .env("CONFIGURE", reconfigure.to_string())
-        .env("GOOSE_TERMINAL", "1")
+        .env("ASTER_TERMINAL", "1")
         .spawn()?;
 
     update.wait_with_output()?;

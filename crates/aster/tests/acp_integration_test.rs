@@ -228,8 +228,8 @@ fn extract_text(updates: &[SessionNotification]) -> String {
         .collect()
 }
 
-async fn spawn_goose_acp(mock_server: &MockServer, builtins: &[&str], data_root: &Path) -> Child {
-    let mut cmd = Command::new(&*common::GOOSE_BINARY);
+async fn spawn_aster_acp(mock_server: &MockServer, builtins: &[&str], data_root: &Path) -> Child {
+    let mut cmd = Command::new(&*common::ASTER_BINARY);
     cmd.args(["acp"]);
     if !builtins.is_empty() {
         cmd.arg("--with-builtin").arg(builtins.join(","));
@@ -237,12 +237,12 @@ async fn spawn_goose_acp(mock_server: &MockServer, builtins: &[&str], data_root:
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .env("GOOSE_PROVIDER", "openai")
-        .env("GOOSE_MODEL", "gpt-5-nano")
-        .env("GOOSE_MODE", "approve")
+        .env("ASTER_PROVIDER", "openai")
+        .env("ASTER_MODEL", "gpt-5-nano")
+        .env("ASTER_MODE", "approve")
         .env("OPENAI_HOST", mock_server.uri())
         .env("OPENAI_API_KEY", "test-key")
-        .env("GOOSE_PATH_ROOT", data_root)
+        .env("ASTER_PATH_ROOT", data_root)
         .env(
             "RUST_LOG",
             std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
@@ -266,7 +266,7 @@ async fn run_acp_session<F, Fut>(
     ) -> Fut,
     Fut: std::future::Future<Output = ()>,
 {
-    let mut child = spawn_goose_acp(mock_server, builtins, data_root).await;
+    let mut child = spawn_aster_acp(mock_server, builtins, data_root).await;
     let work_dir = tempfile::tempdir().unwrap();
     let updates = Arc::new(Mutex::new(Vec::new()));
     let outgoing = child.stdin.take().unwrap().compat_write();
