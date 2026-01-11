@@ -1,0 +1,151 @@
+import { useState, useEffect } from 'react';
+import { Button } from '../../ui/button';
+import { Check } from '../../icons';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../ui/dialog';
+
+const HelpText = () => (
+  <div className="text-sm flex-col space-y-4 text-textSubtle">
+    <p>
+      .asterhints is a text file used to provide additional context about your project and improve
+      the communication with Aster.
+    </p>
+    <p>
+      Please make sure <span className="font-bold">Developer</span> extension is enabled in the
+      extensions page. This extension is required to use .asterhints. You'll need to restart your
+      session for .asterhints updates to take effect.
+    </p>
+    <p>
+      See{' '}
+      <Button
+        variant="link"
+        className="text-blue-500 hover:text-blue-600 p-0 h-auto"
+        onClick={() =>
+          window.open('https://block.github.io/aster/docs/guides/using-asterhints/', '_blank')
+        }
+      >
+        using .asterhints
+      </Button>{' '}
+      for more information.
+    </p>
+  </div>
+);
+
+const ErrorDisplay = ({ error }: { error: Error }) => (
+  <div className="text-sm text-textSubtle">
+    <div className="text-red-600">Error reading .asterhints file: {JSON.stringify(error)}</div>
+  </div>
+);
+
+const FileInfo = ({ filePath, found }: { filePath: string; found: boolean }) => (
+  <div className="text-sm font-medium mb-2">
+    {found ? (
+      <div className="text-green-600">
+        <Check className="w-4 h-4 inline-block" /> .asterhints file found at: {filePath}
+      </div>
+    ) : (
+      <div>Creating new .asterhints file at: {filePath}</div>
+    )}
+  </div>
+);
+
+const getAsterhintsFile = async (filePath: string) => await window.electron.readFile(filePath);
+
+interface AsterhintsModalProps {
+  directory: string;
+  setIsAsterhintsModalOpen: (isOpen: boolean) => void;
+}
+
+export const AsterhintsModal = ({ directory, setIsAsterhintsModalOpen }: AsterhintsModalProps) => {
+  const asterhintsFilePath = `${directory}/.asterhints`;
+  const [asterhintsFile, setAsterhintsFile] = useState<string>('');
+  const [asterhintsFileFound, setAsterhintsFileFound] = useState<boolean>(false);
+  const [asterhintsFileReadError, setAsterhintsFileReadError] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    const fetchAsterhintsFile = async () => {
+      try {
+        const { file, error, found } = await getAsterhintsFile(asterhintsFilePath);
+        setAsterhintsFile(file);
+        setAsterhintsFileFound(found);
+        setAsterhintsFileReadError(found && error ? error : '');
+      } catch (error) {
+        console.error('Error fetching .asterhints file:', error);
+        setAsterhintsFileReadError('Failed to access .asterhints file');
+      }
+    };
+    if (directory) fetchAsterhintsFile();
+  }, [directory, asterhintsFilePath]);
+
+  const writeFile = async () => {
+    setIsSaving(true);
+    setSaveSuccess(false);
+    try {
+      await window.electron.writeFile(asterhintsFilePath, asterhintsFile);
+      setSaveSuccess(true);
+      setAsterhintsFileFound(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      console.error('Error writing .asterhints file:', error);
+      setAsterhintsFileReadError('Failed to save .asterhints file');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={(open) => setIsAsterhintsModalOpen(open)}>
+      <DialogContent className="w-[80vw] max-w-[80vw] sm:max-w-[80vw] max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Configure Project Hints (.asterhints)</DialogTitle>
+          <DialogDescription>
+            Provide additional context about your project to improve communication with Aster
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto space-y-4 pt-2 pb-4">
+          <HelpText />
+
+          <div>
+            {asterhintsFileReadError ? (
+              <ErrorDisplay error={new Error(asterhintsFileReadError)} />
+            ) : (
+              <div className="space-y-2">
+                <FileInfo filePath={asterhintsFilePath} found={asterhintsFileFound} />
+                <textarea
+                  value={asterhintsFile}
+                  className="w-full h-80 border rounded-md p-2 text-sm resize-none bg-background-default text-textStandard border-borderStandard focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(event) => setAsterhintsFile(event.target.value)}
+                  placeholder="Enter project hints here..."
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          {saveSuccess && (
+            <span className="text-green-600 text-sm flex items-center gap-1 mr-auto">
+              <Check className="w-4 h-4" />
+              Saved successfully
+            </span>
+          )}
+          <Button variant="outline" onClick={() => setIsAsterhintsModalOpen(false)}>
+            Close
+          </Button>
+          <Button onClick={writeFile} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};

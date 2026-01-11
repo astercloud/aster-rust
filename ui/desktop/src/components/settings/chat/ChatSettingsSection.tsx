@@ -1,0 +1,50 @@
+import { ModeSection } from '../mode/ModeSection';
+import DictationSection from '../dictation/DictationSection';
+import { SecurityToggle } from '../security/SecurityToggle';
+import { ResponseStylesSection } from '../response_styles/ResponseStylesSection';
+import { AsterhintsSection } from './AsterhintsSection';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
+
+export default function ChatSettingsSection() {
+  return (
+    <div className="space-y-4 pr-4 pb-8 mt-1">
+      <Card className="pb-2 rounded-lg">
+        <CardHeader className="pb-0">
+          <CardTitle className="">Mode</CardTitle>
+          <CardDescription>Configure how Aster interacts with tools and extensions</CardDescription>
+        </CardHeader>
+        <CardContent className="px-2">
+          <ModeSection />
+        </CardContent>
+      </Card>
+
+      <Card className="pb-2 rounded-lg">
+        <CardContent className="px-2">
+          <SecurityToggle />
+        </CardContent>
+      </Card>
+
+      <Card className="pb-2 rounded-lg">
+        <CardHeader className="pb-0">
+          <CardTitle className="">Response Styles</CardTitle>
+          <CardDescription>Choose how Aster should format and style its responses</CardDescription>
+        </CardHeader>
+        <CardContent className="px-2">
+          <ResponseStylesSection />
+        </CardContent>
+      </Card>
+
+      <Card className="pb-2 rounded-lg">
+        <CardContent className="px-2">
+          <DictationSection />
+        </CardContent>
+      </Card>
+
+      <Card className="pb-2 rounded-lg">
+        <CardContent className="px-2">
+          <AsterhintsSection />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

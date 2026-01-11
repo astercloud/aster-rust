@@ -1,0 +1,322 @@
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { Button } from '../../ui/button';
+import { Plus, AlertTriangle } from 'lucide-react';
+import { GPSIcon } from '../../ui/icons';
+import { useConfig, FixedExtensionEntry } from '../../ConfigContext';
+import ExtensionList from './subcomponents/ExtensionList';
+import ExtensionModal from './modal/ExtensionModal';
+import {
+  createExtensionConfig,
+  ExtensionFormData,
+  extensionToFormData,
+  getDefaultFormData,
+} from './utils';
+
+import { activateExtension, deleteExtension, toggleExtension, updateExtension } from './index';
+import { ExtensionConfig } from '../../../api';
+
+interface ExtensionSectionProps {
+  sessionId?: string;
+  deepLinkConfig?: ExtensionConfig;
+  showEnvVars?: boolean;
+  hideButtons?: boolean;
+  disableConfiguration?: boolean;
+  customToggle?: (extension: FixedExtensionEntry) => Promise<boolean | void>;
+  selectedExtensions?: string[]; // Add controlled state
+  onModalClose?: (extensionName: string) => void;
+  searchTerm?: string;
+}
+
+export default function ExtensionsSection({
+  sessionId,
+  deepLinkConfig,
+  showEnvVars,
+  hideButtons,
+  disableConfiguration,
+  customToggle,
+  selectedExtensions = [],
+  onModalClose,
+  searchTerm = '',
+}: ExtensionSectionProps) {
+  const { getExtensions, addExtension, removeExtension, extensionsList, extensionWarnings } =
+    useConfig();
+  const [selectedExtension, setSelectedExtension] = useState<FixedExtensionEntry | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [deepLinkConfigStateVar, setDeepLinkConfigStateVar] = useState<
+    ExtensionConfig | undefined | null
+  >(deepLinkConfig);
+  const [showEnvVarsStateVar, setShowEnvVarsStateVar] = useState<boolean | undefined | null>(
+    showEnvVars
+  );
+  const [pendingActivationExtensions, setPendingActivationExtensions] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Update deep link state when props change
+  useEffect(() => {
+    setDeepLinkConfigStateVar(deepLinkConfig);
+    setShowEnvVarsStateVar(showEnvVars);
+
+    if (deepLinkConfig && !showEnvVars) {
+      setPendingActivationExtensions((prev) => {
+        const updated = new Set(prev);
+        updated.add(deepLinkConfig.name);
+        return updated;
+      });
+    }
+  }, [deepLinkConfig, showEnvVars]);
+
+  // Process extensions from context - this automatically updates when extensionsList changes
+  const extensions = useMemo(() => {
+    if (extensionsList.length === 0) return [];
+
+    return [...extensionsList]
+      .sort((a, b) => {
+        // First sort by builtin
+        if (a.type === 'builtin' && b.type !== 'builtin') return -1;
+        if (a.type !== 'builtin' && b.type === 'builtin') return 1;
+
+        // Then sort by bundled (handle null/undefined cases)
+        const aBundled = 'bundled' in a && a.bundled === true;
+        const bBundled = 'bundled' in b && b.bundled === true;
+        if (aBundled && !bBundled) return -1;
+        if (!aBundled && bBundled) return 1;
+
+        // Finally sort alphabetically within each group
+        return a.name.localeCompare(b.name);
+      })
+      .map((ext) => ({
+        ...ext,
+        // Use selectedExtensions to determine enabled state in recipe editor
+        enabled: disableConfiguration ? selectedExtensions.includes(ext.name) : ext.enabled,
+      }));
+  }, [extensionsList, disableConfiguration, selectedExtensions]);
+
+  const fetchExtensions = useCallback(async () => {
+    await getExtensions(true); // Force refresh - this will update the context
+  }, [getExtensions]);
+
+  const handleExtensionToggle = async (extensionConfig: FixedExtensionEntry) => {
+    if (customToggle) {
+      await customToggle(extensionConfig);
+      return true;
+    }
+
+    // If extension is enabled, we are trying to toggle if off, otherwise on
+    const toggleDirection = extensionConfig.enabled ? 'toggleOff' : 'toggleOn';
+
+    await toggleExtension({
+      toggle: toggleDirection,
+      extensionConfig: extensionConfig,
+      addToConfig: addExtension,
+      toastOptions: { silent: false },
+      sessionId,
+    });
+
+    setPendingActivationExtensions((prev) => {
+      const updated = new Set(prev);
+      updated.delete(extensionConfig.name);
+      return updated;
+    });
+
+    await fetchExtensions();
+    return true;
+  };
+
+  const handleConfigureClick = (extension: FixedExtensionEntry) => {
+    setSelectedExtension(extension);
+    setIsModalOpen(true);
+  };
+
+  const handleAddExtension = async (formData: ExtensionFormData) => {
+    // Close the modal immediately
+    handleModalClose();
+
+    const extensionConfig = createExtensionConfig(formData);
+    try {
+      await activateExtension(extensionConfig, addExtension, sessionId);
+      setPendingActivationExtensions((prev) => {
+        const updated = new Set(prev);
+        updated.delete(extensionConfig.name);
+        return updated;
+      });
+    } catch (error) {
+      console.error('Failed to activate extension:', error);
+      // If activation fails, mark as pending if it's enabled in config
+      if (formData.enabled) {
+        setPendingActivationExtensions((prev) => {
+          const updated = new Set(prev);
+          updated.add(extensionConfig.name);
+          return updated;
+        });
+      }
+    } finally {
+      await fetchExtensions();
+      if (onModalClose) {
+        setTimeout(() => {
+          onModalClose(formData.name);
+        }, 200);
+      }
+    }
+  };
+
+  const handleUpdateExtension = async (formData: ExtensionFormData) => {
+    if (!selectedExtension) {
+      console.error('No selected extension for update');
+      return;
+    }
+
+    // Close the modal immediately
+    handleModalClose();
+
+    const extensionConfig = createExtensionConfig(formData);
+    const originalName = selectedExtension.name;
+
+    try {
+      await updateExtension({
+        enabled: formData.enabled,
+        extensionConfig: extensionConfig,
+        addToConfig: addExtension,
+        removeFromConfig: removeExtension,
+        originalName: originalName,
+        sessionId: sessionId,
+      });
+    } catch (error) {
+      console.error('Failed to update extension:', error);
+      // We don't reopen the modal on failure
+    } finally {
+      // Refresh the extensions list regardless of success or failure
+      await fetchExtensions();
+    }
+  };
+
+  const handleDeleteExtension = async (name: string) => {
+    // Capture the selected extension before closing the modal
+    const extensionToDelete = selectedExtension;
+
+    // Close the modal immediately
+    handleModalClose();
+
+    try {
+      await deleteExtension({
+        name,
+        removeFromConfig: removeExtension,
+        sessionId,
+        extensionConfig: extensionToDelete ?? undefined,
+      });
+    } catch (error) {
+      console.error('Failed to delete extension:', error);
+      // We don't reopen the modal on failure
+    } finally {
+      // Refresh the extensions list regardless of success or failure
+      await fetchExtensions();
+    }
+  };
+
+  const handleModalClose = () => {
+    setDeepLinkConfigStateVar(null);
+    setShowEnvVarsStateVar(null);
+
+    setIsModalOpen(false);
+    setIsAddModalOpen(false);
+    setSelectedExtension(null);
+
+    // Clear any navigation state that might be cached
+    if (window.history.state?.deepLinkConfig) {
+      window.history.replaceState({}, '', window.location.hash);
+    }
+  };
+
+  return (
+    <section id="extensions">
+      <div className="">
+        {/* Unsupported extension warnings */}
+        {extensionWarnings.length > 0 && (
+          <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-yellow-500">
+                {extensionWarnings.map((warning, index) => (
+                  <p key={index} className={index > 0 ? 'mt-1' : ''}>
+                    {warning}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <ExtensionList
+          extensions={extensions}
+          onToggle={handleExtensionToggle}
+          onConfigure={handleConfigureClick}
+          disableConfiguration={disableConfiguration}
+          searchTerm={searchTerm}
+          pendingActivationExtensions={pendingActivationExtensions}
+        />
+
+        {!hideButtons && (
+          <div className="flex gap-4 pt-4 w-full">
+            <Button
+              className="flex items-center gap-2 justify-center"
+              variant="default"
+              onClick={() => setIsAddModalOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              Add custom extension
+            </Button>
+            <Button
+              className="flex items-center gap-2 justify-center"
+              variant="secondary"
+              onClick={() => window.open('https://block.github.io/aster/v1/extensions/', '_blank')}
+            >
+              <GPSIcon size={12} />
+              Browse extensions
+            </Button>
+          </div>
+        )}
+
+        {/* Modal for updating an existing extension */}
+        {isModalOpen && selectedExtension && (
+          <ExtensionModal
+            title="Update Extension"
+            initialData={extensionToFormData(selectedExtension)}
+            onClose={handleModalClose}
+            onSubmit={handleUpdateExtension}
+            onDelete={handleDeleteExtension}
+            submitLabel="Save Changes"
+            modalType={'edit'}
+          />
+        )}
+
+        {/* Modal for adding a new extension */}
+        {isAddModalOpen && (
+          <ExtensionModal
+            title="Add custom extension"
+            initialData={getDefaultFormData()}
+            onClose={handleModalClose}
+            onSubmit={handleAddExtension}
+            submitLabel="Add Extension"
+            modalType={'add'}
+          />
+        )}
+
+        {/* Modal for adding extension from deeplink*/}
+        {deepLinkConfigStateVar && showEnvVarsStateVar && (
+          <ExtensionModal
+            title="Add custom extension"
+            initialData={extensionToFormData({
+              ...deepLinkConfig,
+              enabled: true,
+            } as FixedExtensionEntry)}
+            onClose={handleModalClose}
+            onSubmit={handleAddExtension}
+            submitLabel="Add Extension"
+            modalType={'add'}
+          />
+        )}
+      </div>
+    </section>
+  );
+}

@@ -1,0 +1,10 @@
+ASTER_MODEL: gpt-4o
+ASTER_PROVIDER: openai
+extensions:
+  developer:
+    bundled: true
+    display_name: Developer
+    enabled: true
+    name: developer
+    timeout: 300
+    type: builtin
