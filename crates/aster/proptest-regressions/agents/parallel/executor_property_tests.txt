@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 724b43514f6624d7cd3302b9c3f783f0d46f520d49a992961d7fbe5be5de80a1 # shrinks to base_tasks = [AgentTask { id: "ir---_-x___0", task_type: "execute", prompt: "BmLkU Sz R h bjoG  sZ Qv Rtnv  Jm  KzyEojA", description: None, options: None, priority: Some(176), dependencies: None, timeout: None }, AgentTask { id: "w-1--0-i-z_1", task_type: "explore", prompt: "iKxn qCd jUg  jjIr  R  jev     KYMvTm", description: None, options: None, priority: Some(219), dependencies: None, timeout: None }, AgentTask { id: "b8crc7w_w_2", task_type: "explore", prompt: " tdWWfU HjINGrKM", description: None, options: None, priority: None, dependencies: None, timeout: None }, AgentTask { id: "q--_3", task_type: "test", prompt: "MjzE AKLwHaTnIcy YRKg", description: None, options: None, priority: Some(110), dependencies: None, timeout: None }]

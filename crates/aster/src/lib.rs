@@ -7,6 +7,7 @@ pub mod conversation;
 pub mod execution;
 pub mod hints;
 pub mod logging;
+pub mod mcp;
 pub mod mcp_utils;
 pub mod model;
 pub mod oauth;

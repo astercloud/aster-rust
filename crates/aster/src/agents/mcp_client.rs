@@ -1,5 +1,6 @@
 use crate::action_required_manager::ActionRequiredManager;
 use crate::agents::types::SharedProvider;
+use crate::providers::base::Provider;
 use crate::session_context::SESSION_ID_HEADER;
 use rmcp::model::{
     Content, CreateElicitationRequestParam, CreateElicitationResult, ElicitationAction, ErrorCode,
@@ -182,8 +183,38 @@ impl ClientHandler for AsterClient {
             .as_deref()
             .unwrap_or("You are a general-purpose AI agent called aster");
 
+        // Build model config with sampling parameters
+        let mut model_config = provider.get_model_config();
+
+        // Apply model preferences if provided
+        // MCP model preferences include hints (model name patterns) and priority scores
+        if let Some(prefs) = &params.model_preferences {
+            // Try to find a matching model from hints
+            if let Some(hints) = &prefs.hints {
+                for hint in hints {
+                    if let Some(name) = &hint.name {
+                        // Use the hint name as the model name if it looks like a valid model
+                        // The hint name can be a full model name or a pattern
+                        if !name.is_empty() {
+                            model_config.model_name = name.clone();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply maxTokens from the request (required field in MCP sampling)
+        model_config = model_config.with_max_tokens(Some(params.max_tokens as i32));
+
+        // Apply temperature if provided in the request
+        if let Some(temperature) = params.temperature {
+            model_config = model_config.with_temperature(Some(temperature as f32));
+        }
+
+        // Use complete_with_model to apply the custom model config
         let (response, usage) = provider
-            .complete(system_prompt, &provider_ready_messages, &[])
+            .complete_with_model(&model_config, system_prompt, &provider_ready_messages, &[])
             .await
             .map_err(|e| {
                 ErrorData::new(

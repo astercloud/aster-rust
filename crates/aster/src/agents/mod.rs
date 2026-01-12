@@ -24,6 +24,14 @@ pub(crate) mod todo_extension;
 mod tool_execution;
 pub mod types;
 
+// New modules for agents alignment with claude-code-open
+pub mod communication;
+pub mod context;
+pub mod monitor;
+pub mod parallel;
+pub mod resume;
+pub mod specialized;
+
 pub use agent::{Agent, AgentEvent};
 pub use execute_commands::COMPACT_TRIGGERS;
 pub use extension::ExtensionConfig;
@@ -31,3 +39,10 @@ pub use extension_manager::ExtensionManager;
 pub use prompt_manager::PromptManager;
 pub use subagent_task_config::TaskConfig;
 pub use types::{FrontendTool, RetryConfig, SessionConfig, SuccessCheck};
+
+// Re-export context types for convenience
+pub use context::{
+    AgentContext, AgentContextError, AgentContextResult, CompressionResult, ContextFilter,
+    ContextInheritanceConfig, ContextInheritanceType, ContextMetadata, ContextUpdate, FileContext,
+    ToolExecutionResult,
+};
