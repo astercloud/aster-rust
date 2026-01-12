@@ -2,20 +2,32 @@ use crate::agents::extension_manager_extension::MANAGE_EXTENSIONS_TOOL_NAME_COMP
 use crate::config::permission::PermissionLevel;
 use crate::config::{AsterMode, PermissionManager};
 use crate::conversation::message::{Message, ToolRequest};
+use crate::permission::integration::IntegratedPermissionManager;
 use crate::permission::permission_judge::PermissionCheckResult;
+use crate::permission::types::PermissionContext;
 use crate::tool_inspection::{InspectionAction, InspectionResult, ToolInspector};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// Permission Inspector that handles tool permission checking
+///
+/// This inspector integrates both the legacy PermissionManager and the new
+/// ToolPermissionManager for comprehensive permission checking.
+///
+/// Requirements: 11.1, 11.4
 pub struct PermissionInspector {
     mode: Arc<Mutex<AsterMode>>,
     readonly_tools: HashSet<String>,
     regular_tools: HashSet<String>,
     pub permission_manager: Arc<Mutex<PermissionManager>>,
+    /// Optional integrated permission manager for advanced permission features
+    integrated_manager: Option<Arc<Mutex<IntegratedPermissionManager>>>,
+    /// Working directory for permission context
+    working_directory: Option<PathBuf>,
 }
 
 impl PermissionInspector {
@@ -29,6 +41,8 @@ impl PermissionInspector {
             readonly_tools,
             regular_tools,
             permission_manager: Arc::new(Mutex::new(PermissionManager::default())),
+            integrated_manager: None,
+            working_directory: None,
         }
     }
 
@@ -43,13 +57,110 @@ impl PermissionInspector {
             readonly_tools,
             regular_tools,
             permission_manager,
+            integrated_manager: None,
+            working_directory: None,
         }
+    }
+
+    /// Create with integrated permission manager for advanced features
+    ///
+    /// This constructor enables the new tool permission system with:
+    /// - Three-tier permission architecture (Global, Project, Session)
+    /// - Parameter-level restrictions
+    /// - Context-based condition evaluation
+    ///
+    /// Requirements: 11.1, 11.4
+    pub fn with_integrated_manager(
+        mode: AsterMode,
+        readonly_tools: HashSet<String>,
+        regular_tools: HashSet<String>,
+        permission_manager: Arc<Mutex<PermissionManager>>,
+        integrated_manager: Arc<Mutex<IntegratedPermissionManager>>,
+    ) -> Self {
+        Self {
+            mode: Arc::new(Mutex::new(mode)),
+            readonly_tools,
+            regular_tools,
+            permission_manager,
+            integrated_manager: Some(integrated_manager),
+            working_directory: None,
+        }
+    }
+
+    /// Set the working directory for permission context
+    pub fn set_working_directory(&mut self, dir: PathBuf) {
+        self.working_directory = Some(dir);
+    }
+
+    /// Get the integrated permission manager if configured
+    pub fn integrated_manager(&self) -> Option<&Arc<Mutex<IntegratedPermissionManager>>> {
+        self.integrated_manager.as_ref()
     }
 
     /// Update the mode of this permission inspector
     pub async fn update_mode(&self, new_mode: AsterMode) {
         let mut mode = self.mode.lock().await;
         *mode = new_mode;
+    }
+
+    /// Create a permission context for the current request
+    fn create_permission_context(&self, tool_name: &str) -> PermissionContext {
+        PermissionContext {
+            working_directory: self.working_directory.clone().unwrap_or_else(|| PathBuf::from(".")),
+            session_id: uuid::Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now().timestamp(),
+            user: None,
+            environment: HashMap::new(),
+            metadata: {
+                let mut meta = HashMap::new();
+                meta.insert("tool_name".to_string(), serde_json::Value::String(tool_name.to_string()));
+                meta
+            },
+        }
+    }
+
+    /// Check permission using the integrated manager if available
+    ///
+    /// Requirements: 11.1, 11.4
+    async fn check_integrated_permission(
+        &self,
+        tool_name: &str,
+        tool_request: &ToolRequest,
+    ) -> Option<InspectionAction> {
+        let integrated_manager = self.integrated_manager.as_ref()?;
+        let manager = integrated_manager.lock().await;
+        
+        // Extract parameters from tool request
+        let params: HashMap<String, serde_json::Value> = tool_request
+            .tool_call
+            .as_ref()
+            .ok()
+            .and_then(|tc| tc.arguments.clone())
+            .map(|args| {
+                args.into_iter().collect()
+            })
+            .unwrap_or_default();
+
+        let context = self.create_permission_context(tool_name);
+        let result = manager.is_allowed(tool_name, &params, &context).await;
+
+        if result.matched_rule.is_some() || !result.violations.is_empty() {
+            // The integrated manager has a definitive answer
+            if result.allowed {
+                Some(InspectionAction::Allow)
+            } else if !result.violations.is_empty() {
+                // Parameter restrictions violated
+                Some(InspectionAction::RequireApproval(Some(format!(
+                    "Parameter restrictions: {}",
+                    result.violations.join(", ")
+                ))))
+            } else {
+                Some(InspectionAction::Deny)
+            }
+        } else {
+            // No definitive answer from integrated manager
+            None
+        }
     }
 
     /// Process inspection results into permission decisions
@@ -143,8 +254,13 @@ impl ToolInspector for PermissionInspector {
                     AsterMode::Chat => continue,
                     AsterMode::Auto => InspectionAction::Allow,
                     AsterMode::Approve | AsterMode::SmartApprove => {
+                        // First, check the integrated permission manager if available
+                        // Requirements: 11.1, 11.4
+                        if let Some(integrated_action) = self.check_integrated_permission(tool_name, request).await {
+                            integrated_action
+                        }
                         // 1. Check user-defined permission first
-                        if let Some(level) = permission_manager.get_user_permission(tool_name) {
+                        else if let Some(level) = permission_manager.get_user_permission(tool_name) {
                             match level {
                                 PermissionLevel::AlwaysAllow => InspectionAction::Allow,
                                 PermissionLevel::NeverAllow => InspectionAction::Deny,

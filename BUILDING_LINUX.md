@@ -32,7 +32,7 @@ sudo zypper install dpkg fakeroot gcc gcc-c++ make
 aster is not officially support termux build yet, you need some minor patch to fix build issues.
 We will publish aster (block-aster) into termux-packages.
 If you want to try there is a non-official build, https://github.com/shawn111/aster/releases/download/termux/aster-termux-aarch64.tar.bz2
-For more details, see: https://github.com/block/aster/pull/3890
+For more details, see: https://github.com/astercloud/aster-rust/pull/3890
 
 ```bash
 pkg install rust
@@ -49,7 +49,7 @@ pkg install cmake protobuf clang build-essential
 
 ### 1. Clone and Setup
 ```bash
-git clone https://github.com/block/aster.git
+git clone https://github.com/astercloud/aster-rust.git
 cd aster
 ```
 

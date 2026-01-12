@@ -175,7 +175,7 @@ This governance model may evolve as aster grows. Any proposed modification to th
 
 ## Current Membership
 
-Core Maintainers and Maintainers are listed in the main aster repository's [MAINTAINERS.md](https://github.com/block/aster/blob/main/MAINTAINERS.md) file with their areas of expertise where applicable.
+Core Maintainers and Maintainers are listed in the main aster repository's [MAINTAINERS.md](https://github.com/astercloud/aster-rust/blob/main/MAINTAINERS.md) file with their areas of expertise where applicable.
 
 ## Summary
 

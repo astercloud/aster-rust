@@ -261,7 +261,7 @@ jobs:
             --certfile "${GITHUB_WORKSPACE}/block-codesign-cert.pem" \
             --tsaurl "http://timestamp.digicert.com" \
             --name "Aster" \
-            --url "https://github.com/block/aster" \
+            --url "https://github.com/astercloud/aster-rust" \
             "Aster.exe"
 
           osslsigncode verify Aster.exe
@@ -279,7 +279,7 @@ jobs:
             --certfile "${GITHUB_WORKSPACE}/block-codesign-cert.pem" \
             --tsaurl "http://timestamp.digicert.com" \
             --name "Aster Backend" \
-            --url "https://github.com/block/aster" \
+            --url "https://github.com/astercloud/aster-rust" \
             "asterd.exe"
 
           osslsigncode verify asterd.exe

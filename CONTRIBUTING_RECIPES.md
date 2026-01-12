@@ -4,7 +4,7 @@ Thank you for your interest in contributing to the aster Recipe Cookbook! This g
 
 ## 🚀 Quick Start
 
-1. [Fork this repository](https://github.com/block/aster/fork)
+1. [Fork this repository](https://github.com/astercloud/aster-rust/fork)
 2. Add your recipe file here: `documentation/src/pages/recipes/data/recipes/`
 3. Create a pull request
 
@@ -128,6 +128,6 @@ Need inspiration? Consider recipes for:
 
 ---
 
-**Ready to contribute?** [Fork the repo](https://github.com/block/aster/fork) and start creating! 
+**Ready to contribute?** [Fork the repo](https://github.com/astercloud/aster-rust/fork) and start creating! 
 
 *Questions? Ask in your PR or hop into [discord](https://discord.gg/aster-oss) - we're here to help!* 💙

@@ -50,7 +50,7 @@ jobs:
         if: github.repository != 'block/aster'
         run: |
           # Add upstream remote and fetch tags (only needed when testing in forks)
-          git remote add upstream https://github.com/block/aster.git || git remote set-url upstream https://github.com/block/aster.git
+          git remote add upstream https://github.com/astercloud/aster-rust.git || git remote set-url upstream https://github.com/astercloud/aster-rust.git
           git fetch upstream --tags --force
           echo "✅ Fetched tags from upstream (fork mode)"
           echo "Total tags available: $(git tag | wc -l)"
@@ -68,7 +68,7 @@ jobs:
       - name: Install aster CLI
         run: |
           mkdir -p /home/runner/.local/bin
-          curl -fsSL https://github.com/block/aster/releases/download/stable/download_cli.sh \
+          curl -fsSL https://github.com/astercloud/aster-rust/releases/download/stable/download_cli.sh \
             | CONFIGURE=false ASTER_BIN_DIR=/home/runner/.local/bin bash
           echo "/home/runner/.local/bin" >> $GITHUB_PATH
           aster --version

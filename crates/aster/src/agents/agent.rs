@@ -47,6 +47,9 @@ use crate::session::extension_data::{EnabledExtensionsState, ExtensionState};
 use crate::session::{Session, SessionManager, SessionType};
 use crate::tool_inspection::ToolInspectionManager;
 use crate::tool_monitor::RepetitionInspector;
+use crate::tools::{
+    register_default_tools, SharedFileReadHistory, ToolRegistry, ToolRegistrationConfig,
+};
 use crate::utils::is_token_cancelled;
 use regex::Regex;
 use rmcp::model::{
@@ -54,6 +57,7 @@ use rmcp::model::{
     ServerNotification, Tool,
 };
 use serde_json::Value;
+use std::sync::RwLock;
 use tokio::sync::{mpsc, Mutex};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
@@ -95,6 +99,11 @@ pub struct Agent {
     pub(super) scheduler_service: Mutex<Option<Arc<dyn SchedulerTrait>>>,
     pub(super) retry_manager: RetryManager,
     pub(super) tool_inspection_manager: ToolInspectionManager,
+
+    /// Tool registry for native tools (Requirements: 11.3, 11.4, 11.5)
+    pub(super) tool_registry: Arc<RwLock<ToolRegistry>>,
+    /// Shared file read history for file tools
+    pub(super) file_read_history: SharedFileReadHistory,
 }
 
 #[derive(Clone, Debug)]
@@ -153,6 +162,10 @@ impl Agent {
         let (tool_tx, tool_rx) = mpsc::channel(32);
         let provider = Arc::new(Mutex::new(None));
 
+        // Initialize ToolRegistry with all native tools (Requirements: 11.3, 11.4)
+        let mut tool_registry = ToolRegistry::new();
+        let file_read_history = register_default_tools(&mut tool_registry);
+
         Self {
             provider: provider.clone(),
             extension_manager: Arc::new(ExtensionManager::new(provider.clone())),
@@ -168,6 +181,85 @@ impl Agent {
             scheduler_service: Mutex::new(None),
             retry_manager: RetryManager::new(),
             tool_inspection_manager: Self::create_default_tool_inspection_manager(),
+            tool_registry: Arc::new(RwLock::new(tool_registry)),
+            file_read_history,
+        }
+    }
+
+    /// Create a new Agent with custom tool registration configuration
+    ///
+    /// This allows customizing which tools are registered and their configuration.
+    ///
+    /// # Arguments
+    /// * `config` - Configuration for tool registration
+    ///
+    /// Requirements: 11.3, 11.4
+    pub fn with_tool_config(config: ToolRegistrationConfig) -> Self {
+        let (confirm_tx, confirm_rx) = mpsc::channel(32);
+        let (tool_tx, tool_rx) = mpsc::channel(32);
+        let provider = Arc::new(Mutex::new(None));
+
+        // Initialize ToolRegistry with configured tools
+        let mut tool_registry = ToolRegistry::new();
+        let file_read_history = crate::tools::register_all_tools(&mut tool_registry, config);
+
+        Self {
+            provider: provider.clone(),
+            extension_manager: Arc::new(ExtensionManager::new(provider.clone())),
+            sub_recipes: Mutex::new(HashMap::new()),
+            final_output_tool: Arc::new(Mutex::new(None)),
+            frontend_tools: Mutex::new(HashMap::new()),
+            frontend_instructions: Mutex::new(None),
+            prompt_manager: Mutex::new(PromptManager::new()),
+            confirmation_tx: confirm_tx,
+            confirmation_rx: Mutex::new(confirm_rx),
+            tool_result_tx: tool_tx,
+            tool_result_rx: Arc::new(Mutex::new(tool_rx)),
+            scheduler_service: Mutex::new(None),
+            retry_manager: RetryManager::new(),
+            tool_inspection_manager: Self::create_default_tool_inspection_manager(),
+            tool_registry: Arc::new(RwLock::new(tool_registry)),
+            file_read_history,
+        }
+    }
+
+    /// Get a reference to the tool registry
+    ///
+    /// Requirements: 11.3
+    pub fn tool_registry(&self) -> &Arc<RwLock<ToolRegistry>> {
+        &self.tool_registry
+    }
+
+    /// Get a reference to the shared file read history
+    ///
+    /// This is useful for tools that need to track file reads.
+    pub fn file_read_history(&self) -> &SharedFileReadHistory {
+        &self.file_read_history
+    }
+
+    /// Register an MCP tool with the registry
+    ///
+    /// This method allows registering MCP tools from extensions into the
+    /// native tool registry. Native tools have priority over MCP tools
+    /// with the same name.
+    ///
+    /// # Arguments
+    /// * `name` - The tool name
+    /// * `description` - Tool description
+    /// * `input_schema` - JSON schema for tool input
+    /// * `server_name` - Name of the MCP server providing this tool
+    ///
+    /// Requirements: 11.4, 11.5
+    pub fn register_mcp_tool(
+        &self,
+        name: String,
+        description: String,
+        input_schema: serde_json::Value,
+        server_name: String,
+    ) {
+        let wrapper = crate::tools::McpToolWrapper::new(name.clone(), description, input_schema, server_name);
+        if let Ok(mut registry) = self.tool_registry.write() {
+            registry.register_mcp(name, wrapper);
         }
     }
 
@@ -1652,6 +1744,76 @@ mod tests {
             inspector_names.contains(&"security"),
             "Tool inspection manager should contain security inspector"
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_agent_has_tool_registry() -> Result<()> {
+        let agent = Agent::new();
+
+        // Verify that the tool registry is initialized
+        let registry = agent.tool_registry();
+        let registry_guard = registry.read().unwrap();
+
+        // Verify core native tools are registered
+        assert!(registry_guard.contains("bash"), "bash tool should be registered");
+        assert!(registry_guard.contains("read"), "read tool should be registered");
+        assert!(registry_guard.contains("write"), "write tool should be registered");
+        assert!(registry_guard.contains("edit"), "edit tool should be registered");
+        assert!(registry_guard.contains("glob"), "glob tool should be registered");
+        assert!(registry_guard.contains("grep"), "grep tool should be registered");
+
+        // Verify tool count
+        assert!(registry_guard.native_tool_count() >= 6, "Should have at least 6 native tools");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_agent_with_tool_config() -> Result<()> {
+        let config = ToolRegistrationConfig::new().with_pdf_enabled(true);
+        let agent = Agent::with_tool_config(config);
+
+        // Verify that the tool registry is initialized
+        let registry = agent.tool_registry();
+        let registry_guard = registry.read().unwrap();
+
+        // Verify core native tools are registered
+        assert!(registry_guard.contains("bash"), "bash tool should be registered");
+        assert!(registry_guard.contains("read"), "read tool should be registered");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_agent_register_mcp_tool() -> Result<()> {
+        let agent = Agent::new();
+
+        // Register an MCP tool
+        agent.register_mcp_tool(
+            "test_mcp_tool".to_string(),
+            "A test MCP tool".to_string(),
+            serde_json::json!({"type": "object"}),
+            "test_server".to_string(),
+        );
+
+        // Verify the MCP tool is registered
+        let registry = agent.tool_registry();
+        let registry_guard = registry.read().unwrap();
+        assert!(registry_guard.contains("test_mcp_tool"), "MCP tool should be registered");
+        assert!(registry_guard.contains_mcp("test_mcp_tool"), "Should be registered as MCP tool");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_agent_file_read_history() -> Result<()> {
+        let agent = Agent::new();
+
+        // Verify that the file read history is initialized and accessible
+        let history = agent.file_read_history();
+        assert!(history.read().unwrap().is_empty(), "History should be empty initially");
 
         Ok(())
     }

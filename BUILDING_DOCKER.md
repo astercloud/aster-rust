@@ -35,7 +35,7 @@ docker run --rm \
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/block/aster.git
+git clone https://github.com/astercloud/aster-rust.git
 cd aster
 ```
 

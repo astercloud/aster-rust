@@ -204,7 +204,7 @@ if [ ! -f "$ASTER_BIN" ]; then
     echo "⬇️ Installing Aster CLI..."
 
     if curl -fsSL --connect-timeout 30 --max-time 300 \
-       https://github.com/block/aster/releases/download/stable/download_cli.sh | bash; then
+       https://github.com/astercloud/aster-rust/releases/download/stable/download_cli.sh | bash; then
         for path in "$HOME/.local/bin/aster" "/usr/local/bin/aster" "$(which aster 2>/dev/null || true)"; do
             if [ -n "$path" ] && [ -f "$path" ] && [ -x "$path" ]; then
                 cp "$path" "$ASTER_BIN"
@@ -219,7 +219,7 @@ if [ ! -f "$ASTER_BIN" ]; then
         echo "⚠️ Trying direct download..."
         temp_dir=$(mktemp -d)
         if curl -fsSL --connect-timeout 30 --max-time 300 \
-           "https://github.com/block/aster/releases/download/stable/aster-x86_64-unknown-linux-gnu.tar.bz2" \
+           "https://github.com/astercloud/aster-rust/releases/download/stable/aster-x86_64-unknown-linux-gnu.tar.bz2" \
            -o "$temp_dir/aster.tar.bz2"; then
             tar -xjf "$temp_dir/aster.tar.bz2" -C "$temp_dir"
             aster_binary=$(find "$temp_dir" -name "aster" -type f -executable | head -1)

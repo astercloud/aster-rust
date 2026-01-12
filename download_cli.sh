@@ -11,7 +11,7 @@ set -eu
 # Supported Architectures: x86_64, arm64
 #
 # Usage:
-#   curl -fsSL https://github.com/block/aster/releases/download/stable/download_cli.sh | bash
+#   curl -fsSL https://github.com/astercloud/aster-rust/releases/download/stable/download_cli.sh | bash
 #
 # Environment variables:
 #   ASTER_BIN_DIR  - Directory to which aster will be installed (default: $HOME/.local/bin)

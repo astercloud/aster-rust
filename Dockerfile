@@ -70,4 +70,4 @@ CMD ["--help"]
 LABEL org.opencontainers.image.title="aster"
 LABEL org.opencontainers.image.description="aster CLI"
 LABEL org.opencontainers.image.vendor="Block"
-LABEL org.opencontainers.image.source="https://github.com/block/aster"
+LABEL org.opencontainers.image.source="https://github.com/astercloud/aster-rust"

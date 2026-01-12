@@ -154,6 +154,27 @@ impl ToolInspectionManager {
         tracing::warn!("Permission inspector not found for permission manager update");
     }
 
+    /// Get the integrated permission manager from the permission inspector
+    ///
+    /// Returns the integrated permission manager if the permission inspector
+    /// has been configured with one.
+    ///
+    /// Requirements: 11.1, 11.4
+    pub fn get_integrated_permission_manager(
+        &self,
+    ) -> Option<std::sync::Arc<tokio::sync::Mutex<crate::permission::integration::IntegratedPermissionManager>>> {
+        for inspector in &self.inspectors {
+            if inspector.name() == "permission" {
+                if let Some(permission_inspector) =
+                    inspector.as_any().downcast_ref::<PermissionInspector>()
+                {
+                    return permission_inspector.integrated_manager().cloned();
+                }
+            }
+        }
+        None
+    }
+
     /// Process inspection results using the permission inspector
     /// This delegates to the permission inspector's process_inspection_results method
     pub fn process_inspection_results_with_permission_inspector(

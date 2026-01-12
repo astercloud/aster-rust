@@ -88,7 +88,7 @@ Before submitting AI assisted code, confirm that:
 
 AI is a powerful assistant, not a replacement for your judgment. Use it to speed up development; while keeping your brain engaged, your standards high, and aster secure.  
 
-Questions? Join our [Discord](https://discord.gg/aster-oss) or [GitHub Discussions](https://github.com/block/aster/discussions) to talk more about responsible AI development.  
+Questions? Join our [Discord](https://discord.gg/aster-oss) or [GitHub Discussions](https://github.com/astercloud/aster-rust/discussions) to talk more about responsible AI development.  
 
 ---
 
@@ -99,7 +99,7 @@ Questions? Join our [Discord](https://discord.gg/aster-oss) or [GitHub Discussio
 **Using aster (meta!):**
 ```bash
 # Install aster
-curl -fsSL https://github.com/block/aster/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/astercloud/aster-rust/releases/latest/download/install.sh | bash
 
 # Navigate to your aster clone
 cd /path/to/aster

@@ -45,7 +45,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv --version && uvx --version
 
 # Pre-download and install Aster CLI to avoid network issues during runtime
-RUN curl -fsSL https://github.com/block/aster/releases/download/stable/download_cli.sh | \
+RUN curl -fsSL https://github.com/astercloud/aster-rust/releases/download/stable/download_cli.sh | \
     CONFIGURE=false ASTER_BIN_DIR=/usr/local/bin bash && \
     echo "✅ Aster CLI pre-installed: $(/usr/local/bin/aster --version)"
 
