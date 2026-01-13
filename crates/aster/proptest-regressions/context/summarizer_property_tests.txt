@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc fa4ccdf7c8e890f5cb192fe4920c84d00b993d3c98776699cbec81b10e704f57 # shrinks to turns = [ConversationTurn { user: Message { id: None, role: User, created: 1768267601, content: [Text(Annotated { raw: RawTextContent { text: "How do I create a function?", meta: None }, annotations: None })], metadata: MessageMetadata { user_visible: true, agent_visible: true } }, assistant: Message { id: None, role: Assistant, created: 1768267601, content: [Text(Annotated { raw: RawTextContent { text: "You can use the fn keyword to create a function.", meta: None }, annotations: None })], metadata: MessageMetadata { user_visible: true, agent_visible: true } }, timestamp: 1768267601, token_estimate: 32, original_tokens: 32, summarized: false, summary: None, compressed: false, api_usage: None }]
