@@ -74,9 +74,13 @@ jobs:
           sed -i.bak 's/^version = ".*"/version = "'${{ inputs.version }}'"/' Cargo.toml
           rm -f Cargo.toml.bak
 
+      - name: Install Rust toolchain
+        if: matrix.use-cross
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install cross
         if: matrix.use-cross
-        run: source ./bin/activate-hermit && cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Cache Cargo artifacts (Linux/macOS)
         if: matrix.use-cross
@@ -98,7 +102,6 @@ jobs:
           RUST_BACKTRACE: 1
           CROSS_VERBOSE: 1
         run: |
-          source ./bin/activate-hermit
           export TARGET="${{ matrix.architecture }}-${{ matrix.target-suffix }}"
           rustup target add "${TARGET}"
           echo "Building for target: ${TARGET}"
@@ -218,7 +221,6 @@ jobs:
       - name: Package CLI (Linux/macOS)
         if: matrix.use-cross
         run: |
-          source ./bin/activate-hermit
           export TARGET="${{ matrix.architecture }}-${{ matrix.target-suffix }}"
 
           # Create a directory for the package contents

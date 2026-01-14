@@ -65,7 +65,6 @@ jobs:
           path: |
             node_modules
             ui/desktop/node_modules
-            .hermit/node/cache
           key: windows-npm-cache-v1-${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             windows-npm-cache-v1-${{ runner.os }}-node22-

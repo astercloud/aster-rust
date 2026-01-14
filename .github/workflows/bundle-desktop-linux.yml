@@ -78,14 +78,16 @@ jobs:
             dpkg-dev \
             protobuf-compiler
 
-      - name: Activate hermit and set CARGO_HOME
-        run: |
-          source bin/activate-hermit
-          echo "CARGO_HOME=$CARGO_HOME" >> $GITHUB_ENV
-          echo "RUSTUP_HOME=$RUSTUP_HOME" >> $GITHUB_ENV
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install cross
-        run: source ./bin/activate-hermit && cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
@@ -100,7 +102,6 @@ jobs:
           CROSS_VERBOSE: 1
           CC: gcc-10
         run: |
-          source ./bin/activate-hermit
           export TARGET="x86_64-unknown-linux-gnu"
           rustup target add "${TARGET}"
           cross build --release --target ${TARGET} -p aster-server
@@ -119,14 +120,12 @@ jobs:
         with:
           path: |
             ui/desktop/node_modules
-            .hermit/node/cache
           key: linux-npm-cache-v1-${{ runner.os }}-${{ hashFiles('ui/desktop/package-lock.json') }}
           restore-keys: |
             linux-npm-cache-v1-${{ runner.os }}-
 
       - name: Install npm dependencies
         run: |
-          source ./bin/activate-hermit
           cd ui/desktop
           npm install
           # Verify installation
@@ -134,7 +133,6 @@ jobs:
 
       - name: Build Linux packages
         run: |
-          source ./bin/activate-hermit
           cd ui/desktop
           echo "Building Linux packages (.deb and .rpm)..."
 

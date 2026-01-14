@@ -50,6 +50,14 @@ jobs:
           ref: ${{ inputs.ref != '' && inputs.ref || '' }}
           fetch-depth: 0
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       # Update versions before build
       - name: Update versions
         if: ${{ inputs.version != '' }}
@@ -59,7 +67,6 @@ jobs:
           rm -f Cargo.toml.bak
 
           # Update version in package.json
-          source ./bin/activate-hermit
           cd ui/desktop
           npm version ${{ inputs.version }} --no-git-tag-version --allow-same-version
 
@@ -71,7 +78,6 @@ jobs:
 
       - name: Build aster-server for Intel macOS (x86_64)
         run: |
-          source ./bin/activate-hermit
           rustup target add x86_64-apple-darwin
           cargo build --release -p aster-server --target x86_64-apple-darwin
 
@@ -100,13 +106,12 @@ jobs:
         with:
           path: |
             ui/desktop/node_modules
-            .hermit/node/cache
           key: intel-npm-cache-v1-${{ runner.os }}-${{ hashFiles('ui/desktop/package-lock.json') }}
           restore-keys: |
             intel-npm-cache-v1-${{ runner.os }}-
             
       - name: Install dependencies
-        run: source ../../bin/activate-hermit && npm ci
+        run: npm ci
         working-directory: ui/desktop
 
       # Configure Electron builder for Intel architecture
@@ -122,7 +127,6 @@ jobs:
 
       - name: Build App
         run: |
-          source ../../bin/activate-hermit
           attempt=0
           max_attempts=2
           until [ $attempt -ge $max_attempts ]; do
