@@ -17,8 +17,7 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 
 use crate::mcp::error::{McpError, McpResult};
 use crate::mcp::transport::{
-    McpMessage, McpRequest, McpResponse, Transport, TransportConfig, TransportEvent,
-    TransportState,
+    McpMessage, McpRequest, McpResponse, Transport, TransportConfig, TransportEvent, TransportState,
 };
 use crate::mcp::types::{ConnectionOptions, TransportType};
 
@@ -196,10 +195,11 @@ impl Transport for HttpTransport {
 
         let json = serde_json::to_string(&request)?;
 
-        let response = tokio::time::timeout(timeout, client.post(&self.config.url).body(json).send())
-            .await
-            .map_err(|_| McpError::timeout("HTTP request timed out", timeout))?
-            .map_err(|e| McpError::transport_with_source("Failed to send HTTP request", e))?;
+        let response =
+            tokio::time::timeout(timeout, client.post(&self.config.url).body(json).send())
+                .await
+                .map_err(|_| McpError::timeout("HTTP request timed out", timeout))?
+                .map_err(|e| McpError::transport_with_source("Failed to send HTTP request", e))?;
 
         // Check HTTP status
         let status = response.status();

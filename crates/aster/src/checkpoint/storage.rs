@@ -5,8 +5,8 @@
 use std::path::PathBuf;
 use tokio::fs;
 
-use super::types::*;
 use super::session::CheckpointSession;
+use super::types::*;
 
 /// 检查点存储
 pub struct CheckpointStorage {
@@ -21,7 +21,6 @@ impl CheckpointStorage {
             checkpoint_dir: home.join(".aster").join("checkpoints"),
         }
     }
-
 
     /// 确保检查点目录存在
     pub async fn ensure_checkpoint_dir(&self) -> Result<(), String> {
@@ -52,7 +51,8 @@ impl CheckpointStorage {
         }
 
         let file_hash = self.get_path_hash(&checkpoint.path);
-        let checkpoint_file = session_dir.join(format!("{}-{}.json", file_hash, checkpoint.timestamp));
+        let checkpoint_file =
+            session_dir.join(format!("{}-{}.json", file_hash, checkpoint.timestamp));
 
         let data = serde_json::to_string_pretty(checkpoint)
             .map_err(|e| format!("Failed to serialize checkpoint: {}", e))?;
@@ -63,7 +63,6 @@ impl CheckpointStorage {
 
         Ok(())
     }
-
 
     /// 加载会话
     pub async fn load_session(&self, session_id: &str) -> Result<CheckpointSession, String> {
@@ -91,7 +90,8 @@ impl CheckpointStorage {
 
                 if let Ok(data) = fs::read_to_string(&path).await {
                     if let Ok(checkpoint) = serde_json::from_str::<FileCheckpoint>(&data) {
-                        session.checkpoints
+                        session
+                            .checkpoints
                             .entry(checkpoint.path.clone())
                             .or_insert_with(Vec::new)
                             .push(checkpoint);
@@ -107,16 +107,17 @@ impl CheckpointStorage {
 
         // 更新索引
         for (path, checkpoints) in &session.checkpoints {
-            session.current_index.insert(path.clone(), checkpoints.len().saturating_sub(1));
+            session
+                .current_index
+                .insert(path.clone(), checkpoints.len().saturating_sub(1));
         }
 
         Ok(session)
     }
 
-
     /// 清理旧检查点
     pub async fn cleanup_old_checkpoints(&self) {
-        let cutoff_time = chrono::Utc::now().timestamp_millis() 
+        let cutoff_time = chrono::Utc::now().timestamp_millis()
             - (CHECKPOINT_RETENTION_DAYS as i64 * 24 * 60 * 60 * 1000);
 
         if let Ok(mut entries) = fs::read_dir(&self.checkpoint_dir).await {
@@ -129,7 +130,7 @@ impl CheckpointStorage {
                                 .duration_since(std::time::UNIX_EPOCH)
                                 .map(|d| d.as_millis() as i64)
                                 .unwrap_or(0);
-                            
+
                             if modified_ms < cutoff_time {
                                 let _ = fs::remove_dir_all(&path).await;
                             }
@@ -142,13 +143,13 @@ impl CheckpointStorage {
 
     /// 压缩内容（简化实现，使用 base64 编码）
     pub fn compress_content(&self, content: &str) -> String {
-        use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+        use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
         BASE64.encode(content.as_bytes())
     }
 
     /// 解压缩内容
     pub fn decompress_content(&self, compressed: &str) -> String {
-        use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+        use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
         if let Ok(data) = BASE64.decode(compressed) {
             if let Ok(s) = String::from_utf8(data) {
                 return s;
@@ -159,7 +160,7 @@ impl CheckpointStorage {
 
     /// 获取路径哈希
     fn get_path_hash(&self, path: &str) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(path.as_bytes());
         let result = hasher.finalize();

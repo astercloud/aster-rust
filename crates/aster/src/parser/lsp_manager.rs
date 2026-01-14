@@ -32,64 +32,79 @@ pub struct LspServerInfo {
 }
 
 /// LSP 服务器配置表
-pub static LSP_SERVERS: once_cell::sync::Lazy<HashMap<&'static str, LspServerInfo>> = 
+pub static LSP_SERVERS: once_cell::sync::Lazy<HashMap<&'static str, LspServerInfo>> =
     once_cell::sync::Lazy::new(|| {
         let mut m = HashMap::new();
-        
-        m.insert("typescript", LspServerInfo {
-            language: "typescript".to_string(),
-            name: "TypeScript Language Server".to_string(),
-            command: "typescript-language-server".to_string(),
-            args: vec!["--stdio".to_string()],
-            install_command: "npm install -g typescript-language-server typescript".to_string(),
-            check_command: "typescript-language-server --version".to_string(),
-            extensions: vec![".ts".to_string(), ".tsx".to_string()],
-            language_id: "typescript".to_string(),
-        });
 
-        m.insert("javascript", LspServerInfo {
-            language: "javascript".to_string(),
-            name: "TypeScript Language Server (JavaScript)".to_string(),
-            command: "typescript-language-server".to_string(),
-            args: vec!["--stdio".to_string()],
-            install_command: "npm install -g typescript-language-server typescript".to_string(),
-            check_command: "typescript-language-server --version".to_string(),
-            extensions: vec![".js".to_string(), ".jsx".to_string()],
-            language_id: "javascript".to_string(),
-        });
+        m.insert(
+            "typescript",
+            LspServerInfo {
+                language: "typescript".to_string(),
+                name: "TypeScript Language Server".to_string(),
+                command: "typescript-language-server".to_string(),
+                args: vec!["--stdio".to_string()],
+                install_command: "npm install -g typescript-language-server typescript".to_string(),
+                check_command: "typescript-language-server --version".to_string(),
+                extensions: vec![".ts".to_string(), ".tsx".to_string()],
+                language_id: "typescript".to_string(),
+            },
+        );
 
-        m.insert("python", LspServerInfo {
-            language: "python".to_string(),
-            name: "Pyright".to_string(),
-            command: "pyright-langserver".to_string(),
-            args: vec!["--stdio".to_string()],
-            install_command: "npm install -g pyright".to_string(),
-            check_command: "pyright-langserver --version".to_string(),
-            extensions: vec![".py".to_string(), ".pyi".to_string()],
-            language_id: "python".to_string(),
-        });
+        m.insert(
+            "javascript",
+            LspServerInfo {
+                language: "javascript".to_string(),
+                name: "TypeScript Language Server (JavaScript)".to_string(),
+                command: "typescript-language-server".to_string(),
+                args: vec!["--stdio".to_string()],
+                install_command: "npm install -g typescript-language-server typescript".to_string(),
+                check_command: "typescript-language-server --version".to_string(),
+                extensions: vec![".js".to_string(), ".jsx".to_string()],
+                language_id: "javascript".to_string(),
+            },
+        );
 
-        m.insert("rust", LspServerInfo {
-            language: "rust".to_string(),
-            name: "rust-analyzer".to_string(),
-            command: "rust-analyzer".to_string(),
-            args: vec![],
-            install_command: "rustup component add rust-analyzer".to_string(),
-            check_command: "rust-analyzer --version".to_string(),
-            extensions: vec![".rs".to_string()],
-            language_id: "rust".to_string(),
-        });
+        m.insert(
+            "python",
+            LspServerInfo {
+                language: "python".to_string(),
+                name: "Pyright".to_string(),
+                command: "pyright-langserver".to_string(),
+                args: vec!["--stdio".to_string()],
+                install_command: "npm install -g pyright".to_string(),
+                check_command: "pyright-langserver --version".to_string(),
+                extensions: vec![".py".to_string(), ".pyi".to_string()],
+                language_id: "python".to_string(),
+            },
+        );
 
-        m.insert("go", LspServerInfo {
-            language: "go".to_string(),
-            name: "gopls".to_string(),
-            command: "gopls".to_string(),
-            args: vec!["serve".to_string()],
-            install_command: "go install golang.org/x/tools/gopls@latest".to_string(),
-            check_command: "gopls version".to_string(),
-            extensions: vec![".go".to_string()],
-            language_id: "go".to_string(),
-        });
+        m.insert(
+            "rust",
+            LspServerInfo {
+                language: "rust".to_string(),
+                name: "rust-analyzer".to_string(),
+                command: "rust-analyzer".to_string(),
+                args: vec![],
+                install_command: "rustup component add rust-analyzer".to_string(),
+                check_command: "rust-analyzer --version".to_string(),
+                extensions: vec![".rs".to_string()],
+                language_id: "rust".to_string(),
+            },
+        );
+
+        m.insert(
+            "go",
+            LspServerInfo {
+                language: "go".to_string(),
+                name: "gopls".to_string(),
+                command: "gopls".to_string(),
+                args: vec!["serve".to_string()],
+                install_command: "go install golang.org/x/tools/gopls@latest".to_string(),
+                check_command: "gopls version".to_string(),
+                extensions: vec![".go".to_string()],
+                language_id: "go".to_string(),
+            },
+        );
 
         m
     });
@@ -117,8 +132,14 @@ pub struct ProgressEvent {
 #[derive(Debug, Clone)]
 pub enum LspManagerEvent {
     Progress(ProgressEvent),
-    ClientStateChange { language: String, state: LspServerState },
-    ClientError { language: String, error: String },
+    ClientStateChange {
+        language: String,
+        state: LspServerState,
+    },
+    ClientError {
+        language: String,
+        error: String,
+    },
 }
 
 /// LSP 服务器管理器
@@ -136,7 +157,8 @@ impl LspManager {
         Self {
             clients: Arc::new(RwLock::new(HashMap::new())),
             installed_servers: Arc::new(RwLock::new(std::collections::HashSet::new())),
-            workspace_root: workspace_root.unwrap_or_else(|| std::env::current_dir().unwrap_or_default()),
+            workspace_root: workspace_root
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default()),
             event_sender,
         }
     }
@@ -163,32 +185,43 @@ impl LspManager {
 
     /// 确保 LSP 服务器已安装
     pub async fn ensure_server(&self, language: &str) -> Result<(), String> {
-        let server = LSP_SERVERS.get(language)
+        let server = LSP_SERVERS
+            .get(language)
             .ok_or_else(|| format!("Unsupported language: {}", language))?;
 
         if self.installed_servers.read().await.contains(language) {
             return Ok(());
         }
 
-        let _ = self.event_sender.send(LspManagerEvent::Progress(ProgressEvent {
-            language: language.to_string(),
-            status: InstallStatus::Checking,
-            message: format!("Checking {}...", server.name),
-            progress: None,
-        }));
+        let _ = self
+            .event_sender
+            .send(LspManagerEvent::Progress(ProgressEvent {
+                language: language.to_string(),
+                status: InstallStatus::Checking,
+                message: format!("Checking {}...", server.name),
+                progress: None,
+            }));
 
         if self.is_server_installed(language) {
-            self.installed_servers.write().await.insert(language.to_string());
-            let _ = self.event_sender.send(LspManagerEvent::Progress(ProgressEvent {
-                language: language.to_string(),
-                status: InstallStatus::Installed,
-                message: format!("{} is ready", server.name),
-                progress: Some(100),
-            }));
+            self.installed_servers
+                .write()
+                .await
+                .insert(language.to_string());
+            let _ = self
+                .event_sender
+                .send(LspManagerEvent::Progress(ProgressEvent {
+                    language: language.to_string(),
+                    status: InstallStatus::Installed,
+                    message: format!("{} is ready", server.name),
+                    progress: Some(100),
+                }));
             return Ok(());
         }
 
-        Err(format!("{} is not installed. Install with: {}", server.name, server.install_command))
+        Err(format!(
+            "{} is not installed. Install with: {}",
+            server.name, server.install_command
+        ))
     }
 
     /// 获取或创建 LSP 客户端
@@ -203,7 +236,8 @@ impl LspManager {
         // 确保服务器已安装
         self.ensure_server(language).await?;
 
-        let server = LSP_SERVERS.get(language)
+        let server = LSP_SERVERS
+            .get(language)
             .ok_or_else(|| format!("Unsupported language: {}", language))?;
 
         // 构建 root URI
@@ -221,7 +255,10 @@ impl LspManager {
         // 启动客户端
         client.start().await?;
 
-        self.clients.write().await.insert(language.to_string(), client.clone());
+        self.clients
+            .write()
+            .await
+            .insert(language.to_string(), client.clone());
 
         Ok(client)
     }
@@ -238,7 +275,8 @@ impl LspManager {
 
     /// 获取语言 ID
     pub fn get_language_id(&self, language: &str) -> String {
-        LSP_SERVERS.get(language)
+        LSP_SERVERS
+            .get(language)
             .map(|s| s.language_id.clone())
             .unwrap_or_else(|| language.to_string())
     }
@@ -282,9 +320,18 @@ mod tests {
     #[test]
     fn test_get_language_by_extension() {
         let manager = LspManager::default();
-        assert_eq!(manager.get_language_by_extension(".ts"), Some("typescript".to_string()));
-        assert_eq!(manager.get_language_by_extension(".rs"), Some("rust".to_string()));
-        assert_eq!(manager.get_language_by_extension(".py"), Some("python".to_string()));
+        assert_eq!(
+            manager.get_language_by_extension(".ts"),
+            Some("typescript".to_string())
+        );
+        assert_eq!(
+            manager.get_language_by_extension(".rs"),
+            Some("rust".to_string())
+        );
+        assert_eq!(
+            manager.get_language_by_extension(".py"),
+            Some("python".to_string())
+        );
         assert_eq!(manager.get_language_by_extension(".unknown"), None);
     }
 

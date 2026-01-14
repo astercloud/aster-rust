@@ -162,7 +162,11 @@ impl ToolInspectionManager {
     /// Requirements: 11.1, 11.4
     pub fn get_integrated_permission_manager(
         &self,
-    ) -> Option<std::sync::Arc<tokio::sync::Mutex<crate::permission::integration::IntegratedPermissionManager>>> {
+    ) -> Option<
+        std::sync::Arc<
+            tokio::sync::Mutex<crate::permission::integration::IntegratedPermissionManager>,
+        >,
+    > {
         for inspector in &self.inspectors {
             if inspector.name() == "permission" {
                 if let Some(permission_inspector) =

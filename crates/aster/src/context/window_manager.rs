@@ -78,7 +78,6 @@ impl Default for ContextWindowManager {
     }
 }
 
-
 impl ContextWindowManager {
     /// Create a new ContextWindowManager for the specified model.
     ///
@@ -189,7 +188,6 @@ impl ContextWindowManager {
         }
     }
 
-
     /// Update the model and recalculate context window size.
     ///
     /// # Arguments
@@ -284,7 +282,6 @@ impl ContextWindowManager {
         self.current_usage.as_ref()
     }
 
-
     /// Get context window statistics.
     ///
     /// # Returns
@@ -378,7 +375,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn test_calculate_available_context_small_window() {
         // For small context (≤50k), reserve 20%
@@ -391,7 +387,8 @@ mod tests {
     #[test]
     fn test_calculate_available_context_large_window() {
         // For large context (>50k), reserve fixed 50k
-        let available = ContextWindowManager::calculate_available_context("claude-3-5-sonnet-20241022");
+        let available =
+            ContextWindowManager::calculate_available_context("claude-3-5-sonnet-20241022");
         // 200000 - 50000 = 150000
         assert_eq!(available, 150_000);
     }
@@ -407,7 +404,8 @@ mod tests {
     #[test]
     fn test_calculate_output_space_large_window() {
         // For large context (>50k), reserve fixed 50k
-        let output_space = ContextWindowManager::calculate_output_space("claude-3-5-sonnet-20241022");
+        let output_space =
+            ContextWindowManager::calculate_output_space("claude-3-5-sonnet-20241022");
         assert_eq!(output_space, 50_000);
     }
 

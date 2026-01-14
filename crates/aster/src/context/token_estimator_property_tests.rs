@@ -21,16 +21,15 @@ mod property_tests {
 
     /// Strategy for generating pure English text
     fn english_text_strategy() -> impl Strategy<Value = String> {
-        prop::collection::vec("[a-zA-Z ,.!?]{1,20}", 1..50)
-            .prop_map(|words| words.join(" "))
+        prop::collection::vec("[a-zA-Z ,.!?]{1,20}", 1..50).prop_map(|words| words.join(" "))
     }
 
     /// Strategy for generating Chinese text
     fn chinese_text_strategy() -> impl Strategy<Value = String> {
         prop::collection::vec(
             prop::sample::select(vec![
-                "你", "好", "世", "界", "中", "国", "人", "民", "大", "学",
-                "工", "作", "生", "活", "时", "间", "地", "方", "问", "题",
+                "你", "好", "世", "界", "中", "国", "人", "民", "大", "学", "工", "作", "生", "活",
+                "时", "间", "地", "方", "问", "题",
             ]),
             5..100,
         )
@@ -41,8 +40,8 @@ mod property_tests {
     fn japanese_text_strategy() -> impl Strategy<Value = String> {
         prop::collection::vec(
             prop::sample::select(vec![
-                "あ", "い", "う", "え", "お", "か", "き", "く", "け", "こ",
-                "さ", "し", "す", "せ", "そ", "た", "ち", "つ", "て", "と",
+                "あ", "い", "う", "え", "お", "か", "き", "く", "け", "こ", "さ", "し", "す", "せ",
+                "そ", "た", "ち", "つ", "て", "と",
             ]),
             5..100,
         )
@@ -53,8 +52,8 @@ mod property_tests {
     fn korean_text_strategy() -> impl Strategy<Value = String> {
         prop::collection::vec(
             prop::sample::select(vec![
-                "가", "나", "다", "라", "마", "바", "사", "아", "자", "차",
-                "카", "타", "파", "하", "안", "녕", "하", "세", "요", "감",
+                "가", "나", "다", "라", "마", "바", "사", "아", "자", "차", "카", "타", "파", "하",
+                "안", "녕", "하", "세", "요", "감",
             ]),
             5..100,
         )
@@ -84,8 +83,8 @@ mod property_tests {
     fn special_chars_text_strategy() -> impl Strategy<Value = String> {
         prop::collection::vec(
             prop::sample::select(vec![
-                "@", "#", "$", "%", "^", "&", "*", "\\", "\"", "'", "`", "~",
-                "hello", "world", "test", " ", "\n", "\t",
+                "@", "#", "$", "%", "^", "&", "*", "\\", "\"", "'", "`", "~", "hello", "world",
+                "test", " ", "\n", "\t",
             ]),
             10..50,
         )
@@ -299,18 +298,18 @@ mod property_tests {
                 "fn ", "def ", "function ", "class ", "const ", "let ", "var ",
                 "import ", "pub ", "async ", "await ", "return ", "if ", "for ", "while "
             ];
-            
+
             let contains_keyword = code_keywords.iter().any(|kw| text.contains(kw));
-            
+
             if contains_keyword {
                 // If text contains a code keyword, it's expected to be detected as code
                 // This is correct behavior, so we skip this test case
                 return Ok(());
             }
-            
+
             // Plain alphabetic text without any code indicators should not be detected as code
             let is_code = TokenEstimator::is_code(&text);
-            
+
             prop_assert!(
                 !is_code,
                 "Pure alphabetic text should not be detected as code: {:?}", text

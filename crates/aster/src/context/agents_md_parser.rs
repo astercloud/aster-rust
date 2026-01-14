@@ -78,7 +78,6 @@ impl AgentsMdParser {
         Ok(None)
     }
 
-
     /// Parse AGENTS.md file synchronously (blocking).
     ///
     /// This is a convenience method for contexts where async is not available.
@@ -211,7 +210,6 @@ impl AgentsMdParser {
         files
     }
 
-
     /// Resolve a path string relative to the working directory.
     ///
     /// Handles both absolute and relative paths.
@@ -314,7 +312,6 @@ impl AgentsMdParser {
     }
 }
 
-
 // ============================================================================
 // Tests
 // ============================================================================
@@ -400,7 +397,6 @@ mod tests {
 
         assert!(files.is_empty());
     }
-
 
     #[tokio::test]
     async fn test_parse_root_agents_md() {

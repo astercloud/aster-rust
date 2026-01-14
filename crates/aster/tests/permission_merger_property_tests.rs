@@ -15,10 +15,9 @@
 //! **Validates: Requirements 6.3, 6.4, 6.5, 6.6**
 
 use aster::permission::{
-    merge_permissions, apply_merge_strategy,
-    ConditionOperator, ConditionType, MergeStrategy, ParameterRestriction,
-    PermissionCondition, PermissionInheritance, PermissionScope, RestrictionType,
-    ToolPermission,
+    apply_merge_strategy, merge_permissions, ConditionOperator, ConditionType, MergeStrategy,
+    ParameterRestriction, PermissionCondition, PermissionInheritance, PermissionScope,
+    RestrictionType, ToolPermission,
 };
 use proptest::prelude::*;
 use serde_json::Value;
@@ -38,7 +37,6 @@ fn arb_tool_name() -> impl Strategy<Value = String> {
         "[a-z_]{3,15}".prop_map(|s| s),
     ]
 }
-
 
 /// Generate arbitrary PermissionScope
 fn arb_permission_scope() -> impl Strategy<Value = PermissionScope> {
@@ -85,7 +83,6 @@ fn arb_permission_condition() -> impl Strategy<Value = PermissionCondition> {
         })
 }
 
-
 /// Generate arbitrary ParameterRestriction
 fn arb_parameter_restriction() -> impl Strategy<Value = ParameterRestriction> {
     (
@@ -120,19 +117,20 @@ fn arb_tool_permission_with_scope(
         prop::collection::vec(arb_permission_condition(), 0..3),
         prop::collection::vec(arb_parameter_restriction(), 0..2),
     )
-        .prop_map(move |(allowed, priority, conditions, restrictions)| ToolPermission {
-            tool: tool.clone(),
-            allowed,
-            priority,
-            scope,
-            conditions,
-            parameter_restrictions: restrictions,
-            reason: None,
-            expires_at: None,
-            metadata: HashMap::new(),
-        })
+        .prop_map(
+            move |(allowed, priority, conditions, restrictions)| ToolPermission {
+                tool: tool.clone(),
+                allowed,
+                priority,
+                scope,
+                conditions,
+                parameter_restrictions: restrictions,
+                reason: None,
+                expires_at: None,
+                metadata: HashMap::new(),
+            },
+        )
 }
-
 
 /// Generate arbitrary ToolPermission
 fn arb_tool_permission() -> impl Strategy<Value = ToolPermission> {
@@ -158,7 +156,6 @@ fn arb_tool_permission() -> impl Strategy<Value = ToolPermission> {
             },
         )
 }
-
 
 // ============================================================================
 // Property Tests - Property 1: Scope Priority Resolution
@@ -425,7 +422,6 @@ proptest! {
         }
     }
 }
-
 
 // ============================================================================
 // Property Tests - Property 11: Merge Strategy Behavior

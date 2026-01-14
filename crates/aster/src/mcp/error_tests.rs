@@ -70,10 +70,7 @@ fn tool_name_strategy() -> impl Strategy<Value = Option<String>> {
 
 /// Strategy for generating random cancellation reasons
 fn cancel_reason_strategy() -> impl Strategy<Value = Option<String>> {
-    prop_oneof![
-        Just(None),
-        error_message_strategy().prop_map(Some),
-    ]
+    prop_oneof![Just(None), error_message_strategy().prop_map(Some),]
 }
 
 /// Strategy for generating all types of McpError
@@ -274,8 +271,16 @@ mod unit_tests {
         ];
 
         for code in codes {
-            assert!(!code.description().is_empty(), "Code {:?} should have description", code);
-            assert!(code.code() != 0, "Code {:?} should have non-zero value", code);
+            assert!(
+                !code.description().is_empty(),
+                "Code {:?} should have description",
+                code
+            );
+            assert!(
+                code.code() != 0,
+                "Code {:?} should have non-zero value",
+                code
+            );
         }
     }
 
@@ -287,11 +292,20 @@ mod unit_tests {
 
         // Must have code field
         assert!(json.get("code").is_some(), "JSON must have 'code' field");
-        assert!(json.get("code").unwrap().is_i64(), "code must be an integer");
+        assert!(
+            json.get("code").unwrap().is_i64(),
+            "code must be an integer"
+        );
 
         // Must have message field
-        assert!(json.get("message").is_some(), "JSON must have 'message' field");
-        assert!(json.get("message").unwrap().is_string(), "message must be a string");
+        assert!(
+            json.get("message").is_some(),
+            "JSON must have 'message' field"
+        );
+        assert!(
+            json.get("message").unwrap().is_string(),
+            "message must be a string"
+        );
     }
 
     #[test]
@@ -300,7 +314,10 @@ mod unit_tests {
         let error = McpError::validation("validation failed", errors.clone());
         let structured: StructuredError = (&error).into();
 
-        assert!(structured.data.is_some(), "Validation error should include data");
+        assert!(
+            structured.data.is_some(),
+            "Validation error should include data"
+        );
         let data = structured.data.unwrap();
         let error_list = data.get("errors").unwrap().as_array().unwrap();
         assert_eq!(error_list.len(), 2);
@@ -311,7 +328,10 @@ mod unit_tests {
         let error = McpError::timeout("request timed out", Duration::from_secs(30));
         let structured: StructuredError = (&error).into();
 
-        assert!(structured.data.is_some(), "Timeout error should include data");
+        assert!(
+            structured.data.is_some(),
+            "Timeout error should include data"
+        );
         let data = structured.data.unwrap();
         let duration_ms = data.get("duration_ms").unwrap().as_u64().unwrap();
         assert_eq!(duration_ms, 30000);

@@ -195,7 +195,12 @@ impl Summarizer {
         if !tools_used.is_empty() {
             tools_used.sort();
             tools_used.dedup();
-            let tools_str = tools_used.iter().take(5).cloned().collect::<Vec<_>>().join(", ");
+            let tools_str = tools_used
+                .iter()
+                .take(5)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
             summary_parts.push(format!("Tools: {}", tools_str));
         }
 
@@ -391,9 +396,8 @@ mod tests {
     fn create_test_turn(user_text: &str, assistant_text: &str) -> ConversationTurn {
         let user = Message::user().with_text(user_text);
         let assistant = Message::assistant().with_text(assistant_text);
-        let token_estimate =
-            TokenEstimator::estimate_message_tokens(&user) +
-            TokenEstimator::estimate_message_tokens(&assistant);
+        let token_estimate = TokenEstimator::estimate_message_tokens(&user)
+            + TokenEstimator::estimate_message_tokens(&assistant);
         ConversationTurn::new(user, assistant, token_estimate)
     }
 
@@ -579,7 +583,9 @@ mod tests {
             _system_prompt: Option<&str>,
         ) -> Result<SummarizerResponse, ContextError> {
             if self.should_fail {
-                return Err(ContextError::SummarizationFailed("Mock failure".to_string()));
+                return Err(ContextError::SummarizationFailed(
+                    "Mock failure".to_string(),
+                ));
             }
 
             let content = match &self.response {

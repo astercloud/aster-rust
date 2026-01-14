@@ -2,8 +2,8 @@
 //!
 //! 管理通知的发送、存储和状态
 
+use super::desktop::{play_sound, send_desktop_notification};
 use super::types::*;
-use super::desktop::{send_desktop_notification, play_sound};
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -34,7 +34,9 @@ impl NotificationManager {
         }
 
         // 检查静音时段
-        if let (Some(start), Some(end)) = (self.config.quiet_hours_start, self.config.quiet_hours_end) {
+        if let (Some(start), Some(end)) =
+            (self.config.quiet_hours_start, self.config.quiet_hours_end)
+        {
             use chrono::Timelike;
             let now = chrono::Local::now().hour() as u8;
             if start <= end {
@@ -52,7 +54,6 @@ impl NotificationManager {
         true
     }
 
-
     /// 检查优先级
     fn meets_priority(&self, notification_type: NotificationType) -> bool {
         let Some(min_priority) = self.config.min_priority else {
@@ -66,14 +67,26 @@ impl NotificationManager {
             NotificationType::Error,
         ];
 
-        let type_index = priority_order.iter().position(|&t| t == notification_type).unwrap_or(0);
-        let min_index = priority_order.iter().position(|&t| t == min_priority).unwrap_or(0);
+        let type_index = priority_order
+            .iter()
+            .position(|&t| t == notification_type)
+            .unwrap_or(0);
+        let min_index = priority_order
+            .iter()
+            .position(|&t| t == min_priority)
+            .unwrap_or(0);
 
         type_index >= min_index
     }
 
     /// 发送通知
-    pub fn notify(&self, title: &str, message: &str, notification_type: NotificationType, kind: NotificationKind) -> Option<Notification> {
+    pub fn notify(
+        &self,
+        title: &str,
+        message: &str,
+        notification_type: NotificationType,
+        kind: NotificationKind,
+    ) -> Option<Notification> {
         if !self.is_enabled() || !self.meets_priority(notification_type) {
             return None;
         }
@@ -115,10 +128,12 @@ impl NotificationManager {
         Some(notification)
     }
 
-
     /// 获取所有通知
     pub fn get_all(&self) -> Vec<Notification> {
-        self.notifications.read().map(|n| n.clone()).unwrap_or_default()
+        self.notifications
+            .read()
+            .map(|n| n.clone())
+            .unwrap_or_default()
     }
 
     /// 获取未读通知
@@ -166,22 +181,42 @@ impl NotificationManager {
 
     /// 便捷方法：发送信息通知
     pub fn info(&self, title: &str, message: &str) -> Option<Notification> {
-        self.notify(title, message, NotificationType::Info, NotificationKind::Custom)
+        self.notify(
+            title,
+            message,
+            NotificationType::Info,
+            NotificationKind::Custom,
+        )
     }
 
     /// 便捷方法：发送成功通知
     pub fn success(&self, title: &str, message: &str) -> Option<Notification> {
-        self.notify(title, message, NotificationType::Success, NotificationKind::TaskComplete)
+        self.notify(
+            title,
+            message,
+            NotificationType::Success,
+            NotificationKind::TaskComplete,
+        )
     }
 
     /// 便捷方法：发送警告通知
     pub fn warn(&self, title: &str, message: &str) -> Option<Notification> {
-        self.notify(title, message, NotificationType::Warning, NotificationKind::Custom)
+        self.notify(
+            title,
+            message,
+            NotificationType::Warning,
+            NotificationKind::Custom,
+        )
     }
 
     /// 便捷方法：发送错误通知
     pub fn error(&self, title: &str, message: &str) -> Option<Notification> {
-        self.notify(title, message, NotificationType::Error, NotificationKind::Error)
+        self.notify(
+            title,
+            message,
+            NotificationType::Error,
+            NotificationKind::Error,
+        )
     }
 }
 

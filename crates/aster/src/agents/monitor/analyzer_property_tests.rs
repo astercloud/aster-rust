@@ -62,7 +62,6 @@ fn cost_per_1k_strategy() -> impl Strategy<Value = f64> {
     0.0f64..0.2f64
 }
 
-
 /// Create metrics with specific performance characteristics
 fn create_metrics_with_performance(
     agent_id: &str,
@@ -107,7 +106,6 @@ fn create_metrics_with_performance(
 
     metrics
 }
-
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(100))]
@@ -265,7 +263,6 @@ proptest! {
         );
     }
 }
-
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(100))]
@@ -536,7 +533,6 @@ proptest! {
     }
 }
 
-
 // Additional tests for edge cases and consistency
 #[cfg(test)]
 mod additional_tests {
@@ -651,17 +647,32 @@ mod additional_tests {
             .iter()
             .any(|b| b.category == BottleneckCategory::TimeoutRisk);
 
-        assert!(!has_timeout_risk, "Should not detect timeout risk at 70% usage");
+        assert!(
+            !has_timeout_risk,
+            "Should not detect timeout risk at 70% usage"
+        );
     }
 
     #[test]
     fn test_rating_boundary_values() {
         // Test exact boundary values
-        assert_eq!(PerformanceRating::from_score(80.0), PerformanceRating::Excellent);
-        assert_eq!(PerformanceRating::from_score(79.99), PerformanceRating::Good);
+        assert_eq!(
+            PerformanceRating::from_score(80.0),
+            PerformanceRating::Excellent
+        );
+        assert_eq!(
+            PerformanceRating::from_score(79.99),
+            PerformanceRating::Good
+        );
         assert_eq!(PerformanceRating::from_score(60.0), PerformanceRating::Good);
-        assert_eq!(PerformanceRating::from_score(59.99), PerformanceRating::Fair);
+        assert_eq!(
+            PerformanceRating::from_score(59.99),
+            PerformanceRating::Fair
+        );
         assert_eq!(PerformanceRating::from_score(40.0), PerformanceRating::Fair);
-        assert_eq!(PerformanceRating::from_score(39.99), PerformanceRating::Poor);
+        assert_eq!(
+            PerformanceRating::from_score(39.99),
+            PerformanceRating::Poor
+        );
     }
 }

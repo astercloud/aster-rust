@@ -341,15 +341,33 @@ pub struct CoordinatorStats {
 #[derive(Debug, Clone)]
 pub enum CoordinatorEvent {
     AgentRegistered(AgentCapabilities),
-    AgentUnregistered { agent_id: String },
-    AgentStatusChanged { agent_id: String, status: AgentStatus },
-    AgentOffline { agent_id: String },
-    TaskAssigned { task_id: String, agent_id: String },
-    TaskStarted { task_id: String, agent_id: String },
+    AgentUnregistered {
+        agent_id: String,
+    },
+    AgentStatusChanged {
+        agent_id: String,
+        status: AgentStatus,
+    },
+    AgentOffline {
+        agent_id: String,
+    },
+    TaskAssigned {
+        task_id: String,
+        agent_id: String,
+    },
+    TaskStarted {
+        task_id: String,
+        agent_id: String,
+    },
     TaskCompleted(TaskResult),
-    TaskFailed { task_id: String, error: String },
+    TaskFailed {
+        task_id: String,
+        error: String,
+    },
     DeadlockDetected(DeadlockInfo),
-    SyncBarrierReached { barrier_id: String },
+    SyncBarrierReached {
+        barrier_id: String,
+    },
 }
 
 // ============================================================================
@@ -871,7 +889,9 @@ impl AgentCoordinator {
 
         for node in graph.keys() {
             if !visited.contains(node) {
-                if let Some(cycle) = self.dfs_cycle(node, graph, &mut visited, &mut rec_stack, &mut path) {
+                if let Some(cycle) =
+                    self.dfs_cycle(node, graph, &mut visited, &mut rec_stack, &mut path)
+                {
                     return Some(cycle);
                 }
             }
@@ -930,7 +950,11 @@ impl AgentCoordinator {
     }
 
     /// Agent arrives at a barrier
-    pub fn arrive_at_barrier(&mut self, barrier_id: &str, agent_id: &str) -> CoordinatorResult<bool> {
+    pub fn arrive_at_barrier(
+        &mut self,
+        barrier_id: &str,
+        agent_id: &str,
+    ) -> CoordinatorResult<bool> {
         let barrier = self
             .sync_barriers
             .get_mut(barrier_id)
@@ -971,12 +995,7 @@ impl AgentCoordinator {
     pub fn get_pending_agents(&self, barrier_id: &str) -> Vec<String> {
         self.sync_barriers
             .get(barrier_id)
-            .map(|b| {
-                b.agent_ids
-                    .difference(&b.arrived)
-                    .cloned()
-                    .collect()
-            })
+            .map(|b| b.agent_ids.difference(&b.arrived).cloned().collect())
             .unwrap_or_default()
     }
 
@@ -987,7 +1006,10 @@ impl AgentCoordinator {
     /// Get coordinator statistics
     pub fn get_stats(&self) -> CoordinatorStats {
         let agents: Vec<&AgentCapabilities> = self.agents.values().collect();
-        let active_agents = agents.iter().filter(|a| a.status != AgentStatus::Offline).count();
+        let active_agents = agents
+            .iter()
+            .filter(|a| a.status != AgentStatus::Offline)
+            .count();
         let offline_agents = agents.len() - active_agents;
 
         let total_load: f64 = agents.iter().map(|a| a.current_load).sum();
@@ -1089,20 +1111,17 @@ mod tests {
         let mut coordinator = AgentCoordinator::new();
 
         // Register two agents with different loads
-        let mut agent1 = AgentCapabilities::new("agent1", "worker")
-            .with_max_concurrent_tasks(10);
+        let mut agent1 = AgentCapabilities::new("agent1", "worker").with_max_concurrent_tasks(10);
         agent1.current_tasks = 5;
         agent1.update_load();
 
-        let agent2 = AgentCapabilities::new("agent2", "worker")
-            .with_max_concurrent_tasks(10);
+        let agent2 = AgentCapabilities::new("agent2", "worker").with_max_concurrent_tasks(10);
 
         coordinator.register_agent(agent1).unwrap();
         coordinator.register_agent(agent2).unwrap();
 
         let task = Task::new("test", json!({}));
-        let criteria = AssignmentCriteria::new()
-            .with_strategy(LoadBalanceStrategy::LeastBusy);
+        let criteria = AssignmentCriteria::new().with_strategy(LoadBalanceStrategy::LeastBusy);
 
         let assigned_agent = coordinator.assign_task(task, &criteria).unwrap();
 
@@ -1121,8 +1140,7 @@ mod tests {
         coordinator.register_agent(agent2).unwrap();
 
         let task = Task::new("test", json!({}));
-        let criteria = AssignmentCriteria::new()
-            .with_agent_type("plan");
+        let criteria = AssignmentCriteria::new().with_agent_type("plan");
 
         let assigned_agent = coordinator.assign_task(task, &criteria).unwrap();
         assert_eq!(assigned_agent, "agent2");
@@ -1132,8 +1150,8 @@ mod tests {
     fn test_task_assignment_by_capability() {
         let mut coordinator = AgentCoordinator::new();
 
-        let agent1 = AgentCapabilities::new("agent1", "worker")
-            .with_capabilities(vec!["read".to_string()]);
+        let agent1 =
+            AgentCapabilities::new("agent1", "worker").with_capabilities(vec!["read".to_string()]);
         let agent2 = AgentCapabilities::new("agent2", "worker")
             .with_capabilities(vec!["read".to_string(), "write".to_string()]);
 
@@ -1156,8 +1174,7 @@ mod tests {
         coordinator.register_agent(agent).unwrap();
 
         let task = Task::new("test", json!({}));
-        let criteria = AssignmentCriteria::new()
-            .with_agent_type("plan");
+        let criteria = AssignmentCriteria::new().with_agent_type("plan");
 
         let result = coordinator.assign_task(task, &criteria);
         assert!(matches!(result, Err(CoordinatorError::NoSuitableAgent)));
@@ -1167,8 +1184,7 @@ mod tests {
     fn test_task_lifecycle() {
         let mut coordinator = AgentCoordinator::new();
 
-        let agent = AgentCapabilities::new("agent1", "worker")
-            .with_max_concurrent_tasks(5);
+        let agent = AgentCapabilities::new("agent1", "worker").with_max_concurrent_tasks(5);
         coordinator.register_agent(agent).unwrap();
 
         let task = Task::new("test", json!({})).with_id("task1");
@@ -1248,16 +1264,22 @@ mod tests {
         ]);
 
         // First agent arrives
-        let all_arrived = coordinator.arrive_at_barrier(&barrier_id, "agent1").unwrap();
+        let all_arrived = coordinator
+            .arrive_at_barrier(&barrier_id, "agent1")
+            .unwrap();
         assert!(!all_arrived);
         assert!(!coordinator.is_barrier_reached(&barrier_id));
 
         // Second agent arrives
-        let all_arrived = coordinator.arrive_at_barrier(&barrier_id, "agent2").unwrap();
+        let all_arrived = coordinator
+            .arrive_at_barrier(&barrier_id, "agent2")
+            .unwrap();
         assert!(!all_arrived);
 
         // Third agent arrives
-        let all_arrived = coordinator.arrive_at_barrier(&barrier_id, "agent3").unwrap();
+        let all_arrived = coordinator
+            .arrive_at_barrier(&barrier_id, "agent3")
+            .unwrap();
         assert!(all_arrived);
         assert!(coordinator.is_barrier_reached(&barrier_id));
     }
@@ -1266,12 +1288,12 @@ mod tests {
     fn test_get_pending_agents() {
         let mut coordinator = AgentCoordinator::new();
 
-        let barrier_id = coordinator.create_sync_barrier(vec![
-            "agent1".to_string(),
-            "agent2".to_string(),
-        ]);
+        let barrier_id =
+            coordinator.create_sync_barrier(vec!["agent1".to_string(), "agent2".to_string()]);
 
-        coordinator.arrive_at_barrier(&barrier_id, "agent1").unwrap();
+        coordinator
+            .arrive_at_barrier(&barrier_id, "agent1")
+            .unwrap();
 
         let pending = coordinator.get_pending_agents(&barrier_id);
         assert_eq!(pending.len(), 1);
@@ -1282,10 +1304,8 @@ mod tests {
     fn test_coordinator_stats() {
         let mut coordinator = AgentCoordinator::new();
 
-        let agent1 = AgentCapabilities::new("agent1", "worker")
-            .with_max_concurrent_tasks(5);
-        let mut agent2 = AgentCapabilities::new("agent2", "worker")
-            .with_max_concurrent_tasks(5);
+        let agent1 = AgentCapabilities::new("agent1", "worker").with_max_concurrent_tasks(5);
+        let mut agent2 = AgentCapabilities::new("agent2", "worker").with_max_concurrent_tasks(5);
         agent2.status = AgentStatus::Offline;
 
         coordinator.register_agent(agent1).unwrap();

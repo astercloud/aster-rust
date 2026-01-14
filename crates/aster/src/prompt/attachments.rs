@@ -70,7 +70,6 @@ impl AttachmentManager {
             }
         }
 
-
         // Plan Mode
         if context.plan_mode {
             attachments.push(self.generate_plan_mode_attachment());
@@ -136,7 +135,6 @@ impl AttachmentManager {
         })
     }
 
-
     /// 生成批判性提醒附件
     fn generate_critical_reminder_attachment(&self, reminder: &str) -> Attachment {
         Attachment {
@@ -201,7 +199,6 @@ impl AttachmentManager {
             compute_time_ms: Some(0),
         })
     }
-
 
     /// 生成记忆附件
     fn generate_memory_attachment(
@@ -271,7 +268,6 @@ You are running as a delegated subagent. Complete your assigned task and report 
             compute_time_ms: Some(0),
         })
     }
-
 
     /// 获取 Git 状态
     fn get_git_status(&self, working_dir: &Path) -> Option<GitStatusInfo> {

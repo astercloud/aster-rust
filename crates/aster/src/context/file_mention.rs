@@ -53,7 +53,6 @@ impl FileMentionResolver {
         }
     }
 
-
     /// Get the working directory.
     pub fn working_directory(&self) -> &Path {
         &self.working_directory
@@ -82,7 +81,7 @@ impl FileMentionResolver {
     /// ```
     pub fn parse_mentions(text: &str) -> Vec<String> {
         // Pattern matches @followed by a valid file path
-        // - Starts with @ 
+        // - Starts with @
         // - Followed by alphanumeric, underscore, hyphen, dot, or forward slash
         // - Must not be preceded by alphanumeric (to avoid email addresses)
         // - Must not be followed by certain characters that indicate it's not a file mention
@@ -135,7 +134,6 @@ impl FileMentionResolver {
 
         None
     }
-
 
     /// Resolve all @ mentions in text and read file contents.
     ///
@@ -247,7 +245,6 @@ impl FileMentionResolver {
         Ok(FileMentionResult::new(processed_text, resolved_files))
     }
 }
-
 
 // ============================================================================
 // Tests

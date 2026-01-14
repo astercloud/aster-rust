@@ -232,9 +232,7 @@ pub fn parse_tolerant_json(json_str: &str) -> serde_json::Value {
     let mut fixed = trimmed.to_string();
 
     // Remove trailing commas
-    fixed = fixed
-        .replace(",]", "]")
-        .replace(",}", "}");
+    fixed = fixed.replace(",]", "]").replace(",}", "}");
 
     // Count brackets
     let open_braces = fixed.matches('{').count();
@@ -259,9 +257,8 @@ pub fn parse_tolerant_json(json_str: &str) -> serde_json::Value {
     }
 
     // Try parsing again
-    serde_json::from_str(&fixed).unwrap_or_else(|_| {
-        serde_json::Value::Object(serde_json::Map::new())
-    })
+    serde_json::from_str(&fixed)
+        .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()))
 }
 
 /// Enhanced message stream handler
@@ -373,10 +370,22 @@ impl EnhancedMessageStream {
     fn handle_message_start(&mut self, event: &serde_json::Value) -> Result<(), StreamError> {
         if let Some(message) = event.get("message") {
             let state = MessageState {
-                id: message.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                role: message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant").to_string(),
+                id: message
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                role: message
+                    .get("role")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("assistant")
+                    .to_string(),
                 content: Vec::new(),
-                model: message.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                model: message
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
                 stop_reason: None,
                 stop_sequence: None,
                 usage: TokenUsage::default(),
@@ -387,7 +396,9 @@ impl EnhancedMessageStream {
     }
 
     fn handle_content_block_start(&mut self, event: &serde_json::Value) -> Result<(), StreamError> {
-        let msg = self.current_message.as_mut()
+        let msg = self
+            .current_message
+            .as_mut()
             .ok_or_else(|| StreamError::InvalidState("No current message".to_string()))?;
 
         if let Some(block) = event.get("content_block") {
@@ -403,8 +414,16 @@ impl EnhancedMessageStream {
                     signature: None,
                 }),
                 Some("tool_use") => {
-                    let id = block.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let name = block.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let id = block
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let name = block
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
                     ContentBlock::ToolUse(ToolUseContentBlock::new(id, name))
                 }
                 _ => return Ok(()),
@@ -416,7 +435,9 @@ impl EnhancedMessageStream {
     }
 
     fn handle_content_block_delta(&mut self, event: &serde_json::Value) -> Result<(), StreamError> {
-        let msg = self.current_message.as_mut()
+        let msg = self
+            .current_message
+            .as_mut()
             .ok_or_else(|| StreamError::InvalidState("No current message".to_string()))?;
 
         let index = event.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
@@ -438,7 +459,11 @@ impl EnhancedMessageStream {
         }
     }
 
-    fn apply_text_delta(&mut self, index: usize, delta: Option<&serde_json::Value>) -> Result<(), StreamError> {
+    fn apply_text_delta(
+        &mut self,
+        index: usize,
+        delta: Option<&serde_json::Value>,
+    ) -> Result<(), StreamError> {
         let msg = self.current_message.as_mut().unwrap();
 
         if let ContentBlock::Text(ref mut block) = msg.content[index] {
@@ -453,11 +478,18 @@ impl EnhancedMessageStream {
         Ok(())
     }
 
-    fn apply_thinking_delta(&mut self, index: usize, delta: Option<&serde_json::Value>) -> Result<(), StreamError> {
+    fn apply_thinking_delta(
+        &mut self,
+        index: usize,
+        delta: Option<&serde_json::Value>,
+    ) -> Result<(), StreamError> {
         let msg = self.current_message.as_mut().unwrap();
 
         if let ContentBlock::Thinking(ref mut block) = msg.content[index] {
-            if let Some(thinking) = delta.and_then(|d| d.get("thinking")).and_then(|v| v.as_str()) {
+            if let Some(thinking) = delta
+                .and_then(|d| d.get("thinking"))
+                .and_then(|v| v.as_str())
+            {
                 block.thinking.push_str(thinking);
 
                 if let Some(ref cb) = self.callbacks.on_thinking {
@@ -468,7 +500,11 @@ impl EnhancedMessageStream {
         Ok(())
     }
 
-    fn apply_input_json_delta(&mut self, index: usize, delta: Option<&serde_json::Value>) -> Result<(), StreamError> {
+    fn apply_input_json_delta(
+        &mut self,
+        index: usize,
+        delta: Option<&serde_json::Value>,
+    ) -> Result<(), StreamError> {
         let msg = self.current_message.as_mut().unwrap();
 
         let partial_json = delta
@@ -477,9 +513,9 @@ impl EnhancedMessageStream {
             .unwrap_or("");
 
         match &mut msg.content[index] {
-            ContentBlock::ToolUse(ref mut block) |
-            ContentBlock::ServerToolUse(ref mut block) |
-            ContentBlock::McpToolUse(ref mut block) => {
+            ContentBlock::ToolUse(ref mut block)
+            | ContentBlock::ServerToolUse(ref mut block)
+            | ContentBlock::McpToolUse(ref mut block) => {
                 block.append_json(partial_json);
 
                 if let Some(ref cb) = self.callbacks.on_input_json {
@@ -491,7 +527,11 @@ impl EnhancedMessageStream {
         Ok(())
     }
 
-    fn apply_citations_delta(&mut self, index: usize, delta: Option<&serde_json::Value>) -> Result<(), StreamError> {
+    fn apply_citations_delta(
+        &mut self,
+        index: usize,
+        delta: Option<&serde_json::Value>,
+    ) -> Result<(), StreamError> {
         let msg = self.current_message.as_mut().unwrap();
 
         if let ContentBlock::Text(ref mut block) = msg.content[index] {
@@ -509,11 +549,18 @@ impl EnhancedMessageStream {
         Ok(())
     }
 
-    fn apply_signature_delta(&mut self, index: usize, delta: Option<&serde_json::Value>) -> Result<(), StreamError> {
+    fn apply_signature_delta(
+        &mut self,
+        index: usize,
+        delta: Option<&serde_json::Value>,
+    ) -> Result<(), StreamError> {
         let msg = self.current_message.as_mut().unwrap();
 
         if let ContentBlock::Thinking(ref mut block) = msg.content[index] {
-            if let Some(sig) = delta.and_then(|d| d.get("signature")).and_then(|v| v.as_str()) {
+            if let Some(sig) = delta
+                .and_then(|d| d.get("signature"))
+                .and_then(|v| v.as_str())
+            {
                 block.signature = Some(sig.to_string());
 
                 if let Some(ref cb) = self.callbacks.on_signature {
@@ -536,7 +583,9 @@ impl EnhancedMessageStream {
     }
 
     fn handle_message_delta(&mut self, event: &serde_json::Value) -> Result<(), StreamError> {
-        let msg = self.current_message.as_mut()
+        let msg = self
+            .current_message
+            .as_mut()
             .ok_or_else(|| StreamError::InvalidState("No current message".to_string()))?;
 
         if let Some(delta) = event.get("delta") {
@@ -584,7 +633,8 @@ impl EnhancedMessageStream {
     pub fn get_final_text(&self) -> String {
         self.get_final_message()
             .map(|msg| {
-                msg.content.iter()
+                msg.content
+                    .iter()
                     .filter_map(|block| {
                         if let ContentBlock::Text(text_block) = block {
                             Some(text_block.text.as_str())
@@ -618,7 +668,6 @@ impl EnhancedMessageStream {
         self.error.as_ref()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -707,30 +756,38 @@ mod tests {
         let mut stream = EnhancedMessageStream::with_defaults();
 
         // Start message
-        stream.handle_event(serde_json::json!({
-            "type": "message_start",
-            "message": { "id": "msg_1", "role": "assistant", "model": "claude" }
-        })).unwrap();
+        stream
+            .handle_event(serde_json::json!({
+                "type": "message_start",
+                "message": { "id": "msg_1", "role": "assistant", "model": "claude" }
+            }))
+            .unwrap();
 
         // Start content block
-        stream.handle_event(serde_json::json!({
-            "type": "content_block_start",
-            "index": 0,
-            "content_block": { "type": "text" }
-        })).unwrap();
+        stream
+            .handle_event(serde_json::json!({
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": { "type": "text" }
+            }))
+            .unwrap();
 
         // Text delta
-        stream.handle_event(serde_json::json!({
-            "type": "content_block_delta",
-            "index": 0,
-            "delta": { "type": "text_delta", "text": "Hello " }
-        })).unwrap();
+        stream
+            .handle_event(serde_json::json!({
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": { "type": "text_delta", "text": "Hello " }
+            }))
+            .unwrap();
 
-        stream.handle_event(serde_json::json!({
-            "type": "content_block_delta",
-            "index": 0,
-            "delta": { "type": "text_delta", "text": "World" }
-        })).unwrap();
+        stream
+            .handle_event(serde_json::json!({
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": { "type": "text_delta", "text": "World" }
+            }))
+            .unwrap();
 
         let msg = stream.current_message.as_ref().unwrap();
         if let ContentBlock::Text(block) = &msg.content[0] {
@@ -742,26 +799,34 @@ mod tests {
     fn test_enhanced_message_stream_complete_flow() {
         let mut stream = EnhancedMessageStream::with_defaults();
 
-        stream.handle_event(serde_json::json!({
-            "type": "message_start",
-            "message": { "id": "msg_1", "role": "assistant", "model": "claude" }
-        })).unwrap();
+        stream
+            .handle_event(serde_json::json!({
+                "type": "message_start",
+                "message": { "id": "msg_1", "role": "assistant", "model": "claude" }
+            }))
+            .unwrap();
 
-        stream.handle_event(serde_json::json!({
-            "type": "content_block_start",
-            "index": 0,
-            "content_block": { "type": "text" }
-        })).unwrap();
+        stream
+            .handle_event(serde_json::json!({
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": { "type": "text" }
+            }))
+            .unwrap();
 
-        stream.handle_event(serde_json::json!({
-            "type": "content_block_delta",
-            "index": 0,
-            "delta": { "type": "text_delta", "text": "Test" }
-        })).unwrap();
+        stream
+            .handle_event(serde_json::json!({
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": { "type": "text_delta", "text": "Test" }
+            }))
+            .unwrap();
 
-        stream.handle_event(serde_json::json!({
-            "type": "message_stop"
-        })).unwrap();
+        stream
+            .handle_event(serde_json::json!({
+                "type": "message_stop"
+            }))
+            .unwrap();
 
         assert!(stream.is_ended());
         assert_eq!(stream.get_final_text(), "Test");

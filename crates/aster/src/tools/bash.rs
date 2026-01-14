@@ -225,13 +225,9 @@ impl BashTool {
             r"docker\s+system\s+prune",
         ];
 
-        patterns
-            .iter()
-            .filter_map(|p| Regex::new(p).ok())
-            .collect()
+        patterns.iter().filter_map(|p| Regex::new(p).ok()).collect()
     }
 }
-
 
 // =============================================================================
 // Safety Check Implementation (Requirements: 3.2, 3.3)
@@ -262,9 +258,7 @@ impl BashTool {
 
         // Check for fork bomb patterns
         if self.is_fork_bomb(command_trimmed) {
-            return SafetyCheckResult::unsafe_with_reason(
-                "Command appears to be a fork bomb",
-            );
+            return SafetyCheckResult::unsafe_with_reason("Command appears to be a fork bomb");
         }
 
         // Check for dangerous redirects to device files
@@ -293,9 +287,9 @@ impl BashTool {
     fn is_fork_bomb(&self, command: &str) -> bool {
         // Common fork bomb patterns
         let fork_bomb_patterns = [
-            r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:",  // :(){ :|:& };:
-            r"\$\{:\|:\&\}",                               // ${:|:&}
-            r"\.\/\s*\$0\s*&",                             // ./$0 &
+            r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:", // :(){ :|:& };:
+            r"\$\{:\|:\&\}",                             // ${:|:&}
+            r"\.\/\s*\$0\s*&",                           // ./$0 &
         ];
 
         for pattern in fork_bomb_patterns {
@@ -345,7 +339,6 @@ impl BashTool {
         self.check_command_safety(command).warning.is_some()
     }
 }
-
 
 // =============================================================================
 // Foreground Execution Implementation (Requirements: 3.1, 3.5)
@@ -502,7 +495,6 @@ impl BashTool {
     }
 }
 
-
 // =============================================================================
 // Background Execution Implementation (Requirements: 3.4)
 // =============================================================================
@@ -527,12 +519,13 @@ impl BashTool {
         // Delegate to task manager
         let task_id = self.task_manager.start(command, context).await?;
 
-        Ok(ToolResult::success(format!("Background task started with ID: {}", task_id))
-            .with_metadata("task_id", serde_json::json!(task_id))
-            .with_metadata("background", serde_json::json!(true)))
+        Ok(
+            ToolResult::success(format!("Background task started with ID: {}", task_id))
+                .with_metadata("task_id", serde_json::json!(task_id))
+                .with_metadata("background", serde_json::json!(true)),
+        )
     }
 }
-
 
 // =============================================================================
 // Tool Trait Implementation (Requirements: 3.6, 3.7, 3.8)
@@ -659,7 +652,6 @@ impl Tool for BashTool {
     }
 }
 
-
 // =============================================================================
 // Output Truncation Implementation (Requirements: 3.9)
 // =============================================================================
@@ -701,7 +693,6 @@ impl BashTool {
         output.len() > MAX_OUTPUT_LENGTH
     }
 }
-
 
 // =============================================================================
 // Unit Tests
@@ -854,7 +845,10 @@ mod tests {
         let tool = BashTool::new();
         let options = tool.options();
         assert_eq!(options.max_retries, 0);
-        assert_eq!(options.base_timeout, Duration::from_secs(DEFAULT_TIMEOUT_SECS));
+        assert_eq!(
+            options.base_timeout,
+            Duration::from_secs(DEFAULT_TIMEOUT_SECS)
+        );
     }
 
     // Permission Check Tests
@@ -928,7 +922,10 @@ mod tests {
         assert!(result.is_ok());
         let tool_result = result.unwrap();
         assert!(tool_result.is_error());
-        assert_eq!(tool_result.metadata.get("exit_code"), Some(&serde_json::json!(1)));
+        assert_eq!(
+            tool_result.metadata.get("exit_code"),
+            Some(&serde_json::json!(1))
+        );
     }
 
     #[tokio::test]
@@ -946,7 +943,7 @@ mod tests {
     async fn test_execute_with_timeout() {
         let tool = BashTool::new();
         let context = create_test_context();
-        
+
         // Use a very short timeout
         let params = serde_json::json!({
             "command": if cfg!(target_os = "windows") { "timeout /t 5" } else { "sleep 5" },
@@ -961,12 +958,10 @@ mod tests {
     #[tokio::test]
     async fn test_execute_background() {
         use tempfile::TempDir;
-        
+
         let temp_dir = TempDir::new().unwrap();
-        let task_manager = Arc::new(
-            TaskManager::new()
-                .with_output_directory(temp_dir.path().to_path_buf())
-        );
+        let task_manager =
+            Arc::new(TaskManager::new().with_output_directory(temp_dir.path().to_path_buf()));
         let tool = BashTool::with_task_manager(task_manager.clone());
         let context = create_test_context();
         let params = serde_json::json!({
@@ -981,7 +976,7 @@ mod tests {
         assert!(tool_result.is_success());
         assert!(tool_result.metadata.contains_key("task_id"));
         assert!(tool_result.metadata.contains_key("background"));
-        
+
         // Clean up
         let _ = task_manager.kill_all().await;
     }

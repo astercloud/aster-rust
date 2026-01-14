@@ -101,13 +101,11 @@ impl GlobTool {
 
         // Sort by modification time (newest first)
         // Requirements: 5.2
-        results.sort_by(|a, b| {
-            match (&a.1, &b.1) {
-                (Some(a_time), Some(b_time)) => Reverse(a_time).cmp(&Reverse(b_time)),
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => std::cmp::Ordering::Equal,
-            }
+        results.sort_by(|a, b| match (&a.1, &b.1) {
+            (Some(a_time), Some(b_time)) => Reverse(a_time).cmp(&Reverse(b_time)),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
         });
 
         // Extract just the results
@@ -244,8 +242,7 @@ impl Tool for GlobTool {
     }
 
     fn options(&self) -> ToolOptions {
-        ToolOptions::default()
-            .with_base_timeout(std::time::Duration::from_secs(60))
+        ToolOptions::default().with_base_timeout(std::time::Duration::from_secs(60))
     }
 }
 
@@ -328,7 +325,10 @@ mod tests {
         // Results should be sorted by mtime (newest first)
         for i in 0..results.len().saturating_sub(1) {
             if let (Some(mtime1), Some(mtime2)) = (results[i].mtime, results[i + 1].mtime) {
-                assert!(mtime1 >= mtime2, "Results should be sorted by mtime (newest first)");
+                assert!(
+                    mtime1 >= mtime2,
+                    "Results should be sorted by mtime (newest first)"
+                );
             }
         }
     }
@@ -344,7 +344,9 @@ mod tests {
             .unwrap();
 
         // Should not include files in utils directory
-        assert!(results.iter().all(|r| !r.path.to_string_lossy().contains("utils")));
+        assert!(results
+            .iter()
+            .all(|r| !r.path.to_string_lossy().contains("utils")));
     }
 
     #[test]
@@ -434,7 +436,10 @@ mod tests {
 
         // Check metadata
         assert_eq!(result.metadata.get("count"), Some(&serde_json::json!(2)));
-        assert_eq!(result.metadata.get("truncated"), Some(&serde_json::json!(true)));
+        assert_eq!(
+            result.metadata.get("truncated"),
+            Some(&serde_json::json!(true))
+        );
     }
 
     #[tokio::test]
@@ -470,7 +475,10 @@ mod tests {
         assert!(schema["properties"]["pattern"].is_object());
         assert!(schema["properties"]["path"].is_object());
         assert!(schema["properties"]["exclude"].is_object());
-        assert!(schema["required"].as_array().unwrap().contains(&serde_json::json!("pattern")));
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("pattern")));
     }
 
     #[tokio::test]
@@ -489,8 +497,7 @@ mod tests {
         let token = tokio_util::sync::CancellationToken::new();
         token.cancel();
 
-        let context = ToolContext::new(PathBuf::from("/tmp"))
-            .with_cancellation_token(token);
+        let context = ToolContext::new(PathBuf::from("/tmp")).with_cancellation_token(token);
         let params = serde_json::json!({"pattern": "*.txt"});
 
         let result = tool.execute(params, &context).await;

@@ -55,7 +55,6 @@ impl AskOption {
         }
     }
 
-
     /// Get the display text for this option
     pub fn display(&self) -> &str {
         self.label.as_deref().unwrap_or(&self.value)
@@ -149,7 +148,6 @@ impl AskTool {
         self.timeout
     }
 
-
     /// Ask a question to the user
     ///
     /// This method invokes the callback with the question and optional options,
@@ -172,9 +170,8 @@ impl AskTool {
         })?;
 
         // Convert options to string labels for the callback
-        let option_labels: Option<Vec<String>> = options.map(|opts| {
-            opts.iter().map(|o| o.display().to_string()).collect()
-        });
+        let option_labels: Option<Vec<String>> =
+            options.map(|opts| opts.iter().map(|o| o.display().to_string()).collect());
 
         // Call the callback with timeout
         let response = tokio::time::timeout(
@@ -198,7 +195,9 @@ impl AskTool {
                 // Free-form response
                 Ok(AskResult::from_input(response_text))
             }
-            None => Err(ToolError::execution_failed("User cancelled the interaction")),
+            None => Err(ToolError::execution_failed(
+                "User cancelled the interaction",
+            )),
         }
     }
 }
@@ -246,7 +245,6 @@ impl Tool for AskTool {
             "required": ["question"]
         })
     }
-
 
     async fn execute(
         &self,
@@ -351,12 +349,14 @@ mod tests {
         assert_eq!(result.option_index, Some(0));
     }
 
-
     #[test]
     fn test_ask_tool_new() {
         let tool = AskTool::new();
         assert!(!tool.has_callback());
-        assert_eq!(tool.timeout(), Duration::from_secs(DEFAULT_ASK_TIMEOUT_SECS));
+        assert_eq!(
+            tool.timeout(),
+            Duration::from_secs(DEFAULT_ASK_TIMEOUT_SECS)
+        );
     }
 
     #[test]
@@ -376,7 +376,10 @@ mod tests {
     fn test_ask_tool_default() {
         let tool = AskTool::default();
         assert!(!tool.has_callback());
-        assert_eq!(tool.timeout(), Duration::from_secs(DEFAULT_ASK_TIMEOUT_SECS));
+        assert_eq!(
+            tool.timeout(),
+            Duration::from_secs(DEFAULT_ASK_TIMEOUT_SECS)
+        );
     }
 
     #[tokio::test]
@@ -403,10 +406,7 @@ mod tests {
         let callback = mock_callback(Some("yes".to_string()));
         let tool = AskTool::new().with_callback(callback);
 
-        let options = vec![
-            AskOption::new("yes"),
-            AskOption::new("no"),
-        ];
+        let options = vec![AskOption::new("yes"), AskOption::new("no")];
 
         let result = tool.ask("Continue?", Some(&options)).await.unwrap();
         assert_eq!(result.response, "yes");
@@ -435,10 +435,7 @@ mod tests {
         let callback = mock_callback(Some("maybe".to_string()));
         let tool = AskTool::new().with_callback(callback);
 
-        let options = vec![
-            AskOption::new("yes"),
-            AskOption::new("no"),
-        ];
+        let options = vec![AskOption::new("yes"), AskOption::new("no")];
 
         let result = tool.ask("Continue?", Some(&options)).await.unwrap();
         assert_eq!(result.response, "maybe");
@@ -488,7 +485,10 @@ mod tests {
         assert_eq!(schema["type"], "object");
         assert!(schema["properties"]["question"].is_object());
         assert!(schema["properties"]["options"].is_object());
-        assert!(schema["required"].as_array().unwrap().contains(&serde_json::json!("question")));
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("question")));
     }
 
     #[tokio::test]
@@ -504,8 +504,14 @@ mod tests {
         let result = tool.execute(params, &context).await.unwrap();
         assert!(result.is_success());
         assert!(result.output.unwrap().contains("John"));
-        assert_eq!(result.metadata.get("response"), Some(&serde_json::json!("John")));
-        assert_eq!(result.metadata.get("from_option"), Some(&serde_json::json!(false)));
+        assert_eq!(
+            result.metadata.get("response"),
+            Some(&serde_json::json!("John"))
+        );
+        assert_eq!(
+            result.metadata.get("from_option"),
+            Some(&serde_json::json!(false))
+        );
     }
 
     #[tokio::test]
@@ -525,8 +531,14 @@ mod tests {
         let result = tool.execute(params, &context).await.unwrap();
         assert!(result.is_success());
         assert!(result.output.unwrap().contains("selected option"));
-        assert_eq!(result.metadata.get("from_option"), Some(&serde_json::json!(true)));
-        assert_eq!(result.metadata.get("option_index"), Some(&serde_json::json!(0)));
+        assert_eq!(
+            result.metadata.get("from_option"),
+            Some(&serde_json::json!(true))
+        );
+        assert_eq!(
+            result.metadata.get("option_index"),
+            Some(&serde_json::json!(0))
+        );
     }
 
     #[tokio::test]

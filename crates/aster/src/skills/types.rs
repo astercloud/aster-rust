@@ -55,7 +55,6 @@ pub struct SkillFrontmatter {
     pub disable_model_invocation: Option<String>,
 }
 
-
 /// Skill definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillDefinition {
@@ -112,7 +111,6 @@ impl SkillDefinition {
         }
     }
 }
-
 
 /// Invoked skill record
 #[derive(Debug, Clone, Serialize, Deserialize)]

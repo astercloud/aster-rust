@@ -6,13 +6,13 @@
 // - Context persistence and loading
 // - Context isolation and sandboxing
 
-mod types;
-mod manager;
 mod isolation;
+mod manager;
+mod types;
 
 #[cfg(test)]
 mod isolation_property_tests;
 
-pub use types::*;
-pub use manager::*;
 pub use isolation::*;
+pub use manager::*;
+pub use types::*;

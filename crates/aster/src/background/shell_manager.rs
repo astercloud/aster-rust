@@ -14,10 +14,9 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, RwLock};
-use tokio::time::{Duration, timeout};
+use tokio::time::{timeout, Duration};
 
-use super::types::{ShellStatus, ShellStats, ShellOutputEvent, ShellOutputType};
-
+use super::types::{ShellOutputEvent, ShellOutputType, ShellStats, ShellStatus};
 
 /// 后台 Shell
 pub struct BackgroundShell {
@@ -48,11 +47,10 @@ impl Default for ShellManagerOptions {
         Self {
             max_shells: 10,
             max_output_size: 10 * 1024 * 1024, // 10MB
-            default_max_runtime: 3600000,       // 1 hour
+            default_max_runtime: 3600000,      // 1 hour
         }
     }
 }
-
 
 /// Shell 创建结果
 #[derive(Debug)]
@@ -83,7 +81,6 @@ impl ShellManager {
             event_tx,
         }
     }
-
 
     /// 订阅输出事件
     pub fn subscribe(&self) -> broadcast::Receiver<ShellOutputEvent> {
@@ -122,7 +119,6 @@ impl ShellManager {
                 };
             }
         }
-
 
         let id = self.generate_shell_id();
         let working_dir = cwd.unwrap_or(".").to_string();
@@ -172,7 +168,6 @@ impl ShellManager {
         }
     }
 
-
     /// 启动输出读取器
     async fn spawn_output_reader(&self, shell_id: String) {
         let shells = Arc::clone(&self.shells);
@@ -212,7 +207,6 @@ impl ShellManager {
         });
     }
 
-
     /// 获取 Shell 状态
     pub async fn get_shell(&self, id: &str) -> Option<ShellStatus> {
         self.shells.read().await.get(id).map(|s| s.status)
@@ -247,7 +241,6 @@ impl ShellManager {
         }
     }
 
-
     /// 列出所有 Shell
     pub async fn list_shells(&self) -> Vec<(String, String, ShellStatus, i64, usize)> {
         self.shells
@@ -255,9 +248,10 @@ impl ShellManager {
             .await
             .values()
             .map(|s| {
-                let duration = s.end_time.unwrap_or_else(|| {
-                    chrono::Utc::now().timestamp_millis()
-                }) - s.start_time;
+                let duration = s
+                    .end_time
+                    .unwrap_or_else(|| chrono::Utc::now().timestamp_millis())
+                    - s.start_time;
                 (
                     s.id.clone(),
                     s.command.chars().take(100).collect(),
@@ -289,7 +283,6 @@ impl ShellManager {
         }
         count
     }
-
 
     /// 终止所有 Shell
     pub async fn terminate_all(&self) -> usize {

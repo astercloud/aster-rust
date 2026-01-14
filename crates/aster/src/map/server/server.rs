@@ -22,9 +22,8 @@ impl Default for VisualizationServerOptions {
     }
 }
 
-
 /// 可视化服务器
-/// 
+///
 /// 注意：实际的 HTTP 服务器实现需要依赖 axum/actix-web 等框架
 /// 这里提供核心逻辑和 API 处理器
 pub struct VisualizationServer {
@@ -38,34 +37,30 @@ impl VisualizationServer {
         let handlers = ApiHandlers::new(options.ontology_path.clone());
         Self { options, handlers }
     }
-    
+
     /// 获取配置的端口
     pub fn port(&self) -> u16 {
         self.options.port
     }
-    
+
     /// 获取本体路径
     pub fn ontology_path(&self) -> &PathBuf {
         &self.options.ontology_path
     }
-    
+
     /// 获取 API 处理器
     pub fn handlers(&self) -> &ApiHandlers {
         &self.handlers
     }
-    
+
     /// 获取服务器地址
     pub fn get_address(&self) -> String {
         format!("http://localhost:{}", self.options.port)
     }
 }
 
-
 /// 便捷函数：创建并返回可视化服务器
-pub fn start_visualization_server(
-    ontology_path: PathBuf,
-    port: u16,
-) -> VisualizationServer {
+pub fn start_visualization_server(ontology_path: PathBuf, port: u16) -> VisualizationServer {
     let options = VisualizationServerOptions {
         ontology_path,
         port,
@@ -76,18 +71,18 @@ pub fn start_visualization_server(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_server_creation() {
         let server = VisualizationServer::new(VisualizationServerOptions {
             ontology_path: PathBuf::from("test.json"),
             port: 8080,
         });
-        
+
         assert_eq!(server.port(), 8080);
         assert_eq!(server.get_address(), "http://localhost:8080");
     }
-    
+
     #[test]
     fn test_default_options() {
         let options = VisualizationServerOptions::default();

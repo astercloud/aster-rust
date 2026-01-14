@@ -431,8 +431,14 @@ mod tests {
             .with_metadata("duration_ms", serde_json::json!(100))
             .with_metadata("exit_code", serde_json::json!(0));
 
-        assert_eq!(result.metadata.get("duration_ms"), Some(&serde_json::json!(100)));
-        assert_eq!(result.metadata.get("exit_code"), Some(&serde_json::json!(0)));
+        assert_eq!(
+            result.metadata.get("duration_ms"),
+            Some(&serde_json::json!(100))
+        );
+        assert_eq!(
+            result.metadata.get("exit_code"),
+            Some(&serde_json::json!(0))
+        );
     }
 
     #[test]
@@ -443,13 +449,16 @@ mod tests {
 
         assert_eq!(opts.max_retries, deserialized.max_retries);
         assert_eq!(opts.base_timeout, deserialized.base_timeout);
-        assert_eq!(opts.enable_dynamic_timeout, deserialized.enable_dynamic_timeout);
+        assert_eq!(
+            opts.enable_dynamic_timeout,
+            deserialized.enable_dynamic_timeout
+        );
     }
 
     #[test]
     fn test_tool_result_serialization() {
-        let result = ToolResult::success("test output")
-            .with_metadata("key", serde_json::json!("value"));
+        let result =
+            ToolResult::success("test output").with_metadata("key", serde_json::json!("value"));
 
         let json = serde_json::to_string(&result).unwrap();
         let deserialized: ToolResult = serde_json::from_str(&json).unwrap();

@@ -9,7 +9,7 @@ use super::analyzer::CodeMapAnalyzer;
 use super::call_graph_builder::build_call_graph;
 use super::dependency_analyzer::analyze_dependencies;
 use super::layer_classifier::LayerClassifier;
-use super::types::{ModuleNode, CallGraph, DependencyGraph, GenerateOptions, FileStat};
+use super::types::{CallGraph, DependencyGraph, FileStat, GenerateOptions, ModuleNode};
 use super::types_enhanced::*;
 use super::view_builder::ViewBuilder;
 
@@ -75,7 +75,6 @@ impl EnhancedOntologyGenerator {
         }
     }
 
-
     fn collect_languages(&self, modules: &[ModuleNode]) -> Vec<String> {
         let mut langs: std::collections::HashSet<String> = std::collections::HashSet::new();
         for m in modules {
@@ -84,7 +83,13 @@ impl EnhancedOntologyGenerator {
         langs.into_iter().collect()
     }
 
-    fn build_enhanced_modules(&self, modules: &[ModuleNode]) -> (HashMap<String, EnhancedModule>, HashMap<String, SymbolEntry>) {
+    fn build_enhanced_modules(
+        &self,
+        modules: &[ModuleNode],
+    ) -> (
+        HashMap<String, EnhancedModule>,
+        HashMap<String, SymbolEntry>,
+    ) {
         let mut enhanced = HashMap::new();
         let mut symbols = HashMap::new();
         let classifier = LayerClassifier::new();
@@ -97,17 +102,20 @@ impl EnhancedOntologyGenerator {
             for func in &module.functions {
                 if func.is_exported {
                     exports.push(func.id.clone());
-                    symbols.insert(func.id.clone(), SymbolEntry {
-                        id: func.id.clone(),
-                        name: func.name.clone(),
-                        kind: SymbolKind::Function,
-                        module_id: module.id.clone(),
-                        location: func.location.clone(),
-                        signature: Some(func.signature.clone()),
-                        semantic: None,
-                        children: None,
-                        parent: None,
-                    });
+                    symbols.insert(
+                        func.id.clone(),
+                        SymbolEntry {
+                            id: func.id.clone(),
+                            name: func.name.clone(),
+                            kind: SymbolKind::Function,
+                            module_id: module.id.clone(),
+                            location: func.location.clone(),
+                            signature: Some(func.signature.clone()),
+                            semantic: None,
+                            children: None,
+                            parent: None,
+                        },
+                    );
                 }
             }
 
@@ -115,88 +123,107 @@ impl EnhancedOntologyGenerator {
                 if cls.is_exported {
                     exports.push(cls.id.clone());
                     let children: Vec<String> = cls.methods.iter().map(|m| m.id.clone()).collect();
-                    symbols.insert(cls.id.clone(), SymbolEntry {
-                        id: cls.id.clone(),
-                        name: cls.name.clone(),
-                        kind: SymbolKind::Class,
-                        module_id: module.id.clone(),
-                        location: cls.location.clone(),
-                        signature: None,
-                        semantic: None,
-                        children: Some(children),
-                        parent: None,
-                    });
+                    symbols.insert(
+                        cls.id.clone(),
+                        SymbolEntry {
+                            id: cls.id.clone(),
+                            name: cls.name.clone(),
+                            kind: SymbolKind::Class,
+                            module_id: module.id.clone(),
+                            location: cls.location.clone(),
+                            signature: None,
+                            semantic: None,
+                            children: Some(children),
+                            parent: None,
+                        },
+                    );
 
                     for method in &cls.methods {
-                        symbols.insert(method.id.clone(), SymbolEntry {
-                            id: method.id.clone(),
-                            name: method.name.clone(),
-                            kind: SymbolKind::Method,
-                            module_id: module.id.clone(),
-                            location: method.location.clone(),
-                            signature: Some(method.signature.clone()),
-                            semantic: None,
-                            children: None,
-                            parent: Some(cls.id.clone()),
-                        });
+                        symbols.insert(
+                            method.id.clone(),
+                            SymbolEntry {
+                                id: method.id.clone(),
+                                name: method.name.clone(),
+                                kind: SymbolKind::Method,
+                                module_id: module.id.clone(),
+                                location: method.location.clone(),
+                                signature: Some(method.signature.clone()),
+                                semantic: None,
+                                children: None,
+                                parent: Some(cls.id.clone()),
+                            },
+                        );
                     }
                 }
             }
 
             // 构建导入
-            let imports: Vec<ModuleImport> = module.imports.iter().map(|imp| {
-                ModuleImport {
+            let imports: Vec<ModuleImport> = module
+                .imports
+                .iter()
+                .map(|imp| ModuleImport {
                     source: imp.source.clone(),
                     symbols: imp.symbols.clone(),
                     is_external: !imp.source.starts_with('.') && !imp.source.starts_with('/'),
                     is_type_only: Some(imp.symbols.iter().any(|s| s.starts_with("type "))),
-                }
-            }).collect();
+                })
+                .collect();
 
-            enhanced.insert(module.id.clone(), EnhancedModule {
-                id: module.id.clone(),
-                name: module.name.clone(),
-                path: module.path.clone(),
-                language: module.language.clone(),
-                lines: module.lines,
-                size: module.size,
-                semantic: Some(SemanticInfo {
-                    description: String::new(),
-                    responsibility: String::new(),
-                    business_domain: None,
-                    architecture_layer: classification.layer,
-                    tags: Vec::new(),
-                    confidence: classification.confidence,
-                    generated_at: chrono::Utc::now().to_rfc3339(),
-                }),
-                exports,
-                imports,
-            });
+            enhanced.insert(
+                module.id.clone(),
+                EnhancedModule {
+                    id: module.id.clone(),
+                    name: module.name.clone(),
+                    path: module.path.clone(),
+                    language: module.language.clone(),
+                    lines: module.lines,
+                    size: module.size,
+                    semantic: Some(SemanticInfo {
+                        description: String::new(),
+                        responsibility: String::new(),
+                        business_domain: None,
+                        architecture_layer: classification.layer,
+                        tags: Vec::new(),
+                        confidence: classification.confidence,
+                        generated_at: chrono::Utc::now().to_rfc3339(),
+                    }),
+                    exports,
+                    imports,
+                },
+            );
         }
 
         (enhanced, symbols)
     }
 
-
-    fn build_references(&self, _modules: &[ModuleNode], call_graph: &CallGraph, dep_graph: &DependencyGraph) -> References {
-        let module_deps: Vec<ModuleDependency> = dep_graph.edges.iter().map(|e| {
-            ModuleDependency {
+    fn build_references(
+        &self,
+        _modules: &[ModuleNode],
+        call_graph: &CallGraph,
+        dep_graph: &DependencyGraph,
+    ) -> References {
+        let module_deps: Vec<ModuleDependency> = dep_graph
+            .edges
+            .iter()
+            .map(|e| ModuleDependency {
                 source: e.source.clone(),
                 target: e.target.clone(),
                 dep_type: format!("{:?}", e.edge_type).to_lowercase(),
                 symbols: e.symbols.clone(),
                 is_type_only: e.is_type_only,
-            }
-        }).collect();
+            })
+            .collect();
 
-        let symbol_calls: Vec<SymbolCall> = call_graph.edges.iter().map(|e| {
-            SymbolCall {
+        let symbol_calls: Vec<SymbolCall> = call_graph
+            .edges
+            .iter()
+            .map(|e| SymbolCall {
                 caller: e.source.clone(),
                 callee: e.target.clone(),
                 call_type: format!("{:?}", e.edge_type).to_lowercase(),
                 locations: e.locations.clone(),
-            }
-        }).collect();
+            })
+            .collect();
 
         References {
             module_deps,
@@ -222,8 +249,13 @@ impl EnhancedOntologyGenerator {
             *lang_breakdown.entry(module.language.clone()).or_insert(0) += 1;
         }
 
-        let mut largest: Vec<_> = modules.iter()
-            .map(|m| FileStat { path: m.id.clone(), lines: m.lines, size: m.size })
+        let mut largest: Vec<_> = modules
+            .iter()
+            .map(|m| FileStat {
+                path: m.id.clone(),
+                lines: m.lines,
+                size: m.size,
+            })
             .collect();
         largest.sort_by(|a, b| b.lines.cmp(&a.lines));
 
@@ -247,7 +279,10 @@ impl EnhancedOntologyGenerator {
 }
 
 /// 便捷函数：生成增强版蓝图
-pub fn generate_enhanced_blueprint(root_path: impl AsRef<Path>, options: Option<EnhancedGenerateOptions>) -> EnhancedCodeBlueprint {
+pub fn generate_enhanced_blueprint(
+    root_path: impl AsRef<Path>,
+    options: Option<EnhancedGenerateOptions>,
+) -> EnhancedCodeBlueprint {
     EnhancedOntologyGenerator::new(root_path, options).generate()
 }
 

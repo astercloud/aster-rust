@@ -1,17 +1,17 @@
 //! 签名密钥管理
 
-use super::types::SigningKey;
 use super::storage::{load_keys, save_key};
+use super::types::SigningKey;
 
 /// 生成新的签名密钥对
-/// 
+///
 /// 注意：当前实现仅生成密钥 ID，不包含加密签名功能
 /// 如需完整的 Ed25519 签名，需要添加 ring 或 ed25519-dalek 依赖
 pub fn generate_key_pair() -> Result<SigningKey, String> {
     use rand::RngCore;
-    
+
     let mut rng = rand::thread_rng();
-    
+
     // 生成随机 ID
     let mut id_bytes = [0u8; 16];
     rng.fill_bytes(&mut id_bytes);
@@ -21,7 +21,7 @@ pub fn generate_key_pair() -> Result<SigningKey, String> {
     let mut key_bytes = [0u8; 32];
     rng.fill_bytes(&mut key_bytes);
     let public_key = hex::encode(key_bytes);
-    
+
     let mut private_bytes = [0u8; 64];
     rng.fill_bytes(&mut private_bytes);
     let private_key = hex::encode(private_bytes);

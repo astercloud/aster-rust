@@ -78,7 +78,8 @@ impl SocketServer {
             match listener.accept().await {
                 Ok((stream, _)) => {
                     let id = next_id.fetch_add(1, Ordering::SeqCst);
-                    self.handle_mcp_client(id, stream, Arc::clone(&clients)).await;
+                    self.handle_mcp_client(id, stream, Arc::clone(&clients))
+                        .await;
                 }
                 Err(e) => {
                     log_message(&format!("Accept error: {}", e));
@@ -100,7 +101,11 @@ impl SocketServer {
         {
             let mut clients = clients.lock().await;
             clients.insert(id, McpClientInfo { id, writer });
-            log_message(&format!("MCP client {} connected. Total: {}", id, clients.len()));
+            log_message(&format!(
+                "MCP client {} connected. Total: {}",
+                id,
+                clients.len()
+            ));
         }
 
         // 通知 Chrome 扩展
@@ -126,7 +131,11 @@ impl SocketServer {
 
             let mut clients = clients_clone.lock().await;
             clients.remove(&id);
-            log_message(&format!("MCP client {} disconnected. Total: {}", id, clients.len()));
+            log_message(&format!(
+                "MCP client {} disconnected. Total: {}",
+                id,
+                clients.len()
+            ));
         });
     }
 
@@ -136,7 +145,10 @@ impl SocketServer {
             let msg_len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
 
             if msg_len == 0 || msg_len > MAX_MESSAGE_SIZE {
-                log_message(&format!("Invalid message length from client {}: {}", client_id, msg_len));
+                log_message(&format!(
+                    "Invalid message length from client {}: {}",
+                    client_id, msg_len
+                ));
                 buffer.clear();
                 return;
             }
@@ -149,8 +161,11 @@ impl SocketServer {
             let msg_data = &buffer[4..total_len];
             if let Ok(msg_str) = std::str::from_utf8(msg_data) {
                 if let Ok(message) = serde_json::from_str::<serde_json::Value>(msg_str) {
-                    log_message(&format!("Received from MCP client {}: {}", client_id, 
-                        &msg_str[..msg_str.len().min(200)]));
+                    log_message(&format!(
+                        "Received from MCP client {}: {}",
+                        client_id,
+                        &msg_str[..msg_str.len().min(200)]
+                    ));
                     // 转发到 Chrome 扩展
                     send_to_chrome(&message);
                 }
@@ -162,10 +177,13 @@ impl SocketServer {
 
     /// 处理来自 Chrome 扩展的消息
     pub async fn handle_chrome_message(&self, message: &str) -> Result<(), String> {
-        log_message(&format!("Chrome message: {}", &message[..message.len().min(300)]));
+        log_message(&format!(
+            "Chrome message: {}",
+            &message[..message.len().min(300)]
+        ));
 
-        let data: serde_json::Value = serde_json::from_str(message)
-            .map_err(|e| format!("Parse error: {}", e))?;
+        let data: serde_json::Value =
+            serde_json::from_str(message).map_err(|e| format!("Parse error: {}", e))?;
 
         // 检查是否是工具响应
         if data.get("result").is_some() || data.get("error").is_some() {
@@ -217,8 +235,9 @@ impl SocketServer {
         let mut failed_ids = Vec::new();
 
         for (id, client) in clients.iter_mut() {
-            if client.writer.write_all(&header).await.is_err() 
-                || client.writer.write_all(&json).await.is_err() {
+            if client.writer.write_all(&header).await.is_err()
+                || client.writer.write_all(&json).await.is_err()
+            {
                 failed_ids.push(*id);
             }
         }
@@ -275,7 +294,10 @@ fn log_message(message: &str) {
 /// 向 Chrome 扩展发送消息（Native Messaging 协议）
 fn send_to_chrome(message: &serde_json::Value) {
     let json_str = serde_json::to_string(message).unwrap_or_default();
-    log_message(&format!("Sending to Chrome: {}", &json_str[..json_str.len().min(200)]));
+    log_message(&format!(
+        "Sending to Chrome: {}",
+        &json_str[..json_str.len().min(200)]
+    ));
 
     let json = json_str.as_bytes();
     let mut header = [0u8; 4];

@@ -34,7 +34,6 @@ fn get_resolution_config(language: &str) -> ResolutionConfig {
     }
 }
 
-
 /// 依赖分析器
 pub struct DependencyAnalyzer {
     module_index: HashMap<String, ModuleNode>,
@@ -73,20 +72,18 @@ impl DependencyAnalyzer {
             // 也索引不带扩展名的路径
             if let Some(pos) = module.id.rfind('.') {
                 let without_ext = &module.id[..pos];
-                self.module_index.insert(without_ext.to_string(), module.clone());
+                self.module_index
+                    .insert(without_ext.to_string(), module.clone());
             }
         }
     }
 
-
     /// 分析单个模块的依赖
     fn analyze_module_dependencies(&self, module: &ModuleNode, edges: &mut Vec<DependencyEdge>) {
         for imp in &module.imports {
-            if let Some(target_id) = self.resolve_import_target(
-                &imp.source,
-                &module.id,
-                &module.language,
-            ) {
+            if let Some(target_id) =
+                self.resolve_import_target(&imp.source, &module.id, &module.language)
+            {
                 edges.push(DependencyEdge {
                     source: module.id.clone(),
                     target: target_id,
@@ -132,7 +129,6 @@ impl DependencyAnalyzer {
         None
     }
 
-
     /// 规范化路径
     fn normalize_path(&self, p: &str) -> String {
         let parts: Vec<&str> = p.split('/').collect();
@@ -140,7 +136,9 @@ impl DependencyAnalyzer {
 
         for part in parts {
             match part {
-                ".." => { result.pop(); }
+                ".." => {
+                    result.pop();
+                }
                 "." | "" => {}
                 _ => result.push(part),
             }
@@ -160,7 +158,8 @@ impl DependencyAnalyzer {
         let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
 
         for edge in &graph.edges {
-            adjacency.entry(edge.source.clone())
+            adjacency
+                .entry(edge.source.clone())
                 .or_default()
                 .push(edge.target.clone());
         }
@@ -171,13 +170,19 @@ impl DependencyAnalyzer {
 
         for node in adjacency.keys() {
             if !visited.contains(node) {
-                self.dfs_cycle(node, &adjacency, &mut visited, &mut rec_stack, &mut path, &mut cycles);
+                self.dfs_cycle(
+                    node,
+                    &adjacency,
+                    &mut visited,
+                    &mut rec_stack,
+                    &mut path,
+                    &mut cycles,
+                );
             }
         }
 
         cycles
     }
-
 
     fn dfs_cycle(
         &self,
@@ -220,8 +225,12 @@ impl DependencyAnalyzer {
         for edge in &graph.edges {
             *dependent_count.entry(edge.source.clone()).or_insert(0) += 1;
             *depended_count.entry(edge.target.clone()).or_insert(0) += 1;
-            if edge.is_type_only { type_only += 1; }
-            if edge.edge_type == DependencyType::Dynamic { dynamic += 1; }
+            if edge.is_type_only {
+                type_only += 1;
+            }
+            if edge.edge_type == DependencyType::Dynamic {
+                dynamic += 1;
+            }
         }
 
         let mut most_dependent: Vec<_> = dependent_count.into_iter().collect();
@@ -241,9 +250,10 @@ impl DependencyAnalyzer {
 }
 
 impl Default for DependencyAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
-
 
 /// 依赖统计
 #[derive(Debug, Clone, Default)]

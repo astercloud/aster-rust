@@ -9,12 +9,17 @@
 mod file_history;
 mod manager;
 
-pub use file_history::{
-    FileHistoryManager, FileBackup, FileSnapshot, RewindResult,
-};
+pub use file_history::{FileBackup, FileHistoryManager, FileSnapshot, RewindResult};
 pub use manager::{
-    RewindManager, RewindOption, RewindableMessage, RewindOperationResult,
-    ConversationRewindResult, RewindPreview, SnapshotDetails,
+    cleanup_all_rewind_managers,
+    cleanup_rewind_manager,
     // 全局实例管理
-    get_rewind_manager, cleanup_rewind_manager, cleanup_all_rewind_managers,
+    get_rewind_manager,
+    ConversationRewindResult,
+    RewindManager,
+    RewindOperationResult,
+    RewindOption,
+    RewindPreview,
+    RewindableMessage,
+    SnapshotDetails,
 };

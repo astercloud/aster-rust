@@ -23,7 +23,6 @@ pub struct DownloadProgress {
     pub total_bytes: Option<u64>,
 }
 
-
 /// 下载阶段
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DownloadPhase {
@@ -50,7 +49,6 @@ pub struct InstallOptions {
     pub install_dir: Option<PathBuf>,
 }
 
-
 /// 更新安装器
 pub struct Installer {
     download_dir: PathBuf,
@@ -63,7 +61,7 @@ impl Installer {
         let base_dir = dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("aster");
-        
+
         Self {
             download_dir: base_dir.join("downloads"),
             install_dir: base_dir.join("bin"),
@@ -72,16 +70,14 @@ impl Installer {
 
     /// 使用自定义目录创建
     pub fn with_dirs(download_dir: PathBuf, install_dir: PathBuf) -> Self {
-        Self { download_dir, install_dir }
+        Self {
+            download_dir,
+            install_dir,
+        }
     }
 
-
     /// 下载更新包
-    pub async fn download(
-        &self,
-        url: &str,
-        options: &InstallOptions,
-    ) -> Result<PathBuf, String> {
+    pub async fn download(&self, url: &str, options: &InstallOptions) -> Result<PathBuf, String> {
         if options.dry_run {
             tracing::info!("[DRY-RUN] 将从 {} 下载", url);
             return Ok(self.download_dir.join("dry-run.tar.gz"));
@@ -92,18 +88,14 @@ impl Installer {
             .map_err(|e| format!("创建下载目录失败: {}", e))?;
 
         // 从 URL 提取文件名
-        let filename = url
-            .split('/')
-            .last()
-            .unwrap_or("update.tar.gz");
+        let filename = url.split('/').last().unwrap_or("update.tar.gz");
         let download_path = self.download_dir.join(filename);
 
         // 实际下载逻辑（简化实现）
         tracing::info!("下载更新: {} -> {:?}", url, download_path);
-        
+
         Ok(download_path)
     }
-
 
     /// 安装更新包
     pub async fn install(
@@ -122,11 +114,9 @@ impl Installer {
         }
 
         // 确保安装目录存在
-        let install_dir = options.install_dir.as_ref()
-            .unwrap_or(&self.install_dir);
-        
-        std::fs::create_dir_all(install_dir)
-            .map_err(|e| format!("创建安装目录失败: {}", e))?;
+        let install_dir = options.install_dir.as_ref().unwrap_or(&self.install_dir);
+
+        std::fs::create_dir_all(install_dir).map_err(|e| format!("创建安装目录失败: {}", e))?;
 
         // 备份当前版本
         self.backup_current(install_dir)?;
@@ -141,7 +131,6 @@ impl Installer {
             error: None,
         })
     }
-
 
     /// 回滚到指定版本
     pub async fn rollback(
@@ -176,12 +165,10 @@ impl Installer {
         })
     }
 
-
     /// 备份当前版本
     fn backup_current(&self, install_dir: &std::path::Path) -> Result<(), String> {
         let backup_dir = self.download_dir.join("backups");
-        std::fs::create_dir_all(&backup_dir)
-            .map_err(|e| format!("创建备份目录失败: {}", e))?;
+        std::fs::create_dir_all(&backup_dir).map_err(|e| format!("创建备份目录失败: {}", e))?;
 
         let current_version = env!("CARGO_PKG_VERSION");
         let backup_path = backup_dir.join(format!("v{}", current_version));
@@ -204,7 +191,7 @@ impl Installer {
     /// 列出可用的备份版本
     pub fn list_backups(&self) -> Vec<String> {
         let backup_dir = self.download_dir.join("backups");
-        
+
         if !backup_dir.exists() {
             return Vec::new();
         }
@@ -223,19 +210,16 @@ impl Installer {
             .unwrap_or_default()
     }
 
-
     /// 清理旧的下载和备份
     pub fn cleanup(&self, keep_versions: usize) -> Result<(), String> {
         let backup_dir = self.download_dir.join("backups");
-        
+
         if !backup_dir.exists() {
             return Ok(());
         }
 
         let mut backups = self.list_backups();
-        backups.sort_by(|a, b| {
-            super::checker::compare_versions(b, a).cmp(&0)
-        });
+        backups.sort_by(|a, b| super::checker::compare_versions(b, a).cmp(&0));
 
         // 保留最新的 N 个版本
         for version in backups.iter().skip(keep_versions) {
@@ -255,7 +239,6 @@ impl Default for Installer {
         Self::new()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -336,7 +319,9 @@ mod tests {
             dry_run: true,
             ..Default::default()
         };
-        let result = installer.download("https://example.com/update.tar.gz", &options).await;
+        let result = installer
+            .download("https://example.com/update.tar.gz", &options)
+            .await;
         assert!(result.is_ok());
     }
 
@@ -348,7 +333,9 @@ mod tests {
             version: Some("1.0.0".to_string()),
             ..Default::default()
         };
-        let result = installer.install(std::path::Path::new("/tmp/test.tar.gz"), &options).await;
+        let result = installer
+            .install(std::path::Path::new("/tmp/test.tar.gz"), &options)
+            .await;
         assert!(result.is_ok());
         assert!(result.unwrap().success);
     }

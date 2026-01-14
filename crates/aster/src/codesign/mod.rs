@@ -8,12 +8,12 @@
 //! - 验证文件签名
 //! - 签名缓存和持久化
 
-mod types;
 mod keys;
 mod signing;
 mod storage;
+mod types;
 
-pub use types::*;
 pub use keys::*;
 pub use signing::*;
 pub use storage::*;
+pub use types::*;

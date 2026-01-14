@@ -16,5 +16,5 @@ pub mod types;
 
 pub use lsp_client::{LspClient, LspClientConfig, LspServerState};
 pub use lsp_manager::{LspManager, LspServerInfo, LSP_SERVERS};
-pub use symbol_extractor::{LspSymbolExtractor, CodeSymbol, Reference, SymbolKind};
+pub use symbol_extractor::{CodeSymbol, LspSymbolExtractor, Reference, SymbolKind};
 pub use types::*;

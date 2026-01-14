@@ -8,21 +8,20 @@
 //! - 并发控制
 //! - 状态管理
 
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
-use chrono::{DateTime, Utc};
 
-use super::types::{TaskPriority, TaskStatus, TaskType, QueueStatus};
-
+use super::types::{QueueStatus, TaskPriority, TaskStatus, TaskType};
 
 /// 任务执行函数类型
 pub type TaskExecutor = Box<
     dyn FnOnce() -> Pin<Box<dyn Future<Output = Result<serde_json::Value, String>> + Send>>
         + Send
-        + Sync
+        + Sync,
 >;
 
 /// 队列中的任务
@@ -39,7 +38,6 @@ pub struct QueuedTask {
     pub result: Option<serde_json::Value>,
     pub error: Option<String>,
 }
-
 
 /// 任务队列配置
 #[derive(Debug, Clone)]
@@ -67,7 +65,6 @@ pub struct SimpleTaskQueue {
     on_task_complete: Option<TaskCallback>,
     on_task_failed: Option<TaskCallback>,
 }
-
 
 impl SimpleTaskQueue {
     /// 创建新的任务队列
@@ -99,7 +96,6 @@ impl SimpleTaskQueue {
         self.on_task_failed = Some(callback);
     }
 
-
     /// 添加任务到队列
     pub async fn enqueue(&self, mut task: QueuedTask) -> String {
         task.status = TaskStatus::Pending;
@@ -107,13 +103,13 @@ impl SimpleTaskQueue {
         let task_id = task.id.clone();
 
         let mut queue = self.queue.lock().await;
-        
+
         // 按优先级插入
         let insert_index = queue
             .iter()
             .position(|t| t.priority.order() > task.priority.order())
             .unwrap_or(queue.len());
-        
+
         queue.insert(insert_index, task);
         drop(queue);
 
@@ -137,7 +133,6 @@ impl SimpleTaskQueue {
 
         let mut task = queue.remove(0);
         drop(queue);
-
 
         // 更新任务状态
         task.status = TaskStatus::Running;
@@ -163,10 +158,10 @@ impl SimpleTaskQueue {
 
             tokio::spawn(async move {
                 let result = exec().await;
-                
+
                 if let Some(mut task) = running.write().await.remove(&task_id) {
                     task.end_time = Some(Utc::now());
-                    
+
                     match result {
                         Ok(value) => {
                             task.result = Some(value);
@@ -189,7 +184,6 @@ impl SimpleTaskQueue {
             });
         }
     }
-
 
     /// 获取任务状态
     pub async fn get_task(&self, task_id: &str) -> Option<TaskStatus> {
@@ -228,7 +222,6 @@ impl SimpleTaskQueue {
             available: self.max_concurrent.saturating_sub(running),
         }
     }
-
 
     /// 取消队列中的任务
     pub async fn cancel(&self, task_id: &str) -> bool {

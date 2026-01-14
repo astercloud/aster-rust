@@ -90,7 +90,10 @@ impl SSEDecoder {
             }
 
             let event = SSEEvent {
-                event: self.event_type.take().unwrap_or_else(|| "message".to_string()),
+                event: self
+                    .event_type
+                    .take()
+                    .unwrap_or_else(|| "message".to_string()),
                 data: self.data_lines.join("\n"),
                 raw: std::mem::take(&mut self.chunks),
                 id: self.event_id.clone(),
@@ -133,7 +136,10 @@ impl SSEDecoder {
         }
 
         let event = SSEEvent {
-            event: self.event_type.take().unwrap_or_else(|| "message".to_string()),
+            event: self
+                .event_type
+                .take()
+                .unwrap_or_else(|| "message".to_string()),
             data: self.data_lines.join("\n"),
             raw: std::mem::take(&mut self.chunks),
             id: self.event_id.clone(),
@@ -323,7 +329,6 @@ impl<T> SSEStream<T> {
         !self.event_queue.is_empty()
     }
 }
-
 
 #[cfg(test)]
 mod tests {

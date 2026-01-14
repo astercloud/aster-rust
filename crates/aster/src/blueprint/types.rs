@@ -7,8 +7,8 @@
 //! - TDD Loop：每个 Agent 都在 任务→测试→编码→验证 的循环中
 //! - Checkpoint（检查点）：支持时光倒流的快照系统
 
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 // ============================================================================
@@ -97,7 +97,6 @@ pub struct BusinessProcess {
     pub outputs: Vec<String>,
 }
 
-
 /// 模块类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -162,7 +161,6 @@ pub struct SystemModule {
     /// 模块根目录路径
     pub root_path: Option<String>,
 }
-
 
 /// NFR 类别
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -232,7 +230,6 @@ pub struct BlueprintChange {
     pub author: ChangeAuthor,
 }
 
-
 /// 项目蓝图
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Blueprint {
@@ -268,7 +265,7 @@ impl Blueprint {
     pub fn new(name: String, description: String) -> Self {
         let now = Utc::now();
         let id = Uuid::new_v4().to_string();
-        
+
         Self {
             id: id.clone(),
             name: name.clone(),
@@ -296,7 +293,6 @@ impl Blueprint {
         }
     }
 }
-
 
 // ============================================================================
 // 任务树相关类型
@@ -362,7 +358,6 @@ pub struct TestResult {
     pub coverage: Option<f64>,
     pub details: Option<serde_json::Value>,
 }
-
 
 /// 测试规格
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -437,7 +432,6 @@ pub struct AcceptanceTest {
     pub run_history: Vec<TestResult>,
 }
 
-
 /// 代码产出物类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -490,7 +484,6 @@ pub struct Checkpoint {
 
     pub metadata: Option<serde_json::Value>,
 }
-
 
 /// 任务节点
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -577,7 +570,6 @@ impl TaskNode {
     }
 }
 
-
 /// 文件变更类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -636,7 +628,6 @@ pub struct TaskTreeStats {
     pub progress_percentage: f64,
 }
 
-
 /// 任务树状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -694,7 +685,6 @@ impl TaskTree {
         }
     }
 }
-
 
 // ============================================================================
 // Agent 协调相关类型
@@ -761,7 +751,6 @@ pub struct AgentAction {
     /// 持续时间（毫秒）
     pub duration: u64,
 }
-
 
 /// TDD 循环阶段
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -834,7 +823,6 @@ pub struct WorkerAgent {
     /// 执行历史
     pub history: Vec<AgentAction>,
 }
-
 
 /// 主 Agent（蜂王）
 #[derive(Debug, Clone, Serialize, Deserialize)]

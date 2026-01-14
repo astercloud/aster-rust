@@ -2,13 +2,12 @@
 //!
 //! 提供桌面通知和终端通知功能
 
-mod types;
-mod manager;
 mod desktop;
+mod manager;
+mod types;
 
-pub use types::{
-    Notification, NotificationType, NotificationKind,
-    NotificationAction, NotificationConfig,
-};
+pub use desktop::{bell, play_sound, send_desktop_notification};
 pub use manager::NotificationManager;
-pub use desktop::{send_desktop_notification, play_sound, bell};
+pub use types::{
+    Notification, NotificationAction, NotificationConfig, NotificationKind, NotificationType,
+};

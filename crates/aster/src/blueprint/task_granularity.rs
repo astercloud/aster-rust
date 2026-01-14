@@ -12,7 +12,7 @@
 //! - 保持任务粒度适中（便于 TDD 循环）
 //!
 
-use super::types::{TaskNode, TaskTree, SystemModule};
+use super::types::{SystemModule, TaskNode, TaskTree};
 
 // ============================================================================
 // 配置接口
@@ -46,7 +46,6 @@ pub struct GranularityConfig {
     /// 每个任务最小代码行数
     pub min_lines_per_task: u32,
 }
-
 
 impl Default for GranularityConfig {
     fn default() -> Self {
@@ -111,7 +110,6 @@ impl Default for ComplexityWeights {
         }
     }
 }
-
 
 /// 诊断信息
 #[derive(Debug, Clone, Default)]
@@ -180,7 +178,6 @@ pub struct SplitSuggestion {
     pub suggested_splits: Vec<SuggestedSplit>,
 }
 
-
 /// 合并策略
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MergeStrategy {
@@ -232,7 +229,6 @@ pub struct StructureIssue {
     pub severity: IssueSeverity,
 }
 
-
 /// 调整统计信息
 #[derive(Debug, Clone, Default)]
 pub struct AdjustmentStats {
@@ -274,7 +270,6 @@ impl Default for AdjustmentResult {
     }
 }
 
-
 // ============================================================================
 // 任务粒度控制器
 // ============================================================================
@@ -305,7 +300,11 @@ impl TaskGranularityController {
     // --------------------------------------------------------------------------
 
     /// 评估任务复杂度
-    pub fn assess_complexity(&self, task: &TaskNode, module: Option<&SystemModule>) -> ComplexityScore {
+    pub fn assess_complexity(
+        &self,
+        task: &TaskNode,
+        module: Option<&SystemModule>,
+    ) -> ComplexityScore {
         let factors = ComplexityFactors {
             code_size: self.assess_code_size_factor(task, module),
             dependencies: self.assess_dependencies_factor(task, module),
@@ -341,7 +340,6 @@ impl TaskGranularityController {
             },
         }
     }
-
 
     /// 代码量因子（0-1）
     fn assess_code_size_factor(&self, task: &TaskNode, module: Option<&SystemModule>) -> f64 {
@@ -383,7 +381,6 @@ impl TaskGranularityController {
             0.3 + (task.children.len() as f64 / 10.0 * 0.7).min(0.7)
         }
     }
-
 
     /// 估算代码行数
     fn estimate_code_lines(&self, task: &TaskNode, module: Option<&SystemModule>) -> u32 {
@@ -430,7 +427,6 @@ impl TaskGranularityController {
         duration.round() as u32
     }
 
-
     // --------------------------------------------------------------------------
     // 拆分/合并判断
     // --------------------------------------------------------------------------
@@ -469,7 +465,8 @@ impl TaskGranularityController {
                 should_split: true,
                 reason: format!(
                     "子任务数量过多（{} > {}）",
-                    task.children.len(), self.config.max_children_per_node
+                    task.children.len(),
+                    self.config.max_children_per_node
                 ),
                 complexity: score.total,
             };
@@ -503,7 +500,6 @@ pub struct SplitCheck {
     pub complexity: f64,
 }
 
-
 impl TaskGranularityController {
     /// 检查任务列表是否需要合并
     pub fn should_merge(&self, tasks: &[TaskNode], modules: Option<&[SystemModule]>) -> MergeCheck {
@@ -516,9 +512,8 @@ impl TaskGranularityController {
         }
 
         // 检查是否是兄弟任务
-        let parent_ids: std::collections::HashSet<_> = tasks.iter()
-            .filter_map(|t| t.parent_id.clone())
-            .collect();
+        let parent_ids: std::collections::HashSet<_> =
+            tasks.iter().filter_map(|t| t.parent_id.clone()).collect();
         if parent_ids.len() > 1 {
             return MergeCheck {
                 should_merge: false,
@@ -528,20 +523,24 @@ impl TaskGranularityController {
         }
 
         // 计算平均复杂度
-        let complexities: Vec<_> = tasks.iter()
+        let complexities: Vec<_> = tasks
+            .iter()
             .map(|t| {
                 let module = modules.and_then(|ms| {
-                    ms.iter().find(|m| Some(&m.id) == t.blueprint_module_id.as_ref())
+                    ms.iter()
+                        .find(|m| Some(&m.id) == t.blueprint_module_id.as_ref())
                 });
                 self.assess_complexity(t, module)
             })
             .collect();
 
-        let avg_complexity = complexities.iter().map(|s| s.total).sum::<f64>() / complexities.len() as f64;
+        let avg_complexity =
+            complexities.iter().map(|s| s.total).sum::<f64>() / complexities.len() as f64;
 
         // 情况 1：所有任务复杂度都很低
         if avg_complexity < self.config.min_task_complexity {
-            let too_simple: Vec<_> = tasks.iter()
+            let too_simple: Vec<_> = tasks
+                .iter()
                 .zip(complexities.iter())
                 .filter(|(_, s)| s.total < self.config.min_task_complexity)
                 .map(|(t, _)| t.id.clone())
@@ -565,7 +564,8 @@ impl TaskGranularityController {
                 should_merge: true,
                 reason: format!(
                     "任务数量过多（{} > {}）且复杂度较低",
-                    tasks.len(), self.config.max_children_per_node
+                    tasks.len(),
+                    self.config.max_children_per_node
                 ),
                 task_ids: tasks.iter().map(|t| t.id.clone()).collect(),
             };
@@ -587,14 +587,17 @@ pub struct MergeCheck {
     pub task_ids: Vec<String>,
 }
 
-
 impl TaskGranularityController {
     // --------------------------------------------------------------------------
     // 自动调整
     // --------------------------------------------------------------------------
 
     /// 自动调整任务树粒度
-    pub fn auto_adjust(&self, tree: &TaskTree, modules: Option<&[SystemModule]>) -> AdjustmentResult {
+    pub fn auto_adjust(
+        &self,
+        tree: &TaskTree,
+        modules: Option<&[SystemModule]>,
+    ) -> AdjustmentResult {
         let mut result = AdjustmentResult::default();
 
         // 收集所有任务
@@ -607,7 +610,8 @@ impl TaskGranularityController {
 
         for task in &all_tasks {
             let module = modules.and_then(|ms| {
-                ms.iter().find(|m| Some(&m.id) == task.blueprint_module_id.as_ref())
+                ms.iter()
+                    .find(|m| Some(&m.id) == task.blueprint_module_id.as_ref())
             });
             let complexity = self.assess_complexity(task, module);
 
@@ -635,7 +639,9 @@ impl TaskGranularityController {
             // 检查是否需要拆分
             let split_check = self.should_split(task, module);
             if split_check.should_split {
-                result.split_suggestions.push(self.generate_split_suggestion(task, module, &split_check));
+                result
+                    .split_suggestions
+                    .push(self.generate_split_suggestion(task, module, &split_check));
             }
         }
 
@@ -652,7 +658,10 @@ impl TaskGranularityController {
         // 判断是否需要调整
         result.needs_adjustment = !result.split_suggestions.is_empty()
             || !result.merge_suggestions.is_empty()
-            || result.issues.iter().any(|i| i.severity == IssueSeverity::High);
+            || result
+                .issues
+                .iter()
+                .any(|i| i.severity == IssueSeverity::High);
 
         result
     }
@@ -664,7 +673,6 @@ impl TaskGranularityController {
             self.collect_all_tasks(child, result);
         }
     }
-
 
     /// 生成拆分建议
     fn generate_split_suggestion(
@@ -742,7 +750,6 @@ impl TaskGranularityController {
             suggested_splits: suggested_splits.into_iter().take(5).collect(),
         }
     }
-
 
     /// 检测树结构问题
     fn detect_structure_issues(&self, stats: &AdjustmentStats, issues: &mut Vec<StructureIssue>) {
@@ -822,13 +829,14 @@ impl Default for TaskGranularityController {
     }
 }
 
-
 // ============================================================================
 // 工厂函数
 // ============================================================================
 
 /// 创建任务粒度控制器
-pub fn create_task_granularity_controller(config: Option<GranularityConfig>) -> TaskGranularityController {
+pub fn create_task_granularity_controller(
+    config: Option<GranularityConfig>,
+) -> TaskGranularityController {
     TaskGranularityController::new(config.unwrap_or_default())
 }
 
@@ -847,15 +855,23 @@ mod tests {
     #[test]
     fn test_complexity_weights_default() {
         let weights = ComplexityWeights::default();
-        let total = weights.code_size + weights.dependencies + weights.interfaces
-            + weights.test_coverage + weights.description_length + weights.children_count;
+        let total = weights.code_size
+            + weights.dependencies
+            + weights.interfaces
+            + weights.test_coverage
+            + weights.description_length
+            + weights.children_count;
         assert!((total - 1.0).abs() < 0.001);
     }
 
     #[test]
     fn test_assess_complexity() {
         let controller = TaskGranularityController::default();
-        let task = TaskNode::new("测试任务".to_string(), "这是一个测试任务描述".to_string(), 1);
+        let task = TaskNode::new(
+            "测试任务".to_string(),
+            "这是一个测试任务描述".to_string(),
+            1,
+        );
 
         let score = controller.assess_complexity(&task, None);
 

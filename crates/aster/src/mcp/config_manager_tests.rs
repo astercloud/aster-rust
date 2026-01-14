@@ -25,7 +25,6 @@ fn server_name_strategy() -> impl Strategy<Value = String> {
     "[a-z][a-z0-9_-]{0,20}".prop_map(|s| s.to_string())
 }
 
-
 /// Strategy for generating random environment variable keys
 fn env_key_strategy() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -49,8 +48,7 @@ fn env_value_strategy() -> impl Strategy<Value = String> {
 fn env_map_strategy() -> impl Strategy<Value = Option<HashMap<String, String>>> {
     prop_oneof![
         Just(None),
-        prop::collection::hash_map(env_key_strategy(), env_value_strategy(), 0..5)
-            .prop_map(Some),
+        prop::collection::hash_map(env_key_strategy(), env_value_strategy(), 0..5).prop_map(Some),
     ]
 }
 
@@ -84,7 +82,6 @@ fn server_config_strategy() -> impl Strategy<Value = McpServerConfig> {
             }
         })
 }
-
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(100))]
@@ -238,7 +235,7 @@ proptest! {
             // Original secret should not appear in masked export
             // (unless it's very short, which our strategy prevents)
             if secret_value.len() > 8 {
-                assert!(!exported.contains(&secret_value), 
+                assert!(!exported.contains(&secret_value),
                     "Secret value should be masked in export");
             }
 

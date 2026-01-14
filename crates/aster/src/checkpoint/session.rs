@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use super::types::*;
-use super::storage::CheckpointStorage;
 use super::diff::DiffEngine;
+use super::storage::CheckpointStorage;
+use super::types::*;
 
 /// 检查点会话
 pub struct CheckpointSession {
@@ -22,7 +22,6 @@ pub struct CheckpointSession {
     pub metadata: Option<SessionMetadata>,
 }
 
-
 impl CheckpointSession {
     /// 创建新会话
     pub fn new(
@@ -31,7 +30,7 @@ impl CheckpointSession {
         auto_checkpoint_interval: u32,
     ) -> Self {
         let session_id = id.unwrap_or_else(|| generate_session_id());
-        
+
         Self {
             id: session_id,
             start_time: chrono::Utc::now().timestamp_millis(),
@@ -60,7 +59,6 @@ impl CheckpointSession {
     }
 }
 
-
 /// 检查点管理器
 pub struct CheckpointManager {
     session: Arc<RwLock<Option<CheckpointSession>>>,
@@ -85,16 +83,13 @@ impl CheckpointManager {
         auto_checkpoint_interval: u32,
     ) -> Result<(), String> {
         self.storage.ensure_checkpoint_dir().await?;
-        
+
         let working_dir = std::env::current_dir()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| ".".to_string());
 
-        let session = CheckpointSession::new(
-            session_id.clone(),
-            working_dir,
-            auto_checkpoint_interval,
-        );
+        let session =
+            CheckpointSession::new(session_id.clone(), working_dir, auto_checkpoint_interval);
 
         // 如果有 session_id，尝试加载现有会话
         if let Some(ref id) = session_id {
@@ -105,13 +100,12 @@ impl CheckpointManager {
         }
 
         *self.session.write().await = Some(session);
-        
+
         // 清理旧检查点
         self.storage.cleanup_old_checkpoints().await;
-        
+
         Ok(())
     }
-
 
     /// 创建检查点
     pub async fn create_checkpoint(
@@ -143,11 +137,15 @@ impl CheckpointManager {
         }
 
         let opts = options.unwrap_or_default();
-        let edit_count = session.edit_counts.get(&absolute_path).copied().unwrap_or(0);
+        let edit_count = session
+            .edit_counts
+            .get(&absolute_path)
+            .copied()
+            .unwrap_or(0);
 
         // 决定使用完整内容还是 diff
-        let use_full_content = existing.map_or(true, |c| c.is_empty()) 
-            || opts.force_full_content.unwrap_or(false);
+        let use_full_content =
+            existing.map_or(true, |c| c.is_empty()) || opts.force_full_content.unwrap_or(false);
 
         let (checkpoint_content, checkpoint_diff, compressed) = if use_full_content {
             let (content_str, is_compressed) = if content.len() > COMPRESSION_THRESHOLD_BYTES {
@@ -162,15 +160,15 @@ impl CheckpointManager {
             (None, Some(diff), false)
         };
 
-
-        let metadata = tokio::fs::metadata(&absolute_path).await.ok().map(|m| {
-            FileMetadata {
+        let metadata = tokio::fs::metadata(&absolute_path)
+            .await
+            .ok()
+            .map(|m| FileMetadata {
                 mode: None,
                 uid: None,
                 gid: None,
                 size: Some(m.len()),
-            }
-        });
+            });
 
         let checkpoint = FileCheckpoint {
             path: absolute_path.clone(),
@@ -188,7 +186,8 @@ impl CheckpointManager {
         };
 
         // 添加到会话
-        session.checkpoints
+        session
+            .checkpoints
             .entry(absolute_path.clone())
             .or_insert_with(Vec::new)
             .push(checkpoint.clone());
@@ -202,8 +201,13 @@ impl CheckpointManager {
         }
 
         // 更新索引
-        let len = session.checkpoints.get(&absolute_path).map_or(0, |c| c.len());
-        session.current_index.insert(absolute_path.clone(), len.saturating_sub(1));
+        let len = session
+            .checkpoints
+            .get(&absolute_path)
+            .map_or(0, |c| c.len());
+        session
+            .current_index
+            .insert(absolute_path.clone(), len.saturating_sub(1));
         session.edit_counts.insert(absolute_path, 0);
 
         // 保存到磁盘
@@ -211,7 +215,6 @@ impl CheckpointManager {
 
         Some(checkpoint)
     }
-
 
     /// 跟踪文件编辑
     pub async fn track_file_edit(&self, file_path: &str) {
@@ -223,7 +226,10 @@ impl CheckpointManager {
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| file_path.to_string());
 
-                let edit_count = session.edit_counts.entry(absolute_path.clone()).or_insert(0);
+                let edit_count = session
+                    .edit_counts
+                    .entry(absolute_path.clone())
+                    .or_insert(0);
                 *edit_count += 1;
 
                 // 检查是否需要自动检查点
@@ -239,10 +245,14 @@ impl CheckpointManager {
 
         // 在锁释放后创建检查点
         if let Some((absolute_path, edit_count)) = should_checkpoint {
-            self.create_checkpoint(&absolute_path, Some(CreateCheckpointOptions {
-                name: Some(format!("Auto-checkpoint at {} edits", edit_count)),
-                ..Default::default()
-            })).await;
+            self.create_checkpoint(
+                &absolute_path,
+                Some(CreateCheckpointOptions {
+                    name: Some(format!("Auto-checkpoint at {} edits", edit_count)),
+                    ..Default::default()
+                }),
+            )
+            .await;
         }
     }
 
@@ -274,14 +284,22 @@ impl CheckpointManager {
             };
 
             let target_index = index.unwrap_or_else(|| {
-                session.current_index.get(&absolute_path).copied().unwrap_or(checkpoints.len() - 1)
+                session
+                    .current_index
+                    .get(&absolute_path)
+                    .copied()
+                    .unwrap_or(checkpoints.len() - 1)
             });
 
             if target_index >= checkpoints.len() {
                 return CheckpointResult::err("Invalid checkpoint index");
             }
 
-            let content = match self.reconstruct_content_internal(session, &absolute_path, Some(target_index)) {
+            let content = match self.reconstruct_content_internal(
+                session,
+                &absolute_path,
+                Some(target_index),
+            ) {
                 Some(c) => c,
                 None => return CheckpointResult::err("Failed to reconstruct content"),
             };
@@ -293,9 +311,12 @@ impl CheckpointManager {
 
             let checkpoint = &checkpoints[target_index];
             let name = checkpoint.name.clone().unwrap_or_else(|| {
-                format!("checkpoint from {}", chrono::DateTime::from_timestamp_millis(checkpoint.timestamp)
-                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                    .unwrap_or_else(|| "unknown".to_string()))
+                format!(
+                    "checkpoint from {}",
+                    chrono::DateTime::from_timestamp_millis(checkpoint.timestamp)
+                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                        .unwrap_or_else(|| "unknown".to_string())
+                )
             });
 
             (content, name, opts.create_backup.unwrap_or(true))
@@ -303,10 +324,14 @@ impl CheckpointManager {
 
         // 第二阶段：创建备份（锁已释放）
         if should_backup {
-            self.create_checkpoint(&absolute_path, Some(CreateCheckpointOptions {
-                name: Some("Pre-restore backup".to_string()),
-                ..Default::default()
-            })).await;
+            self.create_checkpoint(
+                &absolute_path,
+                Some(CreateCheckpointOptions {
+                    name: Some("Pre-restore backup".to_string()),
+                    ..Default::default()
+                }),
+            )
+            .await;
         }
 
         // 第三阶段：恢复内容
@@ -361,7 +386,6 @@ impl CheckpointManager {
         Some(content)
     }
 
-
     /// Undo - 回到上一个检查点
     pub async fn undo(&self, file_path: &str) -> CheckpointResult {
         let session_guard = self.session.read().await;
@@ -375,13 +399,18 @@ impl CheckpointManager {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| file_path.to_string());
 
-        let current_index = session.current_index.get(&absolute_path).copied().unwrap_or(0);
+        let current_index = session
+            .current_index
+            .get(&absolute_path)
+            .copied()
+            .unwrap_or(0);
         if current_index == 0 {
             return CheckpointResult::err("Already at oldest checkpoint");
         }
 
         drop(session_guard);
-        self.restore_checkpoint(&absolute_path, Some(current_index - 1), None).await
+        self.restore_checkpoint(&absolute_path, Some(current_index - 1), None)
+            .await
     }
 
     /// Redo - 前进到下一个检查点
@@ -402,22 +431,31 @@ impl CheckpointManager {
             None => return CheckpointResult::err("No checkpoints available"),
         };
 
-        let current_index = session.current_index.get(&absolute_path).copied().unwrap_or(0);
+        let current_index = session
+            .current_index
+            .get(&absolute_path)
+            .copied()
+            .unwrap_or(0);
         if current_index >= checkpoints.len() - 1 {
             return CheckpointResult::err("Already at newest checkpoint");
         }
 
         drop(session_guard);
-        self.restore_checkpoint(&absolute_path, Some(current_index + 1), None).await
+        self.restore_checkpoint(&absolute_path, Some(current_index + 1), None)
+            .await
     }
-
 
     /// 获取检查点历史
     pub async fn get_checkpoint_history(&self, file_path: &str) -> CheckpointHistory {
         let session_guard = self.session.read().await;
         let session = match session_guard.as_ref() {
             Some(s) => s,
-            None => return CheckpointHistory { checkpoints: vec![], current_index: -1 },
+            None => {
+                return CheckpointHistory {
+                    checkpoints: vec![],
+                    current_index: -1,
+                }
+            }
         };
 
         let absolute_path = std::path::Path::new(file_path)
@@ -426,11 +464,16 @@ impl CheckpointManager {
             .unwrap_or_else(|_| file_path.to_string());
 
         let checkpoints = session.checkpoints.get(&absolute_path);
-        let current_index = session.current_index.get(&absolute_path).copied().unwrap_or(0);
+        let current_index = session
+            .current_index
+            .get(&absolute_path)
+            .copied()
+            .unwrap_or(0);
 
         let items = checkpoints.map_or(vec![], |cps| {
-            cps.iter().enumerate().map(|(idx, cp)| {
-                CheckpointHistoryItem {
+            cps.iter()
+                .enumerate()
+                .map(|(idx, cp)| CheckpointHistoryItem {
                     index: idx,
                     timestamp: cp.timestamp,
                     hash: cp.hash.clone(),
@@ -441,8 +484,8 @@ impl CheckpointManager {
                     size: cp.metadata.as_ref().and_then(|m| m.size),
                     compressed: cp.compressed,
                     current: idx == current_index,
-                }
-            }).collect()
+                })
+                .collect()
         });
 
         CheckpointHistory {
@@ -456,14 +499,16 @@ impl CheckpointManager {
         let session_guard = self.session.read().await;
         let session = match session_guard.as_ref() {
             Some(s) => s,
-            None => return CheckpointStats {
-                total_checkpoints: 0,
-                total_files: 0,
-                total_size: 0,
-                oldest_checkpoint: None,
-                newest_checkpoint: None,
-                compression_ratio: None,
-            },
+            None => {
+                return CheckpointStats {
+                    total_checkpoints: 0,
+                    total_files: 0,
+                    total_size: 0,
+                    oldest_checkpoint: None,
+                    newest_checkpoint: None,
+                    compression_ratio: None,
+                }
+            }
         };
 
         let mut total_checkpoints = 0;
@@ -481,7 +526,11 @@ impl CheckpointManager {
         CheckpointStats {
             total_checkpoints,
             total_files: session.checkpoints.len(),
-            total_size: session.metadata.as_ref().and_then(|m| m.total_size).unwrap_or(0),
+            total_size: session
+                .metadata
+                .as_ref()
+                .and_then(|m| m.total_size)
+                .unwrap_or(0),
             oldest_checkpoint: oldest,
             newest_checkpoint: newest,
             compression_ratio: None,
@@ -493,7 +542,6 @@ impl CheckpointManager {
         *self.session.write().await = None;
     }
 }
-
 
 /// 创建检查点选项
 #[derive(Debug, Clone, Default)]
@@ -515,7 +563,7 @@ fn generate_session_id() -> String {
 
 /// 获取内容哈希
 fn get_content_hash(content: &str) -> String {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     let result = hasher.finalize();
@@ -530,7 +578,9 @@ fn get_git_branch() -> Option<String> {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
+                String::from_utf8(o.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
             } else {
                 None
             }
@@ -545,7 +595,9 @@ fn get_git_commit() -> Option<String> {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
+                String::from_utf8(o.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
             } else {
                 None
             }

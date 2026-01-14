@@ -106,14 +106,20 @@ impl PermissionInspector {
     /// Create a permission context for the current request
     fn create_permission_context(&self, tool_name: &str) -> PermissionContext {
         PermissionContext {
-            working_directory: self.working_directory.clone().unwrap_or_else(|| PathBuf::from(".")),
+            working_directory: self
+                .working_directory
+                .clone()
+                .unwrap_or_else(|| PathBuf::from(".")),
             session_id: uuid::Uuid::new_v4().to_string(),
             timestamp: chrono::Utc::now().timestamp(),
             user: None,
             environment: HashMap::new(),
             metadata: {
                 let mut meta = HashMap::new();
-                meta.insert("tool_name".to_string(), serde_json::Value::String(tool_name.to_string()));
+                meta.insert(
+                    "tool_name".to_string(),
+                    serde_json::Value::String(tool_name.to_string()),
+                );
                 meta
             },
         }
@@ -129,16 +135,14 @@ impl PermissionInspector {
     ) -> Option<InspectionAction> {
         let integrated_manager = self.integrated_manager.as_ref()?;
         let manager = integrated_manager.lock().await;
-        
+
         // Extract parameters from tool request
         let params: HashMap<String, serde_json::Value> = tool_request
             .tool_call
             .as_ref()
             .ok()
             .and_then(|tc| tc.arguments.clone())
-            .map(|args| {
-                args.into_iter().collect()
-            })
+            .map(|args| args.into_iter().collect())
             .unwrap_or_default();
 
         let context = self.create_permission_context(tool_name);
@@ -256,11 +260,15 @@ impl ToolInspector for PermissionInspector {
                     AsterMode::Approve | AsterMode::SmartApprove => {
                         // First, check the integrated permission manager if available
                         // Requirements: 11.1, 11.4
-                        if let Some(integrated_action) = self.check_integrated_permission(tool_name, request).await {
+                        if let Some(integrated_action) =
+                            self.check_integrated_permission(tool_name, request).await
+                        {
                             integrated_action
                         }
                         // 1. Check user-defined permission first
-                        else if let Some(level) = permission_manager.get_user_permission(tool_name) {
+                        else if let Some(level) =
+                            permission_manager.get_user_permission(tool_name)
+                        {
                             match level {
                                 PermissionLevel::AlwaysAllow => InspectionAction::Allow,
                                 PermissionLevel::NeverAllow => InspectionAction::Deny,

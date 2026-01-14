@@ -1,9 +1,9 @@
 //! 签名和验证功能
 
-use sha2::{Sha256, Sha384, Sha512, Digest};
+use sha2::{Digest, Sha256, Sha384, Sha512};
 
-use super::types::*;
 use super::keys::get_key;
+use super::types::*;
 
 /// 计算内容哈希
 pub fn hash_content(content: &str, algorithm: HashAlgorithm) -> String {
@@ -27,21 +27,21 @@ pub fn hash_content(content: &str, algorithm: HashAlgorithm) -> String {
 }
 
 /// 使用私钥签名内容
-/// 
+///
 /// 注意：当前实现使用 HMAC-SHA256 作为简化签名
 /// 如需完整的 Ed25519 签名，需要添加 ring 或 ed25519-dalek 依赖
 pub fn sign_content(content: &str, key: &SigningKey) -> Option<CodeSignature> {
     let private_key = key.private_key.as_ref()?;
-    
+
     let hash = hash_content(content, HashAlgorithm::Sha256);
-    
+
     // 使用 HMAC-like 签名（简化实现）
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(hash.as_bytes());
     hasher.update(private_key.as_bytes());
     let signature = hex::encode(hasher.finalize());
-    
+
     Some(CodeSignature {
         hash,
         algorithm: HashAlgorithm::Sha256,
@@ -75,20 +75,20 @@ pub fn verify_signature(content: &str, signature: &CodeSignature) -> bool {
         Some(pk) => pk,
         None => return false,
     };
-    
-    use sha2::{Sha256, Digest};
+
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(hash.as_bytes());
     hasher.update(private_key.as_bytes());
     let expected_sig = hex::encode(hasher.finalize());
-    
+
     sig == expected_sig
 }
 
 /// 签名文件
 pub fn sign_file(file_path: &str, key_id: Option<&str>) -> Option<SignedFile> {
     use std::path::Path;
-    
+
     let absolute_path = Path::new(file_path)
         .canonicalize()
         .map(|p| p.to_string_lossy().to_string())
@@ -130,7 +130,7 @@ pub fn sign_file(file_path: &str, key_id: Option<&str>) -> Option<SignedFile> {
 /// 验证文件签名
 pub fn verify_file(file_path: &str) -> VerifyResult {
     use std::path::Path;
-    
+
     let absolute_path = Path::new(file_path)
         .canonicalize()
         .map(|p| p.to_string_lossy().to_string())

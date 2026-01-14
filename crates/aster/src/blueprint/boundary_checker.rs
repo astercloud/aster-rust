@@ -7,9 +7,9 @@
 //! 3. 技术栈扩展检查
 //! 4. 跨模块修改检测
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
 
 use super::types::*;
 
@@ -57,7 +57,6 @@ impl BoundaryCheckResult {
         self
     }
 }
-
 
 /// 违规类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -136,7 +135,6 @@ impl Default for BoundaryCheckerConfig {
     }
 }
 
-
 // ============================================================================
 // 边界检查器
 // ============================================================================
@@ -157,7 +155,9 @@ impl BoundaryChecker {
         // 构建模块路径映射
         let mut module_paths = std::collections::HashMap::new();
         for module in &blueprint.modules {
-            let root_path = module.root_path.clone()
+            let root_path = module
+                .root_path
+                .clone()
                 .unwrap_or_else(|| format!("src/{}", module.name.to_lowercase()));
             module_paths.insert(module.id.clone(), root_path);
         }
@@ -209,7 +209,7 @@ impl BoundaryChecker {
                         format!("不能修改受保护文件: {} ({})", file_path, pattern.reason),
                         ViolationType::ProtectedFile,
                     )
-                    .with_suggestion("请联系蜂王（主 Agent）处理此文件".to_string())
+                    .with_suggestion("请联系蜂王（主 Agent）处理此文件".to_string()),
                 );
             }
         }
@@ -224,19 +224,22 @@ impl BoundaryChecker {
             .and_then(|n| n.to_str())
             .unwrap_or(file_path);
 
-        if self.config.protected_configs.contains(&file_name.to_string()) {
+        if self
+            .config
+            .protected_configs
+            .contains(&file_name.to_string())
+        {
             return Some(
                 BoundaryCheckResult::deny(
                     format!("不能修改配置文件: {}", file_path),
                     ViolationType::ConfigFile,
                 )
-                .with_suggestion("配置文件修改需要蜂王审批".to_string())
+                .with_suggestion("配置文件修改需要蜂王审批".to_string()),
             );
         }
 
         None
     }
-
 
     /// 检查模块范围
     fn check_module_scope(&self, module_id: &str, file_path: &str) -> BoundaryCheckResult {
@@ -321,10 +324,7 @@ impl BoundaryChecker {
                 ),
                 ViolationType::TechStackMismatch,
             )
-            .with_suggestion(format!(
-                "允许的扩展名: {}",
-                allowed_extensions.join(", ")
-            ))
+            .with_suggestion(format!("允许的扩展名: {}", allowed_extensions.join(", ")))
         }
     }
 
@@ -374,7 +374,6 @@ impl BoundaryChecker {
 
         extensions.into_iter().collect()
     }
-
 
     /// 获取模块信息
     pub fn get_module(&self, module_id: &str) -> Option<&SystemModule> {
@@ -432,10 +431,7 @@ mod tests {
     use super::*;
 
     fn create_test_blueprint() -> Blueprint {
-        let mut blueprint = Blueprint::new(
-            "测试项目".to_string(),
-            "测试描述".to_string(),
-        );
+        let mut blueprint = Blueprint::new("测试项目".to_string(), "测试描述".to_string());
 
         blueprint.modules.push(SystemModule {
             id: "frontend".to_string(),
@@ -488,17 +484,12 @@ mod tests {
         let checker = BoundaryChecker::new(blueprint, None);
 
         // 在模块范围内
-        let result = checker.check_task_boundary(
-            Some("frontend"),
-            "src/frontend/components/Button.tsx",
-        );
+        let result =
+            checker.check_task_boundary(Some("frontend"), "src/frontend/components/Button.tsx");
         assert!(result.allowed);
 
         // 跨模块
-        let result = checker.check_task_boundary(
-            Some("frontend"),
-            "src/backend/api/handler.rs",
-        );
+        let result = checker.check_task_boundary(Some("frontend"), "src/backend/api/handler.rs");
         assert!(!result.allowed);
         assert_eq!(result.violation_type, Some(ViolationType::CrossModule));
     }
@@ -515,6 +506,9 @@ mod tests {
         // 不匹配的技术栈
         let result = checker.check_tech_stack("frontend", "src/frontend/main.rs");
         assert!(!result.allowed);
-        assert_eq!(result.violation_type, Some(ViolationType::TechStackMismatch));
+        assert_eq!(
+            result.violation_type,
+            Some(ViolationType::TechStackMismatch)
+        );
     }
 }

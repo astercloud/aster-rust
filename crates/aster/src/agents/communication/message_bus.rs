@@ -262,7 +262,9 @@ impl MessageSubscription {
 
     /// Check if this subscription matches a message type
     pub fn matches(&self, message_type: &str) -> bool {
-        self.active && (self.message_types.is_empty() || self.message_types.contains(&message_type.to_string()))
+        self.active
+            && (self.message_types.is_empty()
+                || self.message_types.contains(&message_type.to_string()))
     }
 }
 
@@ -338,7 +340,9 @@ impl AgentMessageBus {
         let subscription = MessageSubscription::new(&agent_id).with_types(types);
         self.subscriptions.insert(agent_id.clone(), subscription);
         // Ensure queue exists
-        self.message_queues.entry(agent_id).or_insert_with(BinaryHeap::new);
+        self.message_queues
+            .entry(agent_id)
+            .or_insert_with(BinaryHeap::new);
     }
 
     /// Unsubscribe an agent
@@ -350,7 +354,10 @@ impl AgentMessageBus {
 
     /// Check if an agent is subscribed
     pub fn is_subscribed(&self, agent_id: &str) -> bool {
-        self.subscriptions.get(agent_id).map(|s| s.active).unwrap_or(false)
+        self.subscriptions
+            .get(agent_id)
+            .map(|s| s.active)
+            .unwrap_or(false)
     }
 
     /// Get subscription for an agent
@@ -402,7 +409,10 @@ impl AgentMessageBus {
     /// Deliver a message to a specific agent
     fn deliver_to_agent(&mut self, agent_id: &str, message: AgentMessage) -> MessageBusResult<()> {
         // Ensure queue exists
-        let queue = self.message_queues.entry(agent_id.to_string()).or_insert_with(BinaryHeap::new);
+        let queue = self
+            .message_queues
+            .entry(agent_id.to_string())
+            .or_insert_with(BinaryHeap::new);
 
         // Check queue size limit
         if queue.len() >= self.max_queue_size {
@@ -422,9 +432,7 @@ impl AgentMessageBus {
         let matching_agents: Vec<String> = self
             .subscriptions
             .iter()
-            .filter(|(agent_id, sub)| {
-                sub.matches(message_type) && *agent_id != sender
-            })
+            .filter(|(agent_id, sub)| sub.matches(message_type) && *agent_id != sender)
             .map(|(agent_id, _)| agent_id.clone())
             .collect();
 
@@ -443,11 +451,9 @@ impl AgentMessageBus {
             .map(|heap| {
                 let mut messages: Vec<_> = heap.iter().map(|pm| pm.message.clone()).collect();
                 // Sort by priority (highest first) then timestamp (earliest first)
-                messages.sort_by(|a, b| {
-                    match b.priority.cmp(&a.priority) {
-                        Ordering::Equal => a.timestamp.cmp(&b.timestamp),
-                        other => other,
-                    }
+                messages.sort_by(|a, b| match b.priority.cmp(&a.priority) {
+                    Ordering::Equal => a.timestamp.cmp(&b.timestamp),
+                    other => other,
                 });
                 messages
             })
@@ -493,7 +499,10 @@ impl AgentMessageBus {
 
     /// Get the number of messages in an agent's queue
     pub fn queue_size(&self, agent_id: &str) -> usize {
-        self.message_queues.get(agent_id).map(|q| q.len()).unwrap_or(0)
+        self.message_queues
+            .get(agent_id)
+            .map(|q| q.len())
+            .unwrap_or(0)
     }
 
     /// Check if an agent has pending messages
@@ -539,7 +548,10 @@ impl AgentMessageBus {
         let mut removed = 0;
         for queue in self.message_queues.values_mut() {
             let before = queue.len();
-            let messages: Vec<_> = queue.drain().filter(|pm| !pm.message.is_expired()).collect();
+            let messages: Vec<_> = queue
+                .drain()
+                .filter(|pm| !pm.message.is_expired())
+                .collect();
             removed += before - messages.len();
             for msg in messages {
                 queue.push(msg);
@@ -648,9 +660,9 @@ impl AgentMessageBus {
 
             // Send the response through the channel
             if let Some(sender) = pending.response_sender.take() {
-                sender.send(payload.clone()).map_err(|_| {
-                    MessageBusError::ChannelClosed(request.id.clone())
-                })?;
+                sender
+                    .send(payload.clone())
+                    .map_err(|_| MessageBusError::ChannelClosed(request.id.clone()))?;
             }
 
             // Also create a response message for history/queue
@@ -898,7 +910,8 @@ mod tests {
         bus.subscribe("agent-2", vec!["broadcast-type".to_string()]);
         bus.subscribe("agent-3", vec!["other-type".to_string()]);
 
-        bus.broadcast("broadcast-type", json!({"msg": "hello"}), "sender").unwrap();
+        bus.broadcast("broadcast-type", json!({"msg": "hello"}), "sender")
+            .unwrap();
 
         // agent-1 and agent-2 should receive (subscribed to broadcast-type)
         // agent-3 should not receive (subscribed to other-type)
@@ -1265,7 +1278,8 @@ mod tests {
 
         // Get and respond to the request
         let messages = bus.dequeue("agent-2", 1);
-        bus.respond(&messages[0], json!({"answer": "test"})).unwrap();
+        bus.respond(&messages[0], json!({"answer": "test"}))
+            .unwrap();
 
         // Get the response from agent-1's queue
         let response = bus.get_response("agent-1", &request_id);
@@ -1319,7 +1333,8 @@ mod tests {
 
         // Respond to the request
         let messages = bus.dequeue("agent-2", 1);
-        bus.respond(&messages[0], json!({"answer": "test"})).unwrap();
+        bus.respond(&messages[0], json!({"answer": "test"}))
+            .unwrap();
 
         // Get responses from history
         let responses = bus.get_responses_from_history(&request_id);

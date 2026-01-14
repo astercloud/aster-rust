@@ -316,7 +316,6 @@ impl ToolCall {
     }
 }
 
-
 /// Tool manager trait
 ///
 /// Defines the interface for managing MCP tools, including discovery,
@@ -481,8 +480,14 @@ impl<C: ConnectionManager> McpToolManager<C> {
             .into_iter()
             .filter_map(|t| {
                 let name = t.get("name")?.as_str()?.to_string();
-                let description = t.get("description").and_then(|d| d.as_str()).map(String::from);
-                let input_schema = t.get("inputSchema").cloned().unwrap_or(serde_json::json!({}));
+                let description = t
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .map(String::from);
+                let input_schema = t
+                    .get("inputSchema")
+                    .cloned()
+                    .unwrap_or(serde_json::json!({}));
 
                 Some(McpTool {
                     name,
@@ -517,8 +522,8 @@ impl<C: ConnectionManager> McpToolManager<C> {
     fn convert_result(&self, result: serde_json::Value) -> McpResult<ToolCallResult> {
         // Check if result has content array
         if let Some(content) = result.get("content") {
-            let content_items: Vec<ToolResultContent> =
-                serde_json::from_value(content.clone()).map_err(|e| {
+            let content_items: Vec<ToolResultContent> = serde_json::from_value(content.clone())
+                .map_err(|e| {
                     McpError::protocol(format!("Failed to parse tool result content: {}", e))
                 })?;
 
@@ -542,7 +547,6 @@ impl<C: ConnectionManager> McpToolManager<C> {
         Ok(ToolCallResult::success_text(result.to_string()))
     }
 }
-
 
 #[async_trait]
 impl<C: ConnectionManager + 'static> ToolManager for McpToolManager<C> {
@@ -708,7 +712,9 @@ impl<C: ConnectionManager + 'static> ToolManager for McpToolManager<C> {
         let schema = &tool.input_schema;
 
         // If no schema or empty schema, accept any args
-        if schema.is_null() || (schema.is_object() && schema.as_object().map_or(true, |o| o.is_empty())) {
+        if schema.is_null()
+            || (schema.is_object() && schema.as_object().map_or(true, |o| o.is_empty()))
+        {
             return ArgValidationResult::valid();
         }
 
@@ -947,7 +953,10 @@ mod tests {
         assert_eq!(get_json_type(&serde_json::json!(3.14)), "number");
         assert_eq!(get_json_type(&serde_json::json!("hello")), "string");
         assert_eq!(get_json_type(&serde_json::json!([1, 2, 3])), "array");
-        assert_eq!(get_json_type(&serde_json::json!({"key": "value"})), "object");
+        assert_eq!(
+            get_json_type(&serde_json::json!({"key": "value"})),
+            "object"
+        );
     }
 
     #[test]

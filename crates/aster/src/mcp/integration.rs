@@ -25,7 +25,9 @@ use tokio::sync::RwLock;
 use crate::mcp::config_manager::McpConfigManager;
 use crate::mcp::connection_manager::{ConnectionManager, McpConnectionManager};
 use crate::mcp::error::{McpError, McpResult};
-use crate::mcp::lifecycle_manager::{LifecycleManager, McpLifecycleManager, StartOptions, StopOptions};
+use crate::mcp::lifecycle_manager::{
+    LifecycleManager, McpLifecycleManager, StartOptions, StopOptions,
+};
 use crate::mcp::tool_manager::{McpTool, McpToolManager, ToolCallResult, ToolManager};
 use crate::mcp::types::{JsonObject, McpServerConfig, McpServerInfo};
 use crate::permission::{PermissionContext, PermissionResult, ToolPermissionManager};
@@ -188,7 +190,10 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
         let server_name = extension_name.to_string();
 
         // Get connection ID for this server
-        if let Some(conn) = self.connection_manager.get_connection_by_server(&server_name) {
+        if let Some(conn) = self
+            .connection_manager
+            .get_connection_by_server(&server_name)
+        {
             // Disconnect from the server
             self.connection_manager.disconnect(&conn.id).await?;
         }
@@ -203,7 +208,9 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
             .await?;
 
         // Unregister from lifecycle manager
-        self.lifecycle_manager.unregister_server(&server_name).await?;
+        self.lifecycle_manager
+            .unregister_server(&server_name)
+            .await?;
 
         // Remove from mapping
         {
@@ -247,11 +254,7 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
     }
 
     /// Get a specific tool
-    pub async fn get_tool(
-        &self,
-        server_name: &str,
-        tool_name: &str,
-    ) -> McpResult<Option<McpTool>> {
+    pub async fn get_tool(&self, server_name: &str, tool_name: &str) -> McpResult<Option<McpTool>> {
         self.tool_manager.get_tool(server_name, tool_name).await
     }
 
@@ -306,7 +309,11 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
         registry: &mut crate::tools::ToolRegistry,
         server_name: Option<&str>,
     ) {
-        let mcp_tool_names: Vec<String> = registry.mcp_tool_names().iter().map(|s| s.to_string()).collect();
+        let mcp_tool_names: Vec<String> = registry
+            .mcp_tool_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
 
         for name in mcp_tool_names {
             // If server_name is specified, only remove tools from that server
@@ -338,24 +345,27 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
         // Check permissions if permission manager is configured
         if let Some(ref perm_manager) = self.permission_manager {
             let full_tool_name = format!("{}_{}", server_name, tool_name);
-            let params_map = args
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
+            let params_map = args.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 
-            let perm_result = perm_manager.read().await.is_allowed(&full_tool_name, &params_map, context);
+            let perm_result =
+                perm_manager
+                    .read()
+                    .await
+                    .is_allowed(&full_tool_name, &params_map, context);
 
             if !perm_result.allowed {
                 return Err(McpError::permission_denied(
-                    perm_result
-                        .reason
-                        .unwrap_or_else(|| format!("Permission denied for tool '{}'", full_tool_name)),
+                    perm_result.reason.unwrap_or_else(|| {
+                        format!("Permission denied for tool '{}'", full_tool_name)
+                    }),
                 ));
             }
         }
 
         // Call the tool
-        self.tool_manager.call_tool(server_name, tool_name, args).await
+        self.tool_manager
+            .call_tool(server_name, tool_name, args)
+            .await
     }
 
     /// Call an MCP tool without permission checking
@@ -367,7 +377,9 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
         tool_name: &str,
         args: JsonObject,
     ) -> McpResult<ToolCallResult> {
-        self.tool_manager.call_tool(server_name, tool_name, args).await
+        self.tool_manager
+            .call_tool(server_name, tool_name, args)
+            .await
     }
 
     // =========================================================================
@@ -390,12 +402,12 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
         if let Some(ref perm_manager) = self.permission_manager {
             // Use the full tool name format: server_toolname
             let full_tool_name = format!("{}_{}", server_name, tool_name);
-            let params_map = args
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
+            let params_map = args.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 
-            perm_manager.read().await.is_allowed(&full_tool_name, &params_map, context)
+            perm_manager
+                .read()
+                .await
+                .is_allowed(&full_tool_name, &params_map, context)
         } else {
             // No permission manager - allow by default
             PermissionResult {
@@ -421,7 +433,9 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
 
         for (server_name, tool_name, args) in tools {
             let full_name = format!("{}_{}", server_name, tool_name);
-            let result = self.check_tool_permission(server_name, tool_name, args, context).await;
+            let result = self
+                .check_tool_permission(server_name, tool_name, args, context)
+                .await;
             results.push((full_name, result));
         }
 
@@ -441,7 +455,9 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
         context: &PermissionContext,
     ) -> bool {
         let empty_args = serde_json::Map::new();
-        let result = self.check_tool_permission(server_name, tool_name, &empty_args, context).await;
+        let result = self
+            .check_tool_permission(server_name, tool_name, &empty_args, context)
+            .await;
         result.allowed
     }
 
@@ -455,7 +471,7 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
         if let Some(ref perm_manager) = self.permission_manager {
             let manager = perm_manager.read().await;
             let permissions = manager.get_permissions(None);
-            
+
             permissions
                 .iter()
                 .filter(|p| !p.allowed)
@@ -483,7 +499,10 @@ impl<C: ConnectionManager + 'static> McpIntegration<C> {
         let mut allowed_tools = Vec::new();
 
         for tool in tools {
-            if self.is_tool_allowed(&tool.server_name, &tool.name, context).await {
+            if self
+                .is_tool_allowed(&tool.server_name, &tool.name, context)
+                .await
+            {
                 allowed_tools.push(tool);
             }
         }
@@ -507,7 +526,7 @@ impl McpServerInfo {
     /// Create server info from a config
     pub fn from_config(name: &str, config: &McpServerConfig) -> Self {
         use crate::mcp::types::ConnectionOptions;
-        
+
         Self {
             name: name.to_string(),
             transport_type: config.transport_type.clone(),
@@ -587,14 +606,14 @@ mod tests {
     #[test]
     fn test_mcp_tool_wrapper_creation() {
         use crate::tools::Tool;
-        
+
         let wrapper = McpToolWrapper::new(
             "server_tool",
             "A test tool",
             serde_json::json!({"type": "object"}),
             "test_server",
         );
-        
+
         assert_eq!(wrapper.name(), "server_tool");
         assert_eq!(wrapper.description(), "A test tool");
         assert_eq!(wrapper.server_name(), "test_server");
@@ -613,7 +632,9 @@ mod tests {
         };
 
         // Should allow by default when no permission manager
-        let allowed = integration.is_tool_allowed("server", "tool", &context).await;
+        let allowed = integration
+            .is_tool_allowed("server", "tool", &context)
+            .await;
         assert!(allowed);
     }
 
@@ -652,7 +673,9 @@ mod tests {
         ];
 
         // Should allow all tools when no permission manager
-        let allowed = integration.filter_allowed_tools(tools.clone(), &context).await;
+        let allowed = integration
+            .filter_allowed_tools(tools.clone(), &context)
+            .await;
         assert_eq!(allowed.len(), 2);
     }
 
@@ -669,13 +692,21 @@ mod tests {
         };
 
         let tools = vec![
-            ("server1".to_string(), "tool1".to_string(), serde_json::Map::new()),
-            ("server2".to_string(), "tool2".to_string(), serde_json::Map::new()),
+            (
+                "server1".to_string(),
+                "tool1".to_string(),
+                serde_json::Map::new(),
+            ),
+            (
+                "server2".to_string(),
+                "tool2".to_string(),
+                serde_json::Map::new(),
+            ),
         ];
 
         let results = integration.check_tools_permissions(&tools, &context).await;
         assert_eq!(results.len(), 2);
-        
+
         // All should be allowed when no permission manager
         for (_, result) in results {
             assert!(result.allowed);

@@ -67,7 +67,6 @@ impl Location {
     }
 }
 
-
 /// Hover information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HoverInfo {
@@ -331,11 +330,14 @@ pub enum LspResult {
     /// Call hierarchy items
     CallHierarchy { items: Vec<CallHierarchyItem> },
     /// Incoming calls
-    IncomingCalls { calls: Vec<CallHierarchyIncomingCall> },
+    IncomingCalls {
+        calls: Vec<CallHierarchyIncomingCall>,
+    },
     /// Outgoing calls
-    OutgoingCalls { calls: Vec<CallHierarchyOutgoingCall> },
+    OutgoingCalls {
+        calls: Vec<CallHierarchyOutgoingCall>,
+    },
 }
-
 
 /// Callback type for LSP operations
 ///
@@ -425,9 +427,10 @@ impl LspTool {
         path: &Path,
         position: Option<Position>,
     ) -> Result<LspResult, ToolError> {
-        let callback = self.callback.as_ref().ok_or_else(|| {
-            ToolError::execution_failed("LSP server is not available")
-        })?;
+        let callback = self
+            .callback
+            .as_ref()
+            .ok_or_else(|| ToolError::execution_failed("LSP server is not available"))?;
 
         callback(operation, path.to_path_buf(), position)
             .await
@@ -442,7 +445,10 @@ impl LspTool {
         path: &Path,
         position: Position,
     ) -> Result<Vec<Location>, ToolError> {
-        match self.execute_operation(LspOperation::Definition, path, Some(position)).await? {
+        match self
+            .execute_operation(LspOperation::Definition, path, Some(position))
+            .await?
+        {
             LspResult::Definition { locations } => Ok(locations),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
@@ -456,7 +462,10 @@ impl LspTool {
         path: &Path,
         position: Position,
     ) -> Result<Vec<Location>, ToolError> {
-        match self.execute_operation(LspOperation::References, path, Some(position)).await? {
+        match self
+            .execute_operation(LspOperation::References, path, Some(position))
+            .await?
+        {
             LspResult::References { locations } => Ok(locations),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
@@ -470,7 +479,10 @@ impl LspTool {
         path: &Path,
         position: Position,
     ) -> Result<Option<HoverInfo>, ToolError> {
-        match self.execute_operation(LspOperation::Hover, path, Some(position)).await? {
+        match self
+            .execute_operation(LspOperation::Hover, path, Some(position))
+            .await?
+        {
             LspResult::Hover { info } => Ok(info),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
@@ -484,7 +496,10 @@ impl LspTool {
         path: &Path,
         position: Position,
     ) -> Result<Vec<CompletionItem>, ToolError> {
-        match self.execute_operation(LspOperation::Completion, path, Some(position)).await? {
+        match self
+            .execute_operation(LspOperation::Completion, path, Some(position))
+            .await?
+        {
             LspResult::Completion { items } => Ok(items),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
@@ -494,7 +509,10 @@ impl LspTool {
     ///
     /// Requirements: 7.5
     pub async fn diagnostics(&self, path: &Path) -> Result<Vec<Diagnostic>, ToolError> {
-        match self.execute_operation(LspOperation::Diagnostics, path, None).await? {
+        match self
+            .execute_operation(LspOperation::Diagnostics, path, None)
+            .await?
+        {
             LspResult::Diagnostics { diagnostics } => Ok(diagnostics),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
@@ -504,7 +522,10 @@ impl LspTool {
     ///
     /// Requirements: 7.6
     pub async fn document_symbols(&self, path: &Path) -> Result<Vec<DocumentSymbol>, ToolError> {
-        match self.execute_operation(LspOperation::DocumentSymbol, path, None).await? {
+        match self
+            .execute_operation(LspOperation::DocumentSymbol, path, None)
+            .await?
+        {
             LspResult::DocumentSymbol { symbols } => Ok(symbols),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
@@ -514,7 +535,10 @@ impl LspTool {
     ///
     /// Requirements: 7.7
     pub async fn workspace_symbols(&self, path: &Path) -> Result<Vec<WorkspaceSymbol>, ToolError> {
-        match self.execute_operation(LspOperation::WorkspaceSymbol, path, None).await? {
+        match self
+            .execute_operation(LspOperation::WorkspaceSymbol, path, None)
+            .await?
+        {
             LspResult::WorkspaceSymbol { symbols } => Ok(symbols),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
@@ -528,7 +552,10 @@ impl LspTool {
         path: &Path,
         position: Position,
     ) -> Result<Vec<Location>, ToolError> {
-        match self.execute_operation(LspOperation::Implementation, path, Some(position)).await? {
+        match self
+            .execute_operation(LspOperation::Implementation, path, Some(position))
+            .await?
+        {
             LspResult::Implementation { locations } => Ok(locations),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
@@ -542,7 +569,10 @@ impl LspTool {
         path: &Path,
         position: Position,
     ) -> Result<Vec<CallHierarchyItem>, ToolError> {
-        match self.execute_operation(LspOperation::PrepareCallHierarchy, path, Some(position)).await? {
+        match self
+            .execute_operation(LspOperation::PrepareCallHierarchy, path, Some(position))
+            .await?
+        {
             LspResult::CallHierarchy { items } => Ok(items),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
@@ -556,7 +586,10 @@ impl LspTool {
         path: &Path,
         position: Position,
     ) -> Result<Vec<CallHierarchyIncomingCall>, ToolError> {
-        match self.execute_operation(LspOperation::IncomingCalls, path, Some(position)).await? {
+        match self
+            .execute_operation(LspOperation::IncomingCalls, path, Some(position))
+            .await?
+        {
             LspResult::IncomingCalls { calls } => Ok(calls),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
@@ -570,13 +603,15 @@ impl LspTool {
         path: &Path,
         position: Position,
     ) -> Result<Vec<CallHierarchyOutgoingCall>, ToolError> {
-        match self.execute_operation(LspOperation::OutgoingCalls, path, Some(position)).await? {
+        match self
+            .execute_operation(LspOperation::OutgoingCalls, path, Some(position))
+            .await?
+        {
             LspResult::OutgoingCalls { calls } => Ok(calls),
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
     }
 }
-
 
 #[async_trait]
 impl Tool for LspTool {
@@ -673,23 +708,26 @@ impl Tool for LspTool {
         // Parse position (required for most operations)
         let needs_position = !matches!(
             operation,
-            LspOperation::Diagnostics | LspOperation::DocumentSymbol | LspOperation::WorkspaceSymbol
+            LspOperation::Diagnostics
+                | LspOperation::DocumentSymbol
+                | LspOperation::WorkspaceSymbol
         );
-        
+
         let position = if needs_position {
-            let line = params
-                .get("line")
-                .and_then(|v| v.as_u64())
-                .ok_or_else(|| ToolError::invalid_params(
-                    "Missing required parameter: line (required for this operation)"
-                ))? as u32;
+            let line = params.get("line").and_then(|v| v.as_u64()).ok_or_else(|| {
+                ToolError::invalid_params(
+                    "Missing required parameter: line (required for this operation)",
+                )
+            })? as u32;
 
             let character = params
                 .get("character")
                 .and_then(|v| v.as_u64())
-                .ok_or_else(|| ToolError::invalid_params(
-                    "Missing required parameter: character (required for this operation)"
-                ))? as u32;
+                .ok_or_else(|| {
+                    ToolError::invalid_params(
+                        "Missing required parameter: character (required for this operation)",
+                    )
+                })? as u32;
 
             Some(Position::new(line, character))
         } else {
@@ -753,25 +791,21 @@ fn format_lsp_result(result: &LspResult, query_path: &Path) -> String {
                 output
             }
         }
-        LspResult::Hover { info } => {
-            match info {
-                Some(hover) => {
-                    let mut output = "Hover information:\n".to_string();
-                    output.push_str(&hover.contents);
-                    output
-                }
-                None => "No hover information available".to_string(),
+        LspResult::Hover { info } => match info {
+            Some(hover) => {
+                let mut output = "Hover information:\n".to_string();
+                output.push_str(&hover.contents);
+                output
             }
-        }
+            None => "No hover information available".to_string(),
+        },
         LspResult::Completion { items } => {
             if items.is_empty() {
                 "No completions available".to_string()
             } else {
                 let mut output = format!("Found {} completion(s):\n", items.len());
                 for item in items.iter().take(20) {
-                    let kind_str = item.kind
-                        .map(|k| format!(" ({:?})", k))
-                        .unwrap_or_default();
+                    let kind_str = item.kind.map(|k| format!(" ({:?})", k)).unwrap_or_default();
                     output.push_str(&format!("  {}{}\n", item.label, kind_str));
                     if let Some(detail) = &item.detail {
                         output.push_str(&format!("    {}\n", detail));
@@ -793,7 +827,8 @@ fn format_lsp_result(result: &LspResult, query_path: &Path) -> String {
                     query_path.display()
                 );
                 for diag in diagnostics {
-                    let severity = diag.severity
+                    let severity = diag
+                        .severity
                         .map(|s| format!("{:?}", s))
                         .unwrap_or_else(|| "Unknown".to_string());
                     output.push_str(&format!(
@@ -823,7 +858,8 @@ fn format_lsp_result(result: &LspResult, query_path: &Path) -> String {
             } else {
                 let mut output = format!("Found {} symbol(s) in workspace:\n", symbols.len());
                 for sym in symbols {
-                    let container = sym.container_name
+                    let container = sym
+                        .container_name
                         .as_ref()
                         .map(|c| format!(" in {}", c))
                         .unwrap_or_default();
@@ -862,7 +898,8 @@ fn format_lsp_result(result: &LspResult, query_path: &Path) -> String {
             } else {
                 let mut output = format!("Found {} call hierarchy item(s):\n", items.len());
                 for item in items {
-                    let detail = item.detail
+                    let detail = item
+                        .detail
                         .as_ref()
                         .map(|d| format!(" [{}]", d))
                         .unwrap_or_default();
@@ -885,7 +922,8 @@ fn format_lsp_result(result: &LspResult, query_path: &Path) -> String {
             } else {
                 let mut output = format!("Found {} caller(s):\n", calls.len());
                 for call in calls {
-                    let ranges: Vec<String> = call.from_ranges
+                    let ranges: Vec<String> = call
+                        .from_ranges
                         .iter()
                         .map(|r| format!("{}:{}", r.start.line + 1, r.start.character + 1))
                         .collect();
@@ -913,7 +951,8 @@ fn format_lsp_result(result: &LspResult, query_path: &Path) -> String {
             } else {
                 let mut output = format!("Found {} callee(s):\n", calls.len());
                 for call in calls {
-                    let ranges: Vec<String> = call.from_ranges
+                    let ranges: Vec<String> = call
+                        .from_ranges
                         .iter()
                         .map(|r| format!("{}:{}", r.start.line + 1, r.start.character + 1))
                         .collect();
@@ -951,7 +990,8 @@ fn count_document_symbols(symbols: &[DocumentSymbol]) -> usize {
 fn format_document_symbols(output: &mut String, symbols: &[DocumentSymbol], indent: usize) {
     let prefix = "  ".repeat(indent + 1);
     for sym in symbols {
-        let detail = sym.detail
+        let detail = sym
+            .detail
             .as_ref()
             .map(|d| format!(" - {}", d))
             .unwrap_or_default();
@@ -968,7 +1008,6 @@ fn format_document_symbols(output: &mut String, symbols: &[DocumentSymbol], inde
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1019,7 +1058,9 @@ mod tests {
             let completion_items = items.clone();
             Box::pin(async move {
                 match op {
-                    LspOperation::Completion => Ok(LspResult::Completion { items: completion_items }),
+                    LspOperation::Completion => Ok(LspResult::Completion {
+                        items: completion_items,
+                    }),
                     _ => Err("Unexpected operation".to_string()),
                 }
             })
@@ -1074,19 +1115,18 @@ mod tests {
                     LspOperation::Hover => Ok(LspResult::Hover {
                         info: Some(HoverInfo {
                             contents: "fn example() -> String".to_string(),
-                            range: pos.map(|p| Range::new(p, Position::new(p.line, p.character + 7))),
+                            range: pos
+                                .map(|p| Range::new(p, Position::new(p.line, p.character + 7))),
                         }),
                     }),
                     LspOperation::Completion => Ok(LspResult::Completion {
-                        items: vec![
-                            CompletionItem {
-                                label: "example".to_string(),
-                                kind: Some(CompletionItemKind::Function),
-                                detail: Some("fn example() -> String".to_string()),
-                                documentation: Some("An example function".to_string()),
-                                insert_text: Some("example()".to_string()),
-                            },
-                        ],
+                        items: vec![CompletionItem {
+                            label: "example".to_string(),
+                            kind: Some(CompletionItemKind::Function),
+                            detail: Some("fn example() -> String".to_string()),
+                            documentation: Some("An example function".to_string()),
+                            insert_text: Some("example()".to_string()),
+                        }],
                     }),
                     LspOperation::Diagnostics => Ok(LspResult::Diagnostics {
                         diagnostics: vec![Diagnostic {
@@ -1131,7 +1171,10 @@ mod tests {
                             detail: Some("fn process()".to_string()),
                             uri: path.to_string_lossy().to_string(),
                             range: Range::new(Position::new(10, 0), Position::new(20, 1)),
-                            selection_range: Range::new(Position::new(10, 3), Position::new(10, 10)),
+                            selection_range: Range::new(
+                                Position::new(10, 3),
+                                Position::new(10, 10),
+                            ),
                         }],
                     }),
                     LspOperation::IncomingCalls => Ok(LspResult::IncomingCalls {
@@ -1142,9 +1185,15 @@ mod tests {
                                 detail: None,
                                 uri: path.to_string_lossy().to_string(),
                                 range: Range::new(Position::new(30, 0), Position::new(40, 1)),
-                                selection_range: Range::new(Position::new(30, 3), Position::new(30, 9)),
+                                selection_range: Range::new(
+                                    Position::new(30, 3),
+                                    Position::new(30, 9),
+                                ),
                             },
-                            from_ranges: vec![Range::new(Position::new(35, 4), Position::new(35, 11))],
+                            from_ranges: vec![Range::new(
+                                Position::new(35, 4),
+                                Position::new(35, 11),
+                            )],
                         }],
                     }),
                     LspOperation::OutgoingCalls => Ok(LspResult::OutgoingCalls {
@@ -1155,9 +1204,15 @@ mod tests {
                                 detail: None,
                                 uri: path.to_string_lossy().to_string(),
                                 range: Range::new(Position::new(50, 0), Position::new(60, 1)),
-                                selection_range: Range::new(Position::new(50, 3), Position::new(50, 9)),
+                                selection_range: Range::new(
+                                    Position::new(50, 3),
+                                    Position::new(50, 9),
+                                ),
                             },
-                            from_ranges: vec![Range::new(Position::new(15, 4), Position::new(15, 10))],
+                            from_ranges: vec![Range::new(
+                                Position::new(15, 4),
+                                Position::new(15, 10),
+                            )],
                         }],
                     }),
                 }
@@ -1204,8 +1259,8 @@ mod tests {
 
     #[test]
     fn test_lsp_tool_with_supported_extensions() {
-        let tool = LspTool::new()
-            .with_supported_extensions(vec!["rs".to_string(), "py".to_string()]);
+        let tool =
+            LspTool::new().with_supported_extensions(vec!["rs".to_string(), "py".to_string()]);
         assert_eq!(tool.supported_extensions.len(), 2);
     }
 
@@ -1219,8 +1274,8 @@ mod tests {
 
     #[test]
     fn test_is_extension_supported_filtered() {
-        let tool = LspTool::new()
-            .with_supported_extensions(vec!["rs".to_string(), "py".to_string()]);
+        let tool =
+            LspTool::new().with_supported_extensions(vec!["rs".to_string(), "py".to_string()]);
         assert!(tool.is_extension_supported(Path::new("file.rs")));
         assert!(tool.is_extension_supported(Path::new("file.RS")));
         assert!(tool.is_extension_supported(Path::new("file.py")));
@@ -1345,15 +1400,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_diagnostics_success() {
-        let diagnostics = vec![
-            Diagnostic {
-                range: Range::new(Position::new(5, 0), Position::new(5, 10)),
-                severity: Some(DiagnosticSeverity::Error),
-                code: Some("E0001".to_string()),
-                source: Some("rustc".to_string()),
-                message: "unused variable".to_string(),
-            },
-        ];
+        let diagnostics = vec![Diagnostic {
+            range: Range::new(Position::new(5, 0), Position::new(5, 10)),
+            severity: Some(DiagnosticSeverity::Error),
+            code: Some("E0001".to_string()),
+            source: Some("rustc".to_string()),
+            message: "unused variable".to_string(),
+        }];
         let callback = mock_diagnostics_callback(diagnostics);
         let tool = LspTool::new().with_callback(callback);
 
@@ -1607,7 +1660,9 @@ mod tests {
 
     #[test]
     fn test_format_lsp_result_diagnostics_empty() {
-        let result = LspResult::Diagnostics { diagnostics: vec![] };
+        let result = LspResult::Diagnostics {
+            diagnostics: vec![],
+        };
         let output = format_lsp_result(&result, Path::new("file.rs"));
         assert!(output.contains("No diagnostics"));
     }
@@ -1661,7 +1716,10 @@ mod tests {
         let callback = mock_all_operations_callback();
         let tool = LspTool::new().with_callback(callback);
 
-        let result = tool.document_symbols(Path::new("/path/to/file.rs")).await.unwrap();
+        let result = tool
+            .document_symbols(Path::new("/path/to/file.rs"))
+            .await
+            .unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].name, "main");
     }
@@ -1671,7 +1729,10 @@ mod tests {
         let callback = mock_all_operations_callback();
         let tool = LspTool::new().with_callback(callback);
 
-        let result = tool.workspace_symbols(Path::new("/path/to/file.rs")).await.unwrap();
+        let result = tool
+            .workspace_symbols(Path::new("/path/to/file.rs"))
+            .await
+            .unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].name, "MyStruct");
     }
@@ -1929,11 +1990,29 @@ mod tests {
 
     #[test]
     fn test_new_lsp_operation_serialization() {
-        assert_eq!(serde_json::to_string(&LspOperation::DocumentSymbol).unwrap(), "\"document_symbol\"");
-        assert_eq!(serde_json::to_string(&LspOperation::WorkspaceSymbol).unwrap(), "\"workspace_symbol\"");
-        assert_eq!(serde_json::to_string(&LspOperation::Implementation).unwrap(), "\"implementation\"");
-        assert_eq!(serde_json::to_string(&LspOperation::PrepareCallHierarchy).unwrap(), "\"prepare_call_hierarchy\"");
-        assert_eq!(serde_json::to_string(&LspOperation::IncomingCalls).unwrap(), "\"incoming_calls\"");
-        assert_eq!(serde_json::to_string(&LspOperation::OutgoingCalls).unwrap(), "\"outgoing_calls\"");
+        assert_eq!(
+            serde_json::to_string(&LspOperation::DocumentSymbol).unwrap(),
+            "\"document_symbol\""
+        );
+        assert_eq!(
+            serde_json::to_string(&LspOperation::WorkspaceSymbol).unwrap(),
+            "\"workspace_symbol\""
+        );
+        assert_eq!(
+            serde_json::to_string(&LspOperation::Implementation).unwrap(),
+            "\"implementation\""
+        );
+        assert_eq!(
+            serde_json::to_string(&LspOperation::PrepareCallHierarchy).unwrap(),
+            "\"prepare_call_hierarchy\""
+        );
+        assert_eq!(
+            serde_json::to_string(&LspOperation::IncomingCalls).unwrap(),
+            "\"incoming_calls\""
+        );
+        assert_eq!(
+            serde_json::to_string(&LspOperation::OutgoingCalls).unwrap(),
+            "\"outgoing_calls\""
+        );
     }
 }

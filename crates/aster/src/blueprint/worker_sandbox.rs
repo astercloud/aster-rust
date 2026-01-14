@@ -6,13 +6,13 @@
 //! - 资源限制：控制 Worker 的资源使用
 //!
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::fs;
-use std::sync::{Arc, RwLock};
-use sha2::{Sha256, Digest};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
 // ============================================================================
 // 类型定义
@@ -30,7 +30,6 @@ pub struct SandboxConfig {
     /// 沙箱目录（默认 ~/.aster/sandbox/{worker_id}）
     pub sandbox_dir: Option<PathBuf>,
 }
-
 
 /// 文件同步结果
 #[derive(Debug, Clone, Default)]
@@ -87,7 +86,6 @@ struct FileMetadata {
     size: u64,
 }
 
-
 // ============================================================================
 // 工具函数
 // ============================================================================
@@ -136,7 +134,6 @@ fn get_default_sandbox_root() -> PathBuf {
         .join("sandbox")
 }
 
-
 // ============================================================================
 // 文件锁管理器
 // ============================================================================
@@ -155,9 +152,7 @@ pub struct FileLockManager {
 impl FileLockManager {
     /// 创建新的文件锁管理器
     pub fn new(lock_dir: Option<PathBuf>) -> Self {
-        let lock_dir = lock_dir.unwrap_or_else(|| {
-            get_default_sandbox_root().join("locks")
-        });
+        let lock_dir = lock_dir.unwrap_or_else(|| get_default_sandbox_root().join("locks"));
 
         // 确保锁目录存在
         let _ = fs::create_dir_all(&lock_dir);
@@ -185,10 +180,8 @@ impl FileLockManager {
     fn write_lock_info(&self, lock_file_path: &Path, lock_info: &LockInfo) -> Result<(), String> {
         let content = serde_json::to_string_pretty(lock_info)
             .map_err(|e| format!("序列化锁信息失败: {}", e))?;
-        fs::write(lock_file_path, content)
-            .map_err(|e| format!("写入锁文件失败: {}", e))
+        fs::write(lock_file_path, content).map_err(|e| format!("写入锁文件失败: {}", e))
     }
-
 
     /// 检查锁是否过期
     fn is_lock_expired(&self, lock_info: &LockInfo) -> bool {
@@ -246,7 +239,6 @@ impl FileLockManager {
         Ok(true)
     }
 
-
     /// 释放文件锁
     pub fn release_lock(&self, file_path: &str, worker_id: &str) -> Result<(), String> {
         let lock_file_path = self.get_lock_file_path(file_path);
@@ -265,8 +257,7 @@ impl FileLockManager {
             }
         }
 
-        fs::remove_file(&lock_file_path)
-            .map_err(|e| format!("删除锁文件失败: {}", e))?;
+        fs::remove_file(&lock_file_path).map_err(|e| format!("删除锁文件失败: {}", e))?;
 
         if let Ok(mut locks) = self.locks.write() {
             locks.remove(file_path);
@@ -311,7 +302,6 @@ impl FileLockManager {
 
         Some(lock_info.worker_id)
     }
-
 
     /// 获取所有活跃的锁
     pub fn get_active_locks(&self) -> Vec<LockInfo> {
@@ -396,7 +386,6 @@ impl Default for FileLockManager {
     }
 }
 
-
 // ============================================================================
 // Worker 沙箱
 // ============================================================================
@@ -417,9 +406,10 @@ pub struct WorkerSandbox {
 impl WorkerSandbox {
     /// 创建新的 Worker 沙箱
     pub fn new(config: SandboxConfig, lock_manager: Option<Arc<FileLockManager>>) -> Self {
-        let sandbox_dir = config.sandbox_dir.clone().unwrap_or_else(|| {
-            get_default_sandbox_root().join(&config.worker_id)
-        });
+        let sandbox_dir = config
+            .sandbox_dir
+            .clone()
+            .unwrap_or_else(|| get_default_sandbox_root().join(&config.worker_id));
 
         Self {
             config,
@@ -432,8 +422,7 @@ impl WorkerSandbox {
     /// 创建沙箱环境
     pub fn setup(&self) -> Result<(), String> {
         // 创建沙箱目录
-        fs::create_dir_all(&self.sandbox_dir)
-            .map_err(|e| format!("创建沙箱目录失败: {}", e))?;
+        fs::create_dir_all(&self.sandbox_dir).map_err(|e| format!("创建沙箱目录失败: {}", e))?;
 
         // 创建元数据文件
         let metadata_path = self.sandbox_dir.join(".sandbox-metadata.json");
@@ -445,12 +434,14 @@ impl WorkerSandbox {
             "pid": std::process::id(),
         });
 
-        fs::write(&metadata_path, serde_json::to_string_pretty(&metadata).unwrap())
-            .map_err(|e| format!("写入元数据失败: {}", e))?;
+        fs::write(
+            &metadata_path,
+            serde_json::to_string_pretty(&metadata).unwrap(),
+        )
+        .map_err(|e| format!("写入元数据失败: {}", e))?;
 
         Ok(())
     }
-
 
     /// 将文件复制到沙箱
     pub fn copy_to_sandbox(&mut self, files: &[String]) -> Result<(), String> {
@@ -476,13 +467,12 @@ impl WorkerSandbox {
 
             // 确保目标目录存在
             if let Some(parent) = sandbox_path.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|e| format!("创建目录失败: {}", e))?;
+                fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
             }
 
             // 复制文件或目录
-            let metadata = fs::metadata(&absolute_path)
-                .map_err(|e| format!("获取文件元数据失败: {}", e))?;
+            let metadata =
+                fs::metadata(&absolute_path).map_err(|e| format!("获取文件元数据失败: {}", e))?;
 
             if metadata.is_dir() {
                 copy_directory_recursive(&absolute_path, &sandbox_path)
@@ -493,21 +483,27 @@ impl WorkerSandbox {
 
                 // 记录文件元数据
                 if let Ok(hash) = compute_file_hash(&absolute_path) {
-                    self.copied_files.insert(relative_path.clone(), FileMetadata {
-                        relative_path,
-                        hash,
-                        mtime: metadata.modified()
-                            .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64)
-                            .unwrap_or(0),
-                        size: metadata.len(),
-                    });
+                    self.copied_files.insert(
+                        relative_path.clone(),
+                        FileMetadata {
+                            relative_path,
+                            hash,
+                            mtime: metadata
+                                .modified()
+                                .map(|t| {
+                                    t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+                                        as i64
+                                })
+                                .unwrap_or(0),
+                            size: metadata.len(),
+                        },
+                    );
                 }
             }
         }
 
         Ok(())
     }
-
 
     /// 将修改同步回主目录（需要锁）
     pub fn sync_back(&self) -> SyncResult {
@@ -546,8 +542,11 @@ impl WorkerSandbox {
             }
 
             // 获取文件锁
-            let lock_acquired = self.lock_manager
-                .acquire_lock(original_path.to_str().unwrap_or(""), &self.config.worker_id, Some(60000));
+            let lock_acquired = self.lock_manager.acquire_lock(
+                original_path.to_str().unwrap_or(""),
+                &self.config.worker_id,
+                Some(60000),
+            );
 
             match lock_acquired {
                 Ok(true) => {
@@ -584,13 +583,14 @@ impl WorkerSandbox {
                     }
 
                     // 释放锁
-                    let _ = self.lock_manager.release_lock(
-                        original_path.to_str().unwrap_or(""),
-                        &self.config.worker_id,
-                    );
+                    let _ = self
+                        .lock_manager
+                        .release_lock(original_path.to_str().unwrap_or(""), &self.config.worker_id);
                 }
                 Ok(false) => {
-                    let locker = self.lock_manager.get_locker(original_path.to_str().unwrap_or(""));
+                    let locker = self
+                        .lock_manager
+                        .get_locker(original_path.to_str().unwrap_or(""));
                     result.failed.push(SyncFailure {
                         file: relative_path,
                         error: format!("无法获取锁，被 {:?} 锁定", locker),
@@ -607,7 +607,6 @@ impl WorkerSandbox {
 
         result
     }
-
 
     /// 扫描沙箱中的所有文件
     fn scan_sandbox_files(&self) -> Vec<PathBuf> {
@@ -626,7 +625,10 @@ impl WorkerSandbox {
                 let path = entry.path();
 
                 // 跳过元数据文件
-                if path.file_name().map_or(false, |n| n == ".sandbox-metadata.json") {
+                if path
+                    .file_name()
+                    .map_or(false, |n| n == ".sandbox-metadata.json")
+                {
                     continue;
                 }
 
@@ -671,7 +673,8 @@ impl WorkerSandbox {
     /// 获取沙箱统计信息
     pub fn get_stats(&self) -> SandboxStats {
         let files = self.scan_sandbox_files();
-        let total_size: u64 = files.iter()
+        let total_size: u64 = files
+            .iter()
             .filter_map(|f| fs::metadata(f).ok())
             .map(|m| m.len())
             .sum();
@@ -691,7 +694,6 @@ pub struct SandboxStats {
     pub total_size: u64,
     pub copied_files: usize,
 }
-
 
 // ============================================================================
 // 工厂函数
@@ -738,7 +740,10 @@ mod tests {
 
         // 检查锁状态
         assert!(manager.is_locked("/test/file.rs"));
-        assert_eq!(manager.get_locker("/test/file.rs"), Some("worker1".to_string()));
+        assert_eq!(
+            manager.get_locker("/test/file.rs"),
+            Some("worker1".to_string())
+        );
 
         // 释放锁
         let result = manager.release_lock("/test/file.rs", "worker1");

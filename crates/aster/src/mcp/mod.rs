@@ -89,7 +89,9 @@ mod error_tests;
 pub use config_manager::{
     ConfigChangeCallback, ConfigEvent, ConfigManager, McpConfigFile, McpConfigManager,
 };
-pub use connection_manager::{ConnectionEvent, ConnectionManager, McpConnectionManager, PendingRequestInfo};
+pub use connection_manager::{
+    ConnectionEvent, ConnectionManager, McpConnectionManager, PendingRequestInfo,
+};
 pub use error::{McpError, McpErrorCode, McpResult, StructuredError};
 pub use integration::McpIntegration;
 pub use lifecycle_manager::{
@@ -101,8 +103,8 @@ pub use resource_manager::{
     ResourceEvent, ResourceManager,
 };
 pub use tool_manager::{
-    ArgValidationResult, CallInfo, McpTool, McpToolManager, ToolCall, ToolCallResult,
-    ToolManager, ToolResultContent,
+    ArgValidationResult, CallInfo, McpTool, McpToolManager, ToolCall, ToolCallResult, ToolManager,
+    ToolResultContent,
 };
 pub use transport::{
     BoxedTransport, HttpTransport, McpErrorData, McpMessage, McpNotification, McpRequest,
@@ -127,13 +129,12 @@ pub use cancellation::{
 
 // Re-export notification types
 pub use notifications::{
-    McpNotificationManager, Notification, NotificationEvent, NotificationFilter,
-    NotificationStats, NotificationType, ProgressNotification, ProgressState,
-    create_progress_params,
+    create_progress_params, McpNotificationManager, Notification, NotificationEvent,
+    NotificationFilter, NotificationStats, NotificationType, ProgressNotification, ProgressState,
 };
 
 // Re-export roots types
 pub use roots::{
-    McpRootsManager, Root, RootEvent, RootInfo, RootPermissions, RootsConfig, RootsStats,
-    create_root_from_path, get_default_roots_config,
+    create_root_from_path, get_default_roots_config, McpRootsManager, Root, RootEvent, RootInfo,
+    RootPermissions, RootsConfig, RootsStats,
 };

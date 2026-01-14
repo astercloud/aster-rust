@@ -20,7 +20,6 @@ pub struct SvgRenderOptions {
 /// 默认 DPI
 pub const DEFAULT_SVG_DPI: u32 = 96;
 
-
 /// 检查是否启用 SVG 渲染
 pub fn is_svg_render_enabled() -> bool {
     std::env::var("ASTER_SVG_RENDER")
@@ -34,15 +33,15 @@ pub fn validate_svg_file(file_path: &Path) -> Result<(), String> {
         return Err("File does not exist".to_string());
     }
 
-    let metadata = fs::metadata(file_path)
-        .map_err(|e| format!("Failed to read metadata: {}", e))?;
+    let metadata =
+        fs::metadata(file_path).map_err(|e| format!("Failed to read metadata: {}", e))?;
 
     if metadata.len() == 0 {
         return Err("SVG file is empty".to_string());
     }
 
-    let content = fs::read_to_string(file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let content =
+        fs::read_to_string(file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     if !content.contains("<svg") && !content.contains("<?xml") {
         return Err("File does not appear to be a valid SVG".to_string());
@@ -50,7 +49,6 @@ pub fn validate_svg_file(file_path: &Path) -> Result<(), String> {
 
     Ok(())
 }
-
 
 /// 获取 SVG 文件的原始尺寸
 pub fn get_svg_dimensions(svg_path: &Path) -> Option<(u32, u32)> {
@@ -73,12 +71,10 @@ fn extract_dimension(content: &str, attr: &str) -> Option<u32> {
     caps.get(1)?.as_str().parse::<f64>().ok().map(|v| v as u32)
 }
 
-
 /// 读取 SVG 文件内容
 pub fn read_svg_file(file_path: &Path) -> Result<String, String> {
     validate_svg_file(file_path)?;
-    fs::read_to_string(file_path)
-        .map_err(|e| format!("Failed to read SVG file: {}", e))
+    fs::read_to_string(file_path).map_err(|e| format!("Failed to read SVG file: {}", e))
 }
 
 /// SVG 渲染结果（占位实现）

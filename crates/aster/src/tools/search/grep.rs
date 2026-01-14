@@ -36,7 +36,6 @@ pub enum GrepOutputMode {
     Count,
 }
 
-
 impl GrepOutputMode {
     /// Parse from string
     pub fn from_str(s: &str) -> Option<Self> {
@@ -112,7 +111,6 @@ impl GrepTool {
         Command::new("grep").arg("--version").output().is_ok()
     }
 
-
     /// Search using ripgrep
     ///
     /// Requirements: 5.3
@@ -164,7 +162,8 @@ impl GrepTool {
         }
 
         // Max count to avoid overwhelming output
-        cmd.arg("--max-count").arg((self.max_results * 10).to_string());
+        cmd.arg("--max-count")
+            .arg((self.max_results * 10).to_string());
 
         // Execute
         let output = cmd.output().map_err(|e| {
@@ -174,7 +173,6 @@ impl GrepTool {
         // Parse output
         self.parse_grep_output(&output.stdout, mode, path)
     }
-
 
     /// Search using grep (fallback)
     ///
@@ -225,14 +223,13 @@ impl GrepTool {
         cmd.arg(path);
 
         // Execute
-        let output = cmd.output().map_err(|e| {
-            ToolError::execution_failed(format!("Failed to execute grep: {}", e))
-        })?;
+        let output = cmd
+            .output()
+            .map_err(|e| ToolError::execution_failed(format!("Failed to execute grep: {}", e)))?;
 
         // Parse output
         self.parse_grep_output(&output.stdout, mode, path)
     }
-
 
     /// Parse grep/ripgrep output into SearchResults
     fn parse_grep_output(
@@ -287,7 +284,6 @@ impl GrepTool {
         Ok(results)
     }
 
-
     /// Pure Rust search implementation (fallback when no external tools available)
     ///
     /// Requirements: 5.3, 5.5, 5.6
@@ -311,7 +307,14 @@ impl GrepTool {
         let mut results = Vec::new();
 
         // Walk directory
-        self.search_directory(&regex, path, mode, context_before, context_after, &mut results)?;
+        self.search_directory(
+            &regex,
+            path,
+            mode,
+            context_before,
+            context_after,
+            &mut results,
+        )?;
 
         Ok(results)
     }
@@ -365,7 +368,6 @@ impl GrepTool {
         Ok(())
     }
 
-
     /// Search a single file
     fn search_file(
         &self,
@@ -397,20 +399,16 @@ impl GrepTool {
                     let line_number = idx + 1;
 
                     // Get context
-                    let before: Vec<String> = lines
-                        [idx.saturating_sub(context_before)..idx]
-                        .to_vec();
+                    let before: Vec<String> =
+                        lines[idx.saturating_sub(context_before)..idx].to_vec();
                     let after: Vec<String> = lines
                         .get(idx + 1..=(idx + context_after).min(lines.len() - 1))
                         .unwrap_or(&[])
                         .to_vec();
 
-                    let result = SearchResult::content_match(
-                        path.to_path_buf(),
-                        line_number,
-                        line.clone(),
-                    )
-                    .with_context(before, after);
+                    let result =
+                        SearchResult::content_match(path.to_path_buf(), line_number, line.clone())
+                            .with_context(before, after);
 
                     results.push(result);
                 }
@@ -435,12 +433,10 @@ impl GrepTool {
     fn is_binary_file(&self, path: &Path) -> bool {
         // Check by extension first
         let binary_extensions = [
-            "exe", "dll", "so", "dylib", "bin", "obj", "o", "a", "lib",
-            "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp",
-            "mp3", "mp4", "avi", "mov", "mkv", "wav", "flac",
-            "zip", "tar", "gz", "bz2", "xz", "7z", "rar",
-            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-            "wasm", "pyc", "class",
+            "exe", "dll", "so", "dylib", "bin", "obj", "o", "a", "lib", "png", "jpg", "jpeg",
+            "gif", "bmp", "ico", "webp", "mp3", "mp4", "avi", "mov", "mkv", "wav", "flac", "zip",
+            "tar", "gz", "bz2", "xz", "7z", "rar", "pdf", "doc", "docx", "xls", "xlsx", "ppt",
+            "pptx", "wasm", "pyc", "class",
         ];
 
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -460,7 +456,6 @@ impl GrepTool {
 
         false
     }
-
 
     /// Main search method - chooses best available implementation
     pub fn search(
@@ -499,7 +494,14 @@ impl GrepTool {
         }
 
         // Fall back to pure Rust implementation
-        self.search_rust(pattern, path, mode, context_before, context_after, case_insensitive)
+        self.search_rust(
+            pattern,
+            path,
+            mode,
+            context_before,
+            context_after,
+            case_insensitive,
+        )
     }
 
     /// Truncate output to fit within size limit
@@ -525,7 +527,6 @@ impl GrepTool {
         }
     }
 }
-
 
 #[async_trait]
 impl Tool for GrepTool {
@@ -580,7 +581,6 @@ impl Tool for GrepTool {
             "required": ["pattern"]
         })
     }
-
 
     async fn execute(
         &self,
@@ -662,7 +662,10 @@ impl Tool for GrepTool {
 
         Ok(ToolResult::success(output)
             .with_metadata("count", serde_json::json!(results.len()))
-            .with_metadata("truncated", serde_json::json!(result_truncated || output_truncated))
+            .with_metadata(
+                "truncated",
+                serde_json::json!(result_truncated || output_truncated),
+            )
             .with_metadata("mode", serde_json::json!(format!("{:?}", mode))))
     }
 
@@ -676,11 +679,9 @@ impl Tool for GrepTool {
     }
 
     fn options(&self) -> ToolOptions {
-        ToolOptions::default()
-            .with_base_timeout(std::time::Duration::from_secs(120))
+        ToolOptions::default().with_base_timeout(std::time::Duration::from_secs(120))
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -693,7 +694,10 @@ mod tests {
         // Create test files with searchable content
         let files = vec![
             ("test1.txt", "Hello World\nThis is a test\nHello again"),
-            ("test2.txt", "Another file\nWith some content\nAnd more lines"),
+            (
+                "test2.txt",
+                "Another file\nWith some content\nAnd more lines",
+            ),
             ("src/main.rs", "fn main() {\n    println!(\"Hello\");\n}"),
             ("src/lib.rs", "pub fn hello() {\n    // Hello function\n}"),
         ];
@@ -730,11 +734,26 @@ mod tests {
 
     #[test]
     fn test_grep_output_mode_from_str() {
-        assert_eq!(GrepOutputMode::from_str("content"), Some(GrepOutputMode::Content));
-        assert_eq!(GrepOutputMode::from_str("files_with_matches"), Some(GrepOutputMode::FilesWithMatches));
-        assert_eq!(GrepOutputMode::from_str("files"), Some(GrepOutputMode::FilesWithMatches));
-        assert_eq!(GrepOutputMode::from_str("l"), Some(GrepOutputMode::FilesWithMatches));
-        assert_eq!(GrepOutputMode::from_str("count"), Some(GrepOutputMode::Count));
+        assert_eq!(
+            GrepOutputMode::from_str("content"),
+            Some(GrepOutputMode::Content)
+        );
+        assert_eq!(
+            GrepOutputMode::from_str("files_with_matches"),
+            Some(GrepOutputMode::FilesWithMatches)
+        );
+        assert_eq!(
+            GrepOutputMode::from_str("files"),
+            Some(GrepOutputMode::FilesWithMatches)
+        );
+        assert_eq!(
+            GrepOutputMode::from_str("l"),
+            Some(GrepOutputMode::FilesWithMatches)
+        );
+        assert_eq!(
+            GrepOutputMode::from_str("count"),
+            Some(GrepOutputMode::Count)
+        );
         assert_eq!(GrepOutputMode::from_str("c"), Some(GrepOutputMode::Count));
         assert_eq!(GrepOutputMode::from_str("invalid"), None);
     }
@@ -746,13 +765,19 @@ mod tests {
 
         let tool = GrepTool::new().without_ripgrep();
         let results = tool
-            .search_rust("Hello", temp_dir.path(), GrepOutputMode::Content, 0, 0, false)
+            .search_rust(
+                "Hello",
+                temp_dir.path(),
+                GrepOutputMode::Content,
+                0,
+                0,
+                false,
+            )
             .unwrap();
 
         assert!(!results.is_empty());
         assert!(results.iter().all(|r| r.line_content.is_some()));
     }
-
 
     #[test]
     fn test_grep_rust_search_files_with_matches() {
@@ -761,7 +786,14 @@ mod tests {
 
         let tool = GrepTool::new().without_ripgrep();
         let results = tool
-            .search_rust("Hello", temp_dir.path(), GrepOutputMode::FilesWithMatches, 0, 0, false)
+            .search_rust(
+                "Hello",
+                temp_dir.path(),
+                GrepOutputMode::FilesWithMatches,
+                0,
+                0,
+                false,
+            )
             .unwrap();
 
         assert!(!results.is_empty());
@@ -792,12 +824,26 @@ mod tests {
 
         // Case sensitive - should not match "hello" in lowercase
         let results_sensitive = tool
-            .search_rust("hello", temp_dir.path(), GrepOutputMode::Content, 0, 0, false)
+            .search_rust(
+                "hello",
+                temp_dir.path(),
+                GrepOutputMode::Content,
+                0,
+                0,
+                false,
+            )
             .unwrap();
 
         // Case insensitive - should match both "Hello" and "hello"
         let results_insensitive = tool
-            .search_rust("hello", temp_dir.path(), GrepOutputMode::Content, 0, 0, true)
+            .search_rust(
+                "hello",
+                temp_dir.path(),
+                GrepOutputMode::Content,
+                0,
+                0,
+                true,
+            )
             .unwrap();
 
         assert!(results_insensitive.len() >= results_sensitive.len());
@@ -810,13 +856,20 @@ mod tests {
 
         let tool = GrepTool::new().without_ripgrep();
         let results = tool
-            .search_rust("test", temp_dir.path(), GrepOutputMode::Content, 1, 1, false)
+            .search_rust(
+                "test",
+                temp_dir.path(),
+                GrepOutputMode::Content,
+                1,
+                1,
+                false,
+            )
             .unwrap();
 
         // Should have context lines
-        let has_context = results.iter().any(|r| {
-            !r.context_before.is_empty() || !r.context_after.is_empty()
-        });
+        let has_context = results
+            .iter()
+            .any(|r| !r.context_before.is_empty() || !r.context_after.is_empty());
         assert!(has_context || results.is_empty());
     }
 
@@ -855,7 +908,6 @@ mod tests {
         assert!(output.contains("[Output truncated"));
     }
 
-
     #[tokio::test]
     async fn test_grep_tool_execute() {
         let temp_dir = TempDir::new().unwrap();
@@ -886,7 +938,10 @@ mod tests {
 
         let result = tool.execute(params, &context).await.unwrap();
         assert!(result.is_success());
-        assert_eq!(result.metadata.get("mode"), Some(&serde_json::json!("Count")));
+        assert_eq!(
+            result.metadata.get("mode"),
+            Some(&serde_json::json!("Count"))
+        );
     }
 
     #[tokio::test]
@@ -938,7 +993,10 @@ mod tests {
         assert_eq!(schema["type"], "object");
         assert!(schema["properties"]["pattern"].is_object());
         assert!(schema["properties"]["mode"].is_object());
-        assert!(schema["required"].as_array().unwrap().contains(&serde_json::json!("pattern")));
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("pattern")));
     }
 
     #[tokio::test]
@@ -957,8 +1015,7 @@ mod tests {
         let token = tokio_util::sync::CancellationToken::new();
         token.cancel();
 
-        let context = ToolContext::new(PathBuf::from("/tmp"))
-            .with_cancellation_token(token);
+        let context = ToolContext::new(PathBuf::from("/tmp")).with_cancellation_token(token);
         let params = serde_json::json!({"pattern": "test"});
 
         let result = tool.execute(params, &context).await;

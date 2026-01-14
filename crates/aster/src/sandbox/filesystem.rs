@@ -27,7 +27,6 @@ pub struct PathRule {
     pub recursive: bool,
 }
 
-
 impl PathRule {
     /// 创建只读规则
     pub fn read_only(pattern: impl Into<String>) -> Self {
@@ -59,7 +58,7 @@ impl PathRule {
     /// 检查路径是否匹配规则
     pub fn matches(&self, path: &Path) -> bool {
         let pattern_path = Path::new(&self.pattern);
-        
+
         if self.recursive {
             path.starts_with(pattern_path)
         } else {
@@ -76,7 +75,6 @@ pub struct FilesystemPolicy {
     /// 默认权限
     pub default_permission: Option<PathPermission>,
 }
-
 
 impl FilesystemPolicy {
     /// 创建新的策略
@@ -124,7 +122,6 @@ pub struct FilesystemSandbox {
     /// 是否启用
     enabled: bool,
 }
-
 
 impl FilesystemSandbox {
     /// 创建新的文件系统沙箱
@@ -178,7 +175,7 @@ impl FilesystemSandbox {
         }
 
         let normalized = self.normalize_path(path)?;
-        
+
         if !self.policy.can_read(&normalized) {
             anyhow::bail!("没有读取权限: {}", path.display());
         }
@@ -193,7 +190,7 @@ impl FilesystemSandbox {
         }
 
         let normalized = self.normalize_path(path)?;
-        
+
         if !self.policy.can_write(&normalized) {
             anyhow::bail!("没有写入权限: {}", path.display());
         }

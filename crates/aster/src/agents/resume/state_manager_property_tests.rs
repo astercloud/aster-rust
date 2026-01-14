@@ -9,8 +9,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 use super::state_manager::{
-    AgentState, AgentStateManager, AgentStateStatus,
-    Checkpoint, StateFilter, ToolCallRecord,
+    AgentState, AgentStateManager, AgentStateStatus, Checkpoint, StateFilter, ToolCallRecord,
 };
 
 fn agent_id_strategy() -> impl Strategy<Value = String> {
@@ -41,8 +40,8 @@ fn status_strategy() -> impl Strategy<Value = AgentStateStatus> {
 }
 
 fn tool_call_record_strategy() -> impl Strategy<Value = ToolCallRecord> {
-    ("[a-z_]{1,20}".prop_map(|s| s.to_string()), prop::bool::ANY)
-        .prop_map(|(tool_name, success)| {
+    ("[a-z_]{1,20}".prop_map(|s| s.to_string()), prop::bool::ANY).prop_map(
+        |(tool_name, success)| {
             let mut record = ToolCallRecord::new(tool_name, serde_json::json!({"arg": "value"}));
             if success {
                 record.complete_success(serde_json::json!({"result": "ok"}));
@@ -50,7 +49,8 @@ fn tool_call_record_strategy() -> impl Strategy<Value = ToolCallRecord> {
                 record.complete_failure("Test error");
             }
             record
-        })
+        },
+    )
 }
 
 fn agent_state_strategy() -> impl Strategy<Value = AgentState> {
@@ -65,18 +65,24 @@ fn agent_state_strategy() -> impl Strategy<Value = AgentState> {
         prop::collection::vec(tool_call_record_strategy(), 0..5),
         prop::collection::vec(
             prop::bool::ANY.prop_map(|b| serde_json::json!({"value": b})),
-            0..5
+            0..5,
         ),
     )
-        .prop_map(|(id, agent_type, prompt, status, step, errors, retries, tool_calls, results)| {
-            let mut state = AgentState::new(id, agent_type, prompt).with_status(status);
-            state.current_step = step;
-            state.error_count = errors;
-            state.retry_count = retries;
-            for tc in tool_calls { state.add_tool_call(tc); }
-            for r in results { state.add_result(r); }
-            state
-        })
+        .prop_map(
+            |(id, agent_type, prompt, status, step, errors, retries, tool_calls, results)| {
+                let mut state = AgentState::new(id, agent_type, prompt).with_status(status);
+                state.current_step = step;
+                state.error_count = errors;
+                state.retry_count = retries;
+                for tc in tool_calls {
+                    state.add_tool_call(tc);
+                }
+                for r in results {
+                    state.add_result(r);
+                }
+                state
+            },
+        )
 }
 
 fn checkpoint_strategy() -> impl Strategy<Value = Checkpoint> {
@@ -86,12 +92,14 @@ fn checkpoint_strategy() -> impl Strategy<Value = Checkpoint> {
         prop::option::of("[a-z_]{1,20}".prop_map(|s| s.to_string())),
         prop::collection::vec(
             prop::bool::ANY.prop_map(|b| serde_json::json!({"value": b})),
-            0..3
+            0..3,
         ),
     )
         .prop_map(|(agent_id, step, name, results)| {
             let mut checkpoint = Checkpoint::new(agent_id, step);
-            if let Some(n) = name { checkpoint = checkpoint.with_name(n); }
+            if let Some(n) = name {
+                checkpoint = checkpoint.with_name(n);
+            }
             checkpoint = checkpoint.with_results(results);
             checkpoint
         })
@@ -154,7 +162,7 @@ proptest! {
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
             let manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-            
+
             // Ensure unique state IDs by appending index
             let states: Vec<AgentState> = base_states
                 .into_iter()
@@ -164,7 +172,7 @@ proptest! {
                     state
                 })
                 .collect();
-            
+
             for state in &states {
                 let result = manager.save_state(state).await;
                 prop_assert!(result.is_ok(), "Save should succeed");
@@ -246,7 +254,10 @@ async fn property_32_cleanup_expired_removes_old_states() {
     manager.save_state(&recent_state).await.unwrap();
     let all_states = manager.list_states(None).await.unwrap();
     assert_eq!(all_states.len(), 2, "Should have 2 states before cleanup");
-    let cleaned = manager.cleanup_expired(Duration::from_secs(24 * 60 * 60)).await.unwrap();
+    let cleaned = manager
+        .cleanup_expired(Duration::from_secs(24 * 60 * 60))
+        .await
+        .unwrap();
     assert_eq!(cleaned, 1, "Should have cleaned 1 expired state");
     let remaining = manager.list_states(None).await.unwrap();
     assert_eq!(remaining.len(), 1, "Should have 1 state after cleanup");
@@ -264,7 +275,10 @@ async fn property_32_list_checkpoints_returns_sorted() {
     let checkpoints = manager.list_checkpoints("agent-1").await.unwrap();
     assert_eq!(checkpoints.len(), 5, "Should have 5 checkpoints");
     for i in 1..checkpoints.len() {
-        assert!(checkpoints[i - 1].step <= checkpoints[i].step, "Checkpoints should be sorted");
+        assert!(
+            checkpoints[i - 1].step <= checkpoints[i].step,
+            "Checkpoints should be sorted"
+        );
     }
 }
 
@@ -280,5 +294,9 @@ async fn property_32_delete_state_also_deletes_checkpoints() {
     assert_eq!(checkpoints.len(), 1, "Should have 1 checkpoint");
     manager.delete_state("agent-1").await.unwrap();
     let checkpoints = manager.list_checkpoints("agent-1").await.unwrap();
-    assert_eq!(checkpoints.len(), 0, "Checkpoints should be deleted with state");
+    assert_eq!(
+        checkpoints.len(),
+        0,
+        "Checkpoints should be deleted with state"
+    );
 }

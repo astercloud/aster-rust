@@ -42,7 +42,6 @@ pub enum ExploreError {
     AnalysisError(String),
 }
 
-
 /// Thoroughness level for exploration
 /// Determines how deep and comprehensive the exploration will be
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -96,7 +95,6 @@ impl ThoroughnessLevel {
         }
     }
 }
-
 
 /// Options for explore operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,10 +173,10 @@ impl ExploreOptions {
 
     /// Get effective max results based on thoroughness
     pub fn effective_max_results(&self) -> usize {
-        self.max_results.unwrap_or_else(|| self.thoroughness.max_files())
+        self.max_results
+            .unwrap_or_else(|| self.thoroughness.max_files())
     }
 }
-
 
 /// A code snippet found during search
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -278,7 +276,6 @@ impl ExploreStats {
     }
 }
 
-
 /// Result of an exploration operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -347,7 +344,6 @@ impl ExploreResultData {
         self
     }
 }
-
 
 /// Structure analysis result for a file
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -418,7 +414,6 @@ impl StructureAnalysis {
             + self.constants.len()
     }
 }
-
 
 /// Explore Agent for codebase exploration
 ///
@@ -504,7 +499,6 @@ impl ExploreAgent {
         }
         false
     }
-
 
     /// Perform exploration based on configured options
     pub async fn explore(&self) -> ExploreResult<ExploreResultData> {
@@ -643,7 +637,6 @@ impl ExploreAgent {
         Ok(())
     }
 
-
     /// Search for code content in files
     pub async fn search_code(&self, keyword: &str) -> ExploreResult<Vec<CodeSnippet>> {
         let mut stats = ExploreStats::new();
@@ -684,7 +677,10 @@ impl ExploreAgent {
         let context_lines = self.options.thoroughness.context_lines();
 
         let content = std::fs::read_to_string(path).map_err(|e| {
-            ExploreError::Io(std::io::Error::new(e.kind(), format!("{}: {}", path.display(), e)))
+            ExploreError::Io(std::io::Error::new(
+                e.kind(),
+                format!("{}: {}", path.display(), e),
+            ))
         })?;
 
         // Skip files that are too large
@@ -704,10 +700,8 @@ impl ExploreAgent {
                 let start = idx.saturating_sub(context_lines);
                 let end = (idx + context_lines + 1).min(lines.len());
 
-                let context_before: Vec<String> = lines[start..idx]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect();
+                let context_before: Vec<String> =
+                    lines[start..idx].iter().map(|s| s.to_string()).collect();
                 let context_after: Vec<String> = lines[(idx + 1)..end]
                     .iter()
                     .map(|s| s.to_string())
@@ -722,7 +716,6 @@ impl ExploreAgent {
 
         Ok(snippets)
     }
-
 
     /// Analyze the structure of a file
     pub fn analyze_structure(&self, file_path: &Path) -> ExploreResult<StructureAnalysis> {
@@ -786,7 +779,10 @@ impl ExploreAgent {
 
             // Imports (use statements)
             if trimmed.starts_with("use ") {
-                if let Some(import) = trimmed.strip_prefix("use ").and_then(|s| s.strip_suffix(';')) {
+                if let Some(import) = trimmed
+                    .strip_prefix("use ")
+                    .and_then(|s| s.strip_suffix(';'))
+                {
                     analysis.imports.push(import.to_string());
                 }
             }
@@ -849,7 +845,6 @@ impl ExploreAgent {
             }
         }
     }
-
 
     /// Analyze Python source code
     fn analyze_python(&self, content: &str, analysis: &mut StructureAnalysis) {
@@ -980,7 +975,12 @@ impl ExploreAgent {
                 if let Some(name) = self.extract_go_fn_name(trimmed) {
                     analysis.functions.push(name.clone());
                     // Exported if starts with uppercase
-                    if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+                    if name
+                        .chars()
+                        .next()
+                        .map(|c| c.is_uppercase())
+                        .unwrap_or(false)
+                    {
                         analysis.exports.push(name);
                     }
                 }
@@ -997,7 +997,12 @@ impl ExploreAgent {
                         analysis.types.push(name.clone());
                     }
                     // Exported if starts with uppercase
-                    if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+                    if name
+                        .chars()
+                        .next()
+                        .map(|c| c.is_uppercase())
+                        .unwrap_or(false)
+                    {
                         analysis.exports.push(name);
                     }
                 }
@@ -1007,7 +1012,12 @@ impl ExploreAgent {
             if trimmed.starts_with("const ") {
                 if let Some(name) = self.extract_go_const_name(trimmed) {
                     analysis.constants.push(name.clone());
-                    if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+                    if name
+                        .chars()
+                        .next()
+                        .map(|c| c.is_uppercase())
+                        .unwrap_or(false)
+                    {
                         analysis.exports.push(name);
                     }
                 }
@@ -1025,7 +1035,8 @@ impl ExploreAgent {
                 analysis.imports.push(trimmed.to_string());
             }
 
-            if trimmed.contains("function ") || trimmed.contains("def ") || trimmed.contains("fn ") {
+            if trimmed.contains("function ") || trimmed.contains("def ") || trimmed.contains("fn ")
+            {
                 analysis.functions.push(trimmed.to_string());
             }
 
@@ -1034,7 +1045,6 @@ impl ExploreAgent {
             }
         }
     }
-
 
     // Helper methods for name extraction
 
@@ -1046,7 +1056,8 @@ impl ExploreAgent {
 
     fn extract_type_name(&self, line: &str, prefix: &str) -> Option<String> {
         let rest = line.strip_prefix(prefix)?.trim();
-        let name_end = rest.find(|c: char| c == '{' || c == '<' || c == '(' || c.is_whitespace())?;
+        let name_end =
+            rest.find(|c: char| c == '{' || c == '<' || c == '(' || c.is_whitespace())?;
         Some(rest[..name_end].to_string())
     }
 
@@ -1139,7 +1150,6 @@ impl ExploreAgent {
         Some(rest[..name_end].to_string())
     }
 
-
     /// Generate a summary of the exploration results
     fn generate_summary(
         &self,
@@ -1184,11 +1194,7 @@ impl ExploreAgent {
     }
 
     /// Generate suggestions based on exploration results
-    fn generate_suggestions(
-        &self,
-        files: &[PathBuf],
-        snippets: &[CodeSnippet],
-    ) -> Vec<String> {
+    fn generate_suggestions(&self, files: &[PathBuf], snippets: &[CodeSnippet]) -> Vec<String> {
         let mut suggestions = Vec::new();
 
         if files.is_empty() && snippets.is_empty() {
@@ -1221,12 +1227,11 @@ impl ExploreAgent {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     fn create_test_files(dir: &Path) -> std::io::Result<()> {
         // Create Rust file
@@ -1324,8 +1329,10 @@ export const VERSION = "1.0.0";
 
     #[test]
     fn test_code_snippet_creation() {
-        let snippet = CodeSnippet::new("/path/file.rs", 10, "let x = 1;", "let")
-            .with_context(vec!["// comment".to_string()], vec!["let y = 2;".to_string()]);
+        let snippet = CodeSnippet::new("/path/file.rs", 10, "let x = 1;", "let").with_context(
+            vec!["// comment".to_string()],
+            vec!["let y = 2;".to_string()],
+        );
 
         assert_eq!(snippet.line_number, 10);
         assert_eq!(snippet.content, "let x = 1;");
@@ -1353,8 +1360,7 @@ export const VERSION = "1.0.0";
 
     #[test]
     fn test_structure_analysis() {
-        let mut analysis = StructureAnalysis::new("/path/file.rs")
-            .with_language("rust");
+        let mut analysis = StructureAnalysis::new("/path/file.rs").with_language("rust");
 
         assert!(!analysis.has_structure());
         assert_eq!(analysis.total_items(), 0);
@@ -1379,7 +1385,10 @@ export const VERSION = "1.0.0";
         let result = agent.explore().await.unwrap();
 
         assert!(!result.files.is_empty(), "Should find .rs files");
-        assert!(result.files.iter().all(|f| f.extension().map(|e| e == "rs").unwrap_or(false)));
+        assert!(result
+            .files
+            .iter()
+            .all(|f| f.extension().map(|e| e == "rs").unwrap_or(false)));
     }
 
     #[tokio::test]
@@ -1387,14 +1396,16 @@ export const VERSION = "1.0.0";
         let temp_dir = TempDir::new().unwrap();
         create_test_files(temp_dir.path()).unwrap();
 
-        let options = ExploreOptions::new("Hello")
-            .with_target_path(temp_dir.path());
+        let options = ExploreOptions::new("Hello").with_target_path(temp_dir.path());
 
         let agent = ExploreAgent::new(options);
         let result = agent.explore().await.unwrap();
 
         assert!(!result.files.is_empty(), "Should find files");
-        assert!(!result.code_snippets.is_empty(), "Should find code snippets containing 'Hello'");
+        assert!(
+            !result.code_snippets.is_empty(),
+            "Should find code snippets containing 'Hello'"
+        );
         assert!(!result.summary.is_empty());
     }
 
@@ -1403,8 +1414,7 @@ export const VERSION = "1.0.0";
         let temp_dir = TempDir::new().unwrap();
         create_test_files(temp_dir.path()).unwrap();
 
-        let options = ExploreOptions::new("")
-            .with_target_path(temp_dir.path());
+        let options = ExploreOptions::new("").with_target_path(temp_dir.path());
 
         let agent = ExploreAgent::new(options);
         let snippets = agent.search_code("pub fn").await.unwrap();
@@ -1418,11 +1428,12 @@ export const VERSION = "1.0.0";
         let temp_dir = TempDir::new().unwrap();
         create_test_files(temp_dir.path()).unwrap();
 
-        let options = ExploreOptions::new("")
-            .with_target_path(temp_dir.path());
+        let options = ExploreOptions::new("").with_target_path(temp_dir.path());
 
         let agent = ExploreAgent::new(options);
-        let analysis = agent.analyze_structure(&temp_dir.path().join("main.rs")).unwrap();
+        let analysis = agent
+            .analyze_structure(&temp_dir.path().join("main.rs"))
+            .unwrap();
 
         assert_eq!(analysis.language, Some("rust".to_string()));
         assert!(analysis.imports.iter().any(|i| i.contains("std::io")));
@@ -1437,11 +1448,12 @@ export const VERSION = "1.0.0";
         let temp_dir = TempDir::new().unwrap();
         create_test_files(temp_dir.path()).unwrap();
 
-        let options = ExploreOptions::new("")
-            .with_target_path(temp_dir.path());
+        let options = ExploreOptions::new("").with_target_path(temp_dir.path());
 
         let agent = ExploreAgent::new(options);
-        let analysis = agent.analyze_structure(&temp_dir.path().join("script.py")).unwrap();
+        let analysis = agent
+            .analyze_structure(&temp_dir.path().join("script.py"))
+            .unwrap();
 
         assert_eq!(analysis.language, Some("python".to_string()));
         assert!(!analysis.imports.is_empty());
@@ -1454,11 +1466,12 @@ export const VERSION = "1.0.0";
         let temp_dir = TempDir::new().unwrap();
         create_test_files(temp_dir.path()).unwrap();
 
-        let options = ExploreOptions::new("")
-            .with_target_path(temp_dir.path());
+        let options = ExploreOptions::new("").with_target_path(temp_dir.path());
 
         let agent = ExploreAgent::new(options);
-        let analysis = agent.analyze_structure(&temp_dir.path().join("app.ts")).unwrap();
+        let analysis = agent
+            .analyze_structure(&temp_dir.path().join("app.ts"))
+            .unwrap();
 
         assert_eq!(analysis.language, Some("typescript".to_string()));
         assert!(analysis.interfaces.iter().any(|i| i == "User"));
@@ -1482,9 +1495,13 @@ export const VERSION = "1.0.0";
 
         let agent = ExploreAgent::new(options);
         let mut stats = ExploreStats::new();
-        let files = agent.find_files_internal(temp_dir.path(), &mut stats).unwrap();
+        let files = agent
+            .find_files_internal(temp_dir.path(), &mut stats)
+            .unwrap();
 
-        assert!(files.iter().all(|f| !f.to_string_lossy().contains(".hidden")));
+        assert!(files
+            .iter()
+            .all(|f| !f.to_string_lossy().contains(".hidden")));
 
         // With hidden files
         let options = ExploreOptions::new("")
@@ -1493,15 +1510,19 @@ export const VERSION = "1.0.0";
 
         let agent = ExploreAgent::new(options);
         let mut stats = ExploreStats::new();
-        let files = agent.find_files_internal(temp_dir.path(), &mut stats).unwrap();
+        let files = agent
+            .find_files_internal(temp_dir.path(), &mut stats)
+            .unwrap();
 
-        assert!(files.iter().any(|f| f.to_string_lossy().contains(".hidden")));
+        assert!(files
+            .iter()
+            .any(|f| f.to_string_lossy().contains(".hidden")));
     }
 
     #[tokio::test]
     async fn test_max_results_limit() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Create many files
         for i in 0..20 {
             fs::write(temp_dir.path().join(format!("file{}.rs", i)), "// content").unwrap();
@@ -1519,8 +1540,8 @@ export const VERSION = "1.0.0";
 
     #[test]
     fn test_explore_nonexistent_path() {
-        let options = ExploreOptions::new("")
-            .with_target_path("/nonexistent/path/that/does/not/exist");
+        let options =
+            ExploreOptions::new("").with_target_path("/nonexistent/path/that/does/not/exist");
 
         let agent = ExploreAgent::new(options);
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -1534,7 +1555,7 @@ export const VERSION = "1.0.0";
     fn test_analyze_nonexistent_file() {
         let options = ExploreOptions::new("");
         let agent = ExploreAgent::new(options);
-        
+
         let result = agent.analyze_structure(Path::new("/nonexistent/file.rs"));
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ExploreError::FileNotFound(_)));

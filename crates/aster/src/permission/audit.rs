@@ -631,8 +631,7 @@ mod tests {
         let logger = AuditLogger::new(AuditLogLevel::Error);
 
         // Info level entry should not be logged when logger is at Error level
-        let entry = AuditLogEntry::new("permission_check", "bash")
-            .with_level(AuditLogLevel::Info);
+        let entry = AuditLogEntry::new("permission_check", "bash").with_level(AuditLogLevel::Info);
 
         // This should return immediately without logging
         logger.log_permission_check(entry);

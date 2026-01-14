@@ -274,8 +274,14 @@ pub fn get_reqwest_proxy(config: Option<&ProxyConfig>) -> Option<reqwest::Proxy>
     let parsed = parse_proxy_url(&proxy_url);
     let final_url = build_proxy_url_with_auth(
         &parsed.url,
-        effective_config.username.as_deref().or(parsed.username.as_deref()),
-        effective_config.password.as_deref().or(parsed.password.as_deref()),
+        effective_config
+            .username
+            .as_deref()
+            .or(parsed.username.as_deref()),
+        effective_config
+            .password
+            .as_deref()
+            .or(parsed.password.as_deref()),
     );
 
     reqwest::Proxy::all(&final_url).ok()

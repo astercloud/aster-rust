@@ -42,7 +42,9 @@ impl std::error::Error for SocketConnectionError {}
 
 impl SocketConnectionError {
     pub fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into() }
+        Self {
+            message: message.into(),
+        }
     }
 }
 
@@ -136,11 +138,12 @@ impl SocketClient {
         }
 
         let socket_path = get_socket_path();
-        
+
         let connect_result = timeout(
             CONNECT_TIMEOUT,
-            tokio::net::UnixStream::connect(&socket_path)
-        ).await;
+            tokio::net::UnixStream::connect(&socket_path),
+        )
+        .await;
 
         match connect_result {
             Ok(Ok(stream)) => {
@@ -166,7 +169,10 @@ impl SocketClient {
             Ok(Err(e)) => {
                 let mut state = self.state.lock().await;
                 state.connecting = false;
-                Err(SocketConnectionError::new(format!("Connection failed: {}", e)))
+                Err(SocketConnectionError::new(format!(
+                    "Connection failed: {}",
+                    e
+                )))
             }
             Err(_) => {
                 let mut state = self.state.lock().await;
@@ -188,20 +194,17 @@ impl SocketClient {
         }
 
         let socket_path = get_socket_path();
-        
+
         // Windows named pipe 连接
-        let connect_result = timeout(
-            CONNECT_TIMEOUT,
-            async {
-                tokio::net::windows::named_pipe::ClientOptions::new()
-                    .open(&socket_path)
-            }
-        ).await;
+        let connect_result = timeout(CONNECT_TIMEOUT, async {
+            tokio::net::windows::named_pipe::ClientOptions::new().open(&socket_path)
+        })
+        .await;
 
         match connect_result {
             Ok(Ok(pipe)) => {
                 *self.writer.lock().await = Some(pipe);
-                
+
                 let mut state = self.state.lock().await;
                 state.connected = true;
                 state.connecting = false;
@@ -212,7 +215,10 @@ impl SocketClient {
             Ok(Err(e)) => {
                 let mut state = self.state.lock().await;
                 state.connecting = false;
-                Err(SocketConnectionError::new(format!("Connection failed: {}", e)))
+                Err(SocketConnectionError::new(format!(
+                    "Connection failed: {}",
+                    e
+                )))
             }
             Err(_) => {
                 let mut state = self.state.lock().await;
@@ -268,7 +274,9 @@ impl SocketClient {
 
         // 拒绝所有等待中的调用
         for (_, pending) in state.pending_calls.drain() {
-            let _ = pending.sender.send(Err(SocketConnectionError::new("Connection closed")));
+            let _ = pending
+                .sender
+                .send(Err(SocketConnectionError::new("Connection closed")));
         }
     }
 
@@ -344,7 +352,8 @@ impl SocketClient {
             return Err(SocketConnectionError::new("Not connected"));
         }
 
-        let call_id = format!("call_{}_{}", 
+        let call_id = format!(
+            "call_{}_{}",
             self.call_id.fetch_add(1, Ordering::SeqCst),
             chrono::Utc::now().timestamp_millis()
         );
@@ -354,7 +363,9 @@ impl SocketClient {
         // 注册等待中的调用
         {
             let mut state = self.state.lock().await;
-            state.pending_calls.insert(call_id.clone(), PendingCall { sender: tx });
+            state
+                .pending_calls
+                .insert(call_id.clone(), PendingCall { sender: tx });
         }
 
         // 构造消息
@@ -398,9 +409,11 @@ impl SocketClient {
 
         let mut writer = self.writer.lock().await;
         if let Some(ref mut w) = *writer {
-            w.write_all(&header).await
+            w.write_all(&header)
+                .await
                 .map_err(|e| SocketConnectionError::new(format!("Write error: {}", e)))?;
-            w.write_all(&json).await
+            w.write_all(&json)
+                .await
                 .map_err(|e| SocketConnectionError::new(format!("Write error: {}", e)))?;
             Ok(())
         } else {
@@ -419,9 +432,11 @@ impl SocketClient {
 
         let mut writer = self.writer.lock().await;
         if let Some(ref mut w) = *writer {
-            w.write_all(&header).await
+            w.write_all(&header)
+                .await
                 .map_err(|e| SocketConnectionError::new(format!("Write error: {}", e)))?;
-            w.write_all(&json).await
+            w.write_all(&json)
+                .await
                 .map_err(|e| SocketConnectionError::new(format!("Write error: {}", e)))?;
             Ok(())
         } else {
@@ -446,7 +461,9 @@ impl SocketClient {
 
         // 拒绝所有等待中的调用
         for (_, pending) in state.pending_calls.drain() {
-            let _ = pending.sender.send(Err(SocketConnectionError::new("Disconnected")));
+            let _ = pending
+                .sender
+                .send(Err(SocketConnectionError::new("Disconnected")));
         }
     }
 }

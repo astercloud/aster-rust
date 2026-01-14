@@ -30,7 +30,6 @@ pub struct TeleportMetadata {
     pub updated_at: Option<String>,
 }
 
-
 /// 仓库验证状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -93,7 +92,6 @@ pub struct RemoteMessage {
     pub timestamp: String,
 }
 
-
 /// 同步状态
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SyncState {
@@ -136,7 +134,6 @@ pub struct RemoteSessionState {
     /// 错误信息
     pub error: Option<String>,
 }
-
 
 #[cfg(test)]
 mod tests {

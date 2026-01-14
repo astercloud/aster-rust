@@ -36,7 +36,6 @@ pub struct ResourceLimiter {
     start_time: Option<Instant>,
 }
 
-
 impl ResourceLimiter {
     /// 创建新的资源限制器
     pub fn new() -> Self {
@@ -98,7 +97,6 @@ impl ResourceLimiter {
         }
         false
     }
-
 
     /// 检查资源使用是否超限
     pub fn check_limits(&self, usage: &ResourceUsage) -> Result<(), ResourceLimitError> {
@@ -170,7 +168,6 @@ impl Default for ResourceLimiter {
     }
 }
 
-
 /// 资源限制错误
 #[derive(Debug, Clone)]
 pub enum ResourceLimitError {
@@ -202,11 +199,7 @@ impl std::fmt::Display for ResourceLimitError {
                 write!(f, "文件描述符超限: 使用 {}，限制 {}", used, limit)
             }
             Self::Timeout { elapsed, limit } => {
-                write!(
-                    f,
-                    "执行超时: 已执行 {:?}，限制 {:?}",
-                    elapsed, limit
-                )
+                write!(f, "执行超时: 已执行 {:?}，限制 {:?}", elapsed, limit)
             }
         }
     }

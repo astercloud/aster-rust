@@ -137,8 +137,14 @@ impl Alert {
         );
 
         let mut metadata = HashMap::new();
-        metadata.insert("duration_ms".to_string(), serde_json::json!(duration.as_millis()));
-        metadata.insert("timeout_ms".to_string(), serde_json::json!(timeout.as_millis()));
+        metadata.insert(
+            "duration_ms".to_string(),
+            serde_json::json!(duration.as_millis()),
+        );
+        metadata.insert(
+            "timeout_ms".to_string(),
+            serde_json::json!(timeout.as_millis()),
+        );
         alert.metadata = Some(metadata);
 
         alert
@@ -231,8 +237,14 @@ impl Alert {
         );
 
         let mut metadata = HashMap::new();
-        metadata.insert("latency_ms".to_string(), serde_json::json!(latency.as_millis()));
-        metadata.insert("threshold_ms".to_string(), serde_json::json!(threshold.as_millis()));
+        metadata.insert(
+            "latency_ms".to_string(),
+            serde_json::json!(latency.as_millis()),
+        );
+        metadata.insert(
+            "threshold_ms".to_string(),
+            serde_json::json!(threshold.as_millis()),
+        );
         alert.metadata = Some(metadata);
 
         alert
@@ -445,8 +457,8 @@ pub struct AlertThresholds {
 impl Default for AlertThresholds {
     fn default() -> Self {
         Self {
-            cost_threshold: Some(1.0), // $1.00 default
-            error_rate_threshold: Some(0.1), // 10% error rate
+            cost_threshold: Some(1.0),                        // $1.00 default
+            error_rate_threshold: Some(0.1),                  // 10% error rate
             latency_threshold: Some(Duration::from_secs(30)), // 30 seconds
         }
     }
@@ -708,12 +720,7 @@ mod tests {
 
     #[test]
     fn test_alert_acknowledge() {
-        let mut alert = Alert::new(
-            AlertType::Timeout,
-            AlertSeverity::High,
-            "agent-1",
-            "Test",
-        );
+        let mut alert = Alert::new(AlertType::Timeout, AlertSeverity::High, "agent-1", "Test");
 
         assert!(alert.is_active());
         alert.acknowledge();
@@ -725,12 +732,7 @@ mod tests {
     fn test_alert_manager_basic() {
         let mut manager = AlertManager::new();
 
-        let alert = Alert::new(
-            AlertType::Timeout,
-            AlertSeverity::High,
-            "agent-1",
-            "Test",
-        );
+        let alert = Alert::new(AlertType::Timeout, AlertSeverity::High, "agent-1", "Test");
         let id = manager.add_alert(alert);
 
         assert_eq!(manager.alert_count(), 1);
@@ -779,12 +781,7 @@ mod tests {
     fn test_alert_manager_acknowledge() {
         let mut manager = AlertManager::new();
 
-        let alert = Alert::new(
-            AlertType::Timeout,
-            AlertSeverity::High,
-            "agent-1",
-            "Test",
-        );
+        let alert = Alert::new(AlertType::Timeout, AlertSeverity::High, "agent-1", "Test");
         let id = manager.add_alert(alert);
 
         assert_eq!(manager.active_alert_count(), 1);
@@ -797,7 +794,12 @@ mod tests {
         let mut manager = AlertManager::new();
 
         let alert1 = Alert::new(AlertType::Timeout, AlertSeverity::High, "agent-1", "Test 1");
-        let alert2 = Alert::new(AlertType::CostThreshold, AlertSeverity::Medium, "agent-2", "Test 2");
+        let alert2 = Alert::new(
+            AlertType::CostThreshold,
+            AlertSeverity::Medium,
+            "agent-2",
+            "Test 2",
+        );
 
         let id1 = manager.add_alert(alert1);
         manager.add_alert(alert2);
@@ -814,7 +816,12 @@ mod tests {
         let mut manager = AlertManager::new();
 
         let alert1 = Alert::new(AlertType::Timeout, AlertSeverity::High, "agent-1", "Test 1");
-        let alert2 = Alert::new(AlertType::CostThreshold, AlertSeverity::Medium, "agent-2", "Test 2");
+        let alert2 = Alert::new(
+            AlertType::CostThreshold,
+            AlertSeverity::Medium,
+            "agent-2",
+            "Test 2",
+        );
 
         let id1 = manager.add_alert(alert1);
         manager.add_alert(alert2);
@@ -830,9 +837,24 @@ mod tests {
     fn test_alert_manager_get_by_severity() {
         let mut manager = AlertManager::new();
 
-        manager.add_alert(Alert::new(AlertType::Timeout, AlertSeverity::High, "agent-1", "Test 1"));
-        manager.add_alert(Alert::new(AlertType::CostThreshold, AlertSeverity::High, "agent-2", "Test 2"));
-        manager.add_alert(Alert::new(AlertType::ErrorRate, AlertSeverity::Medium, "agent-3", "Test 3"));
+        manager.add_alert(Alert::new(
+            AlertType::Timeout,
+            AlertSeverity::High,
+            "agent-1",
+            "Test 1",
+        ));
+        manager.add_alert(Alert::new(
+            AlertType::CostThreshold,
+            AlertSeverity::High,
+            "agent-2",
+            "Test 2",
+        ));
+        manager.add_alert(Alert::new(
+            AlertType::ErrorRate,
+            AlertSeverity::Medium,
+            "agent-3",
+            "Test 3",
+        ));
 
         let high_alerts = manager.get_alerts_by_severity(AlertSeverity::High);
         assert_eq!(high_alerts.len(), 2);

@@ -6,9 +6,7 @@
 //!
 //! **Validates: Requirements 5.8**
 
-use aster::tools::search::{
-    format_search_results, truncate_results, SearchResult,
-};
+use aster::tools::search::{format_search_results, truncate_results, SearchResult};
 use aster::tools::{GlobTool, GrepTool, Tool, ToolContext};
 use proptest::prelude::*;
 use std::fs::{self, File};
@@ -22,8 +20,7 @@ use tempfile::TempDir;
 
 /// Generate arbitrary file paths
 fn arb_file_path() -> impl Strategy<Value = PathBuf> {
-    "[a-z]{1,8}/[a-z]{1,8}\\.(txt|rs|py|md)"
-        .prop_map(PathBuf::from)
+    "[a-z]{1,8}/[a-z]{1,8}\\.(txt|rs|py|md)".prop_map(PathBuf::from)
 }
 
 /// Generate arbitrary line numbers
@@ -46,13 +43,11 @@ fn arb_max_results() -> impl Strategy<Value = usize> {
     1usize..50
 }
 
-
 /// Generate arbitrary SearchResult for content match
 fn arb_content_search_result() -> impl Strategy<Value = SearchResult> {
-    (arb_file_path(), arb_line_number(), arb_line_content())
-        .prop_map(|(path, line_number, content)| {
-            SearchResult::content_match(path, line_number, content)
-        })
+    (arb_file_path(), arb_line_number(), arb_line_content()).prop_map(
+        |(path, line_number, content)| SearchResult::content_match(path, line_number, content),
+    )
 }
 
 /// Generate arbitrary SearchResult for file match
@@ -262,7 +257,6 @@ proptest! {
         );
     }
 }
-
 
 // ============================================================================
 // GlobTool Property Tests
@@ -489,15 +483,12 @@ mod edge_case_tests {
 
     #[test]
     fn test_search_result_with_context() {
-        let result = SearchResult::content_match(
-            PathBuf::from("test.txt"),
-            5,
-            "match line".to_string(),
-        )
-        .with_context(
-            vec!["before 1".to_string(), "before 2".to_string()],
-            vec!["after 1".to_string()],
-        );
+        let result =
+            SearchResult::content_match(PathBuf::from("test.txt"), 5, "match line".to_string())
+                .with_context(
+                    vec!["before 1".to_string(), "before 2".to_string()],
+                    vec!["after 1".to_string()],
+                );
 
         assert_eq!(result.context_before.len(), 2);
         assert_eq!(result.context_after.len(), 1);
@@ -515,7 +506,9 @@ mod edge_case_tests {
         });
 
         let result = tool.execute(params, &context).await.unwrap();
-        let count = result.metadata.get("count")
+        let count = result
+            .metadata
+            .get("count")
             .and_then(|v| v.as_u64())
             .unwrap_or(0);
         assert_eq!(count, 0);
@@ -533,7 +526,9 @@ mod edge_case_tests {
         });
 
         let result = tool.execute(params, &context).await.unwrap();
-        let count = result.metadata.get("count")
+        let count = result
+            .metadata
+            .get("count")
             .and_then(|v| v.as_u64())
             .unwrap_or(0);
         assert_eq!(count, 0);
@@ -542,11 +537,11 @@ mod edge_case_tests {
     #[tokio::test]
     async fn test_glob_with_exclude() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Create files in different directories
         fs::create_dir_all(temp_dir.path().join("src")).unwrap();
         fs::create_dir_all(temp_dir.path().join("node_modules")).unwrap();
-        
+
         File::create(temp_dir.path().join("src/main.txt")).unwrap();
         File::create(temp_dir.path().join("node_modules/dep.txt")).unwrap();
 
@@ -559,7 +554,7 @@ mod edge_case_tests {
 
         let result = tool.execute(params, &context).await.unwrap();
         let output = result.output.unwrap();
-        
+
         assert!(output.contains("main.txt"));
         assert!(!output.contains("node_modules"));
     }
@@ -575,14 +570,14 @@ mod edge_case_tests {
 
         let tool = GrepTool::new();
         let context = ToolContext::new(temp_dir.path().to_path_buf());
-        
+
         // Case sensitive
         let params_sensitive = serde_json::json!({
             "pattern": "Hello",
             "case_insensitive": false
         });
         let result_sensitive = tool.execute(params_sensitive, &context).await.unwrap();
-        
+
         // Case insensitive
         let params_insensitive = serde_json::json!({
             "pattern": "Hello",
@@ -590,10 +585,14 @@ mod edge_case_tests {
         });
         let result_insensitive = tool.execute(params_insensitive, &context).await.unwrap();
 
-        let count_sensitive = result_sensitive.metadata.get("count")
+        let count_sensitive = result_sensitive
+            .metadata
+            .get("count")
             .and_then(|v| v.as_u64())
             .unwrap_or(0);
-        let count_insensitive = result_insensitive.metadata.get("count")
+        let count_insensitive = result_insensitive
+            .metadata
+            .get("count")
             .and_then(|v| v.as_u64())
             .unwrap_or(0);
 

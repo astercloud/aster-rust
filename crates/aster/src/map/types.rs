@@ -68,7 +68,6 @@ pub enum ExportType {
     Reexport,
 }
 
-
 /// 参数信息
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ParameterInfo {
@@ -149,7 +148,6 @@ pub enum CallType {
     Callback,
     Dynamic,
 }
-
 
 /// 函数节点
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,7 +243,6 @@ pub struct MethodSignature {
     pub return_type: Option<String>,
     pub is_optional: bool,
 }
-
 
 /// 类型节点
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -404,7 +401,6 @@ pub struct ModuleStat {
     pub id: String,
     pub import_count: usize,
 }
-
 
 /// 代码本体（根结构）
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -111,7 +111,6 @@ impl Default for ParallelAgentConfig {
     }
 }
 
-
 /// Agent task definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -136,7 +135,11 @@ pub struct AgentTask {
 
 impl AgentTask {
     /// Create a new task
-    pub fn new(id: impl Into<String>, task_type: impl Into<String>, prompt: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        task_type: impl Into<String>,
+        prompt: impl Into<String>,
+    ) -> Self {
         Self {
             id: id.into(),
             task_type: task_type.into(),
@@ -186,7 +189,10 @@ impl AgentTask {
 
     /// Check if this task has dependencies
     pub fn has_dependencies(&self) -> bool {
-        self.dependencies.as_ref().map(|d| !d.is_empty()).unwrap_or(false)
+        self.dependencies
+            .as_ref()
+            .map(|d| !d.is_empty())
+            .unwrap_or(false)
     }
 
     /// Get dependencies or empty vec
@@ -250,7 +256,6 @@ impl TaskExecutionInfo {
         }
     }
 }
-
 
 /// Execution progress information
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -371,7 +376,11 @@ impl DependencyGraph {
     }
 
     /// Get tasks that are ready to execute (no unmet dependencies)
-    pub fn get_ready_tasks(&self, completed: &HashSet<String>, running: &HashSet<String>) -> Vec<String> {
+    pub fn get_ready_tasks(
+        &self,
+        completed: &HashSet<String>,
+        running: &HashSet<String>,
+    ) -> Vec<String> {
         self.task_ids
             .iter()
             .filter(|id| {
@@ -404,7 +413,6 @@ impl Default for DependencyGraph {
         Self::new()
     }
 }
-
 
 /// Validation result for task dependencies
 #[derive(Debug, Clone)]
@@ -510,7 +518,9 @@ fn detect_cycle(graph: &DependencyGraph) -> Option<Vec<String>> {
 
     for task_id in graph.get_all_tasks() {
         if !visited.contains(task_id) {
-            if let Some(cycle) = dfs_detect_cycle(graph, task_id, &mut visited, &mut rec_stack, &mut path) {
+            if let Some(cycle) =
+                dfs_detect_cycle(graph, task_id, &mut visited, &mut rec_stack, &mut path)
+            {
                 return Some(cycle);
             }
         }
@@ -582,7 +592,6 @@ pub fn merge_agent_results(results: Vec<AgentResult>) -> MergedResult {
     }
 }
 
-
 /// Parallel Agent Executor
 ///
 /// Executes multiple agent tasks concurrently with configurable
@@ -620,7 +629,10 @@ impl ParallelAgentExecutor {
     }
 
     /// Execute tasks without dependencies (parallel execution)
-    pub async fn execute(&mut self, tasks: Vec<AgentTask>) -> ExecutorResult<ParallelExecutionResult> {
+    pub async fn execute(
+        &mut self,
+        tasks: Vec<AgentTask>,
+    ) -> ExecutorResult<ParallelExecutionResult> {
         // Create dependency graph (no dependencies)
         let graph = create_dependency_graph(&tasks);
         self.execute_with_graph(tasks, graph).await
@@ -722,7 +734,10 @@ impl ParallelAgentExecutor {
         let failed_count = results_vec.iter().filter(|r| !r.success).count();
         let skipped_count = {
             let task_map = self.tasks.lock().await;
-            task_map.values().filter(|t| t.status == TaskStatus::Skipped).count()
+            task_map
+                .values()
+                .filter(|t| t.status == TaskStatus::Skipped)
+                .count()
         };
 
         Ok(ParallelExecutionResult {
@@ -736,7 +751,6 @@ impl ParallelAgentExecutor {
         })
     }
 
-
     /// Execute tasks respecting dependencies
     async fn execute_tasks_with_deps(
         &self,
@@ -746,11 +760,11 @@ impl ParallelAgentExecutor {
         failed: Arc<Mutex<HashSet<String>>>,
         results: Arc<Mutex<Vec<AgentResult>>>,
     ) -> ExecutorResult<()> {
-        let task_map: HashMap<String, AgentTask> = tasks.iter().map(|t| (t.id.clone(), t.clone())).collect();
+        let task_map: HashMap<String, AgentTask> =
+            tasks.iter().map(|t| (t.id.clone(), t.clone())).collect();
         // Preserve the sorted order from the input tasks
-        let pending: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(
-            tasks.iter().map(|t| t.id.clone()).collect(),
-        ));
+        let pending: Arc<Mutex<VecDeque<String>>> =
+            Arc::new(Mutex::new(tasks.iter().map(|t| t.id.clone()).collect()));
         let running: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
 
         loop {
@@ -818,7 +832,7 @@ impl ParallelAgentExecutor {
             // Only spawn up to max_concurrency tasks, put the rest back in pending
             let mut tasks_to_spawn = Vec::new();
             let mut tasks_to_defer = Vec::new();
-            
+
             for (i, task_id) in ready_tasks.into_iter().enumerate() {
                 if i < self.config.max_concurrency {
                     tasks_to_spawn.push(task_id);
@@ -826,7 +840,7 @@ impl ParallelAgentExecutor {
                     tasks_to_defer.push(task_id);
                 }
             }
-            
+
             // Put deferred tasks back in pending (at the front to maintain priority order)
             {
                 let mut pending_guard = pending.lock().await;
@@ -834,7 +848,7 @@ impl ParallelAgentExecutor {
                     pending_guard.push_front(task_id);
                 }
             }
-            
+
             let mut handles = Vec::new();
             for task_id in tasks_to_spawn {
                 let task = match task_map.get(&task_id) {
@@ -988,7 +1002,11 @@ async fn execute_single_task(
 ) -> AgentResult {
     let start_time = Utc::now();
     let task_timeout = task.timeout.unwrap_or(config.timeout);
-    let max_retries = if config.retry_on_failure { config.max_retries } else { 0 };
+    let max_retries = if config.retry_on_failure {
+        config.max_retries
+    } else {
+        0
+    };
 
     let mut retries = 0;
     #[allow(unused_assignments)]
@@ -1058,7 +1076,7 @@ async fn execute_single_task(
 async fn simulate_task_execution(task: &AgentTask) -> Result<Value, String> {
     // This is a placeholder - in real implementation, this would
     // invoke the actual agent with the task prompt
-    
+
     // Simulate some work
     tokio::time::sleep(Duration::from_millis(10)).await;
 
@@ -1070,7 +1088,6 @@ async fn simulate_task_execution(task: &AgentTask) -> Result<Value, String> {
         "output": format!("Executed task: {}", task.prompt)
     }))
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1122,8 +1139,8 @@ mod tests {
         let task_empty_deps = AgentTask::new("t2", "test", "test").with_dependencies(vec![]);
         assert!(!task_empty_deps.has_dependencies());
 
-        let task_with_deps = AgentTask::new("t3", "test", "test")
-            .with_dependencies(vec!["t1".to_string()]);
+        let task_with_deps =
+            AgentTask::new("t3", "test", "test").with_dependencies(vec!["t1".to_string()]);
         assert!(task_with_deps.has_dependencies());
     }
 
@@ -1181,7 +1198,8 @@ mod tests {
         let tasks = vec![
             AgentTask::new("task-1", "test", "test"),
             AgentTask::new("task-2", "test", "test").with_dependencies(vec!["task-1".to_string()]),
-            AgentTask::new("task-3", "test", "test").with_dependencies(vec!["task-1".to_string(), "task-2".to_string()]),
+            AgentTask::new("task-3", "test", "test")
+                .with_dependencies(vec!["task-1".to_string(), "task-2".to_string()]),
         ];
 
         let graph = create_dependency_graph(&tasks);
@@ -1209,9 +1227,8 @@ mod tests {
 
     #[test]
     fn test_validate_missing_dependency() {
-        let tasks = vec![
-            AgentTask::new("task-1", "test", "test").with_dependencies(vec!["non-existent".to_string()]),
-        ];
+        let tasks = vec![AgentTask::new("task-1", "test", "test")
+            .with_dependencies(vec!["non-existent".to_string()])];
 
         let result = validate_task_dependencies(&tasks);
         assert!(!result.valid);
@@ -1233,9 +1250,9 @@ mod tests {
 
     #[test]
     fn test_validate_self_dependency() {
-        let tasks = vec![
-            AgentTask::new("task-1", "test", "test").with_dependencies(vec!["task-1".to_string()]),
-        ];
+        let tasks =
+            vec![AgentTask::new("task-1", "test", "test")
+                .with_dependencies(vec!["task-1".to_string()])];
 
         let result = validate_task_dependencies(&tasks);
         assert!(!result.valid);
@@ -1342,8 +1359,10 @@ mod tests {
 
         let tasks = vec![
             AgentTask::new("task-1", "test", "First task"),
-            AgentTask::new("task-2", "test", "Second task").with_dependencies(vec!["task-1".to_string()]),
-            AgentTask::new("task-3", "test", "Third task").with_dependencies(vec!["task-2".to_string()]),
+            AgentTask::new("task-2", "test", "Second task")
+                .with_dependencies(vec!["task-1".to_string()]),
+            AgentTask::new("task-3", "test", "Third task")
+                .with_dependencies(vec!["task-2".to_string()]),
         ];
 
         let result = executor.execute_with_dependencies(tasks).await.unwrap();
@@ -1371,13 +1390,15 @@ mod tests {
     async fn test_executor_invalid_dependency_error() {
         let mut executor = ParallelAgentExecutor::new(None);
 
-        let tasks = vec![
-            AgentTask::new("task-1", "test", "test").with_dependencies(vec!["non-existent".to_string()]),
-        ];
+        let tasks = vec![AgentTask::new("task-1", "test", "test")
+            .with_dependencies(vec!["non-existent".to_string()])];
 
         let result = executor.execute_with_dependencies(tasks).await;
 
-        assert!(matches!(result, Err(ExecutorError::InvalidDependency { .. })));
+        assert!(matches!(
+            result,
+            Err(ExecutorError::InvalidDependency { .. })
+        ));
     }
 
     #[tokio::test]

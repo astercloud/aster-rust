@@ -131,7 +131,10 @@ impl CacheController {
     ///
     /// A tuple of (messages, cacheable_indices) where cacheable_indices
     /// contains the indices of messages that should have cache control applied
-    pub fn add_cache_control(messages: &[Message], config: &CacheConfig) -> (Vec<Message>, Vec<usize>) {
+    pub fn add_cache_control(
+        messages: &[Message],
+        config: &CacheConfig,
+    ) -> (Vec<Message>, Vec<usize>) {
         let eligibility = Self::get_cache_eligibility(messages, config);
         (messages.to_vec(), eligibility.cacheable_indices)
     }
@@ -179,7 +182,7 @@ impl CacheController {
     /// base_cost = input_tokens * base_price
     /// cache_write_cost = cache_creation_tokens * (base_price * 1.25)
     /// cache_read_cost = cache_read_tokens * (base_price * 0.1)
-    /// actual_cost = (input_tokens - cache_read_tokens) * base_price 
+    /// actual_cost = (input_tokens - cache_read_tokens) * base_price
     ///             + cache_write_cost + cache_read_cost
     /// savings = base_cost - actual_cost
     /// ```
@@ -369,7 +372,7 @@ mod tests {
         config.cache_recent_messages = 10;
 
         let eligibility = CacheController::get_cache_eligibility(&messages, &config);
-        
+
         // All 3 messages should be cacheable
         assert_eq!(eligibility.cacheable_indices.len(), 3);
         assert!(eligibility.cacheable_tokens > 0);

@@ -171,7 +171,11 @@ impl BackgroundTaskManager {
             // 写入文件
             if let Ok(mut file) = OpenOptions::new().append(true).open(&task.output_file) {
                 let _ = writeln!(file, "\n--- Tool: {} ---", tool_name);
-                let _ = writeln!(file, "Input: {}", serde_json::to_string_pretty(&input).unwrap_or_default());
+                let _ = writeln!(
+                    file,
+                    "Input: {}",
+                    serde_json::to_string_pretty(&input).unwrap_or_default()
+                );
                 if let Some(ref r) = result {
                     let preview = if r.len() > 1000 { &r[..1000] } else { r };
                     let _ = writeln!(file, "Result: {}", preview);
@@ -188,7 +192,11 @@ impl BackgroundTaskManager {
     pub fn complete_task(&self, task_id: &str, success: bool, error: Option<String>) {
         let mut tasks = self.tasks.write();
         if let Some(task) = tasks.get_mut(task_id) {
-            task.status = if success { TaskStatus::Completed } else { TaskStatus::Failed };
+            task.status = if success {
+                TaskStatus::Completed
+            } else {
+                TaskStatus::Failed
+            };
             task.end_time = Some(current_timestamp());
             task.error = error.clone();
 
@@ -197,7 +205,11 @@ impl BackgroundTaskManager {
                 let status = if success { "Completed" } else { "Failed" };
                 let _ = writeln!(file, "\n=== Task {} ===", status);
                 let _ = writeln!(file, "End Time: {}", task.end_time.unwrap());
-                let _ = writeln!(file, "Duration: {}ms", task.end_time.unwrap() - task.start_time);
+                let _ = writeln!(
+                    file,
+                    "Duration: {}ms",
+                    task.end_time.unwrap() - task.start_time
+                );
                 if let Some(ref e) = error {
                     let _ = writeln!(file, "Error: {}", e);
                 }
@@ -298,9 +310,18 @@ impl BackgroundTaskManager {
         let tasks = self.tasks.read();
         TaskStats {
             total: tasks.len(),
-            running: tasks.values().filter(|t| t.status == TaskStatus::Running).count(),
-            completed: tasks.values().filter(|t| t.status == TaskStatus::Completed).count(),
-            failed: tasks.values().filter(|t| t.status == TaskStatus::Failed).count(),
+            running: tasks
+                .values()
+                .filter(|t| t.status == TaskStatus::Running)
+                .count(),
+            completed: tasks
+                .values()
+                .filter(|t| t.status == TaskStatus::Completed)
+                .count(),
+            failed: tasks
+                .values()
+                .filter(|t| t.status == TaskStatus::Failed)
+                .count(),
         }
     }
 

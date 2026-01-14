@@ -8,13 +8,52 @@ use super::types::*;
 
 /// 需要忽略的内置函数/关键字
 const IGNORED_NAMES: &[&str] = &[
-    "if", "for", "while", "switch", "catch", "with", "function", "class",
-    "return", "throw", "typeof", "instanceof", "void", "delete",
-    "await", "async", "yield", "new", "super", "this",
-    "console", "Math", "JSON", "Object", "Array", "String", "Number",
-    "Boolean", "Date", "RegExp", "Error", "Promise", "Map", "Set",
-    "parseInt", "parseFloat", "isNaN", "isFinite",
-    "print", "len", "range", "str", "int", "float", "list", "dict",
+    "if",
+    "for",
+    "while",
+    "switch",
+    "catch",
+    "with",
+    "function",
+    "class",
+    "return",
+    "throw",
+    "typeof",
+    "instanceof",
+    "void",
+    "delete",
+    "await",
+    "async",
+    "yield",
+    "new",
+    "super",
+    "this",
+    "console",
+    "Math",
+    "JSON",
+    "Object",
+    "Array",
+    "String",
+    "Number",
+    "Boolean",
+    "Date",
+    "RegExp",
+    "Error",
+    "Promise",
+    "Map",
+    "Set",
+    "parseInt",
+    "parseFloat",
+    "isNaN",
+    "isFinite",
+    "print",
+    "len",
+    "range",
+    "str",
+    "int",
+    "float",
+    "list",
+    "dict",
 ];
 
 /// 调用图构建器
@@ -22,7 +61,6 @@ pub struct CallGraphBuilder {
     function_index: HashMap<String, CallGraphNode>,
     name_to_ids: HashMap<String, Vec<String>>,
 }
-
 
 impl CallGraphBuilder {
     pub fn new() -> Self {
@@ -44,7 +82,10 @@ impl CallGraphBuilder {
         }
 
         let merged_edges = self.merge_edges(edges);
-        CallGraph { nodes, edges: merged_edges }
+        CallGraph {
+            nodes,
+            edges: merged_edges,
+        }
     }
 
     /// 建立函数索引
@@ -91,11 +132,11 @@ impl CallGraphBuilder {
     }
 
     fn add_to_name_index(&mut self, name: &str, id: &str) {
-        self.name_to_ids.entry(name.to_string())
+        self.name_to_ids
+            .entry(name.to_string())
             .or_default()
             .push(id.to_string());
     }
-
 
     /// 分析模块中的调用
     fn analyze_module_calls(&self, module: &ModuleNode, edges: &mut Vec<CallGraphEdge>) {
@@ -157,7 +198,6 @@ impl CallGraphBuilder {
         }
     }
 
-
     fn analyze_method_calls(
         &self,
         method: &MethodNode,
@@ -210,7 +250,6 @@ impl CallGraphBuilder {
         }
     }
 
-
     /// 合并重复边
     fn merge_edges(&self, edges: Vec<CallGraphEdge>) -> Vec<CallGraphEdge> {
         let mut edge_map: HashMap<String, CallGraphEdge> = HashMap::new();
@@ -230,7 +269,9 @@ impl CallGraphBuilder {
 }
 
 impl Default for CallGraphBuilder {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// 便捷函数：构建调用图

@@ -7,13 +7,13 @@
 //! 3. 分支执行（从检查点创建新分支）
 //! 4. 历史比较和差异查看
 
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
 
-use super::types::*;
 use super::task_tree_manager::TaskTreeManager;
+use super::types::*;
 
 // ============================================================================
 // 检查点信息
@@ -122,7 +122,6 @@ pub struct CheckpointDetails {
     pub test_result: Option<TestResult>,
 }
 
-
 // ============================================================================
 // 时光倒流管理器
 // ============================================================================
@@ -218,7 +217,8 @@ impl TimeTravelManager {
     /// 获取时间线视图
     pub fn get_timeline_view(&self, tree: &TaskTree) -> TimelineView {
         let checkpoints = self.get_all_checkpoints(tree);
-        let branches: Vec<BranchInfo> = self.branches
+        let branches: Vec<BranchInfo> = self
+            .branches
             .values()
             .filter(|b| b.status == BranchStatus::Active)
             .cloned()
@@ -230,7 +230,6 @@ impl TimeTravelManager {
             branches,
         }
     }
-
 
     // ------------------------------------------------------------------------
     // 检查点操作
@@ -247,14 +246,14 @@ impl TimeTravelManager {
     ) -> Result<CheckpointInfo, String> {
         if let Some(tid) = task_id {
             // 创建任务检查点
-            let checkpoint = tree_manager.create_task_checkpoint(
-                tree_id,
-                tid,
-                name.clone(),
-                description.clone(),
-            ).await.map_err(|e| e.to_string())?;
+            let checkpoint = tree_manager
+                .create_task_checkpoint(tree_id, tid, name.clone(), description.clone())
+                .await
+                .map_err(|e| e.to_string())?;
 
-            let tree = tree_manager.get_task_tree(tree_id).await
+            let tree = tree_manager
+                .get_task_tree(tree_id)
+                .await
                 .ok_or_else(|| format!("任务树 {} 不存在", tree_id))?;
             let task = TaskTreeManager::find_task(&tree.root, tid);
 
@@ -274,11 +273,10 @@ impl TimeTravelManager {
             })
         } else {
             // 创建全局检查点
-            let checkpoint = tree_manager.create_global_checkpoint(
-                tree_id,
-                name.clone(),
-                description.clone(),
-            ).await.map_err(|e| e.to_string())?;
+            let checkpoint = tree_manager
+                .create_global_checkpoint(tree_id, name.clone(), description.clone())
+                .await
+                .map_err(|e| e.to_string())?;
 
             Ok(CheckpointInfo {
                 id: checkpoint.id,
@@ -304,11 +302,14 @@ impl TimeTravelManager {
         tree_id: &str,
         checkpoint_id: &str,
     ) -> Result<(), String> {
-        let tree = tree_manager.get_task_tree(tree_id).await
+        let tree = tree_manager
+            .get_task_tree(tree_id)
+            .await
             .ok_or_else(|| format!("任务树 {} 不存在", tree_id))?;
 
         let checkpoints = self.get_all_checkpoints(&tree);
-        let checkpoint = checkpoints.iter()
+        let checkpoint = checkpoints
+            .iter()
             .find(|c| c.id == checkpoint_id)
             .ok_or_else(|| format!("检查点 {} 不存在", checkpoint_id))?;
 
@@ -318,15 +319,21 @@ impl TimeTravelManager {
 
         match checkpoint.checkpoint_type {
             CheckpointType::Global => {
-                tree_manager.rollback_to_global_checkpoint(tree_id, checkpoint_id)
-                    .await.map_err(|e| e.to_string())?;
+                tree_manager
+                    .rollback_to_global_checkpoint(tree_id, checkpoint_id)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 Ok(())
             }
             CheckpointType::Task => {
-                let task_id = checkpoint.task_id.as_ref()
+                let task_id = checkpoint
+                    .task_id
+                    .as_ref()
                     .ok_or_else(|| "任务检查点缺少 task_id".to_string())?;
-                tree_manager.rollback_to_checkpoint(tree_id, task_id, checkpoint_id)
-                    .await.map_err(|e| e.to_string())?;
+                tree_manager
+                    .rollback_to_checkpoint(tree_id, task_id, checkpoint_id)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 Ok(())
             }
         }
@@ -339,16 +346,17 @@ impl TimeTravelManager {
         checkpoint_id: &str,
     ) -> Result<CompareResult, String> {
         let checkpoints = self.get_all_checkpoints(tree);
-        let _target = checkpoints.iter()
+        let _target = checkpoints
+            .iter()
             .find(|c| c.id == checkpoint_id)
             .ok_or_else(|| format!("检查点 {} 不存在", checkpoint_id))?;
 
-        let current = checkpoints.first()
+        let current = checkpoints
+            .first()
             .ok_or_else(|| "没有当前检查点".to_string())?;
 
         self.compare_checkpoints(tree, checkpoint_id, &current.id)
     }
-
 
     // ------------------------------------------------------------------------
     // 分支管理
@@ -362,11 +370,14 @@ impl TimeTravelManager {
         checkpoint_id: &str,
         branch_name: String,
     ) -> Result<BranchInfo, String> {
-        let tree = tree_manager.get_task_tree(tree_id).await
+        let tree = tree_manager
+            .get_task_tree(tree_id)
+            .await
             .ok_or_else(|| format!("任务树 {} 不存在", tree_id))?;
 
         let checkpoints = self.get_all_checkpoints(&tree);
-        let _checkpoint = checkpoints.iter()
+        let _checkpoint = checkpoints
+            .iter()
             .find(|c| c.id == checkpoint_id)
             .ok_or_else(|| format!("检查点 {} 不存在", checkpoint_id))?;
 
@@ -419,11 +430,13 @@ impl TimeTravelManager {
     ) -> Result<CompareResult, String> {
         let checkpoints = self.get_all_checkpoints(tree);
 
-        let from = checkpoints.iter()
+        let from = checkpoints
+            .iter()
             .find(|c| c.id == from_checkpoint_id)
             .ok_or_else(|| format!("检查点 {} 不存在", from_checkpoint_id))?;
 
-        let to = checkpoints.iter()
+        let to = checkpoints
+            .iter()
             .find(|c| c.id == to_checkpoint_id)
             .ok_or_else(|| format!("检查点 {} 不存在", to_checkpoint_id))?;
 
@@ -446,7 +459,11 @@ impl TimeTravelManager {
         checkpoint_id: &str,
     ) -> Option<CheckpointDetails> {
         // 查找全局检查点
-        if let Some(gc) = tree.global_checkpoints.iter().find(|c| c.id == checkpoint_id) {
+        if let Some(gc) = tree
+            .global_checkpoints
+            .iter()
+            .find(|c| c.id == checkpoint_id)
+        {
             return Some(CheckpointDetails {
                 checkpoint: CheckpointInfo {
                     id: gc.id.clone(),
@@ -462,11 +479,15 @@ impl TimeTravelManager {
                     has_code_changes: !gc.file_changes.is_empty(),
                     code_changes_count: gc.file_changes.len(),
                 },
-                code_snapshots: gc.file_changes.iter().map(|fc| CodeSnapshot {
-                    file_path: fc.file_path.clone(),
-                    content: fc.new_content.clone().unwrap_or_default(),
-                    hash: String::new(),
-                }).collect(),
+                code_snapshots: gc
+                    .file_changes
+                    .iter()
+                    .map(|fc| CodeSnapshot {
+                        file_path: fc.file_path.clone(),
+                        content: fc.new_content.clone().unwrap_or_default(),
+                        hash: String::new(),
+                    })
+                    .collect(),
                 test_result: None,
             });
         }
@@ -513,7 +534,6 @@ impl TimeTravelManager {
         None
     }
 
-
     // ------------------------------------------------------------------------
     // 可视化辅助
     // ------------------------------------------------------------------------
@@ -530,13 +550,24 @@ impl TimeTravelManager {
         for (i, cp) in checkpoints.iter().enumerate() {
             let is_last = i == checkpoints.len() - 1;
             let prefix = if is_last { "└── " } else { "├── " };
-            let type_icon = if cp.checkpoint_type == CheckpointType::Global { "🌍" } else { "📌" };
+            let type_icon = if cp.checkpoint_type == CheckpointType::Global {
+                "🌍"
+            } else {
+                "📌"
+            };
             let status_icon = if cp.can_restore { "✅" } else { "⚠️" };
 
-            lines.push(format!("{}{} {} {}", prefix, type_icon, cp.name, status_icon));
+            lines.push(format!(
+                "{}{} {} {}",
+                prefix, type_icon, cp.name, status_icon
+            ));
 
             let indent = if is_last { "    " } else { "│   " };
-            lines.push(format!("{}📅 {}", indent, cp.timestamp.format("%Y-%m-%d %H:%M:%S")));
+            lines.push(format!(
+                "{}📅 {}",
+                indent,
+                cp.timestamp.format("%Y-%m-%d %H:%M:%S")
+            ));
 
             if let Some(ref task_name) = cp.task_name {
                 lines.push(format!("{}📁 {}", indent, task_name));

@@ -28,7 +28,6 @@ pub enum NotificationKind {
     Custom,
 }
 
-
 /// 通知动作
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationAction {

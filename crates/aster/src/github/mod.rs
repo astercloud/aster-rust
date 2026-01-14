@@ -2,14 +2,12 @@
 //!
 //! 提供 GitHub Actions 工作流设置、PR 管理等功能
 
-mod workflow;
 mod pr;
+mod workflow;
 
-pub use workflow::{
-    setup_github_workflow, check_github_cli, GitHubCLIStatus,
-    CLAUDE_CODE_WORKFLOW,
-};
 pub use pr::{
-    PRInfo, PRComment, get_pr_info, get_pr_comments,
-    add_pr_comment, create_pr, CreatePROptions,
+    add_pr_comment, create_pr, get_pr_comments, get_pr_info, CreatePROptions, PRComment, PRInfo,
+};
+pub use workflow::{
+    check_github_cli, setup_github_workflow, GitHubCLIStatus, CLAUDE_CODE_WORKFLOW,
 };

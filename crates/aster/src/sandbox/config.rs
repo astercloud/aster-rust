@@ -41,7 +41,6 @@ pub enum SandboxType {
     None,
 }
 
-
 /// 审计日志配置
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AuditLogging {
@@ -82,7 +81,6 @@ pub struct DockerConfig {
     /// 工作目录
     pub workdir: Option<String>,
 }
-
 
 /// 沙箱配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,7 +126,6 @@ pub struct SandboxConfig {
     /// 资源限制
     pub resource_limits: Option<ResourceLimits>,
 }
-
 
 impl Default for SandboxConfig {
     fn default() -> Self {
@@ -186,85 +183,89 @@ pub enum SandboxPreset {
     AiCode,
 }
 
-
 /// 预设配置集合
 pub static SANDBOX_PRESETS: once_cell::sync::Lazy<HashMap<SandboxPreset, SandboxConfig>> =
     once_cell::sync::Lazy::new(|| {
         let mut presets = HashMap::new();
 
         // 严格隔离预设
-        presets.insert(SandboxPreset::Strict, SandboxConfig {
-            enabled: true,
-            sandbox_type: SandboxType::Bubblewrap,
-            allowed_paths: Vec::new(),
-            denied_paths: vec![
-                PathBuf::from("/home"),
-                PathBuf::from("/root"),
-            ],
-            network_access: false,
-            read_only_paths: vec![
-                PathBuf::from("/usr"),
-                PathBuf::from("/lib"),
-                PathBuf::from("/lib64"),
-                PathBuf::from("/bin"),
-                PathBuf::from("/sbin"),
-                PathBuf::from("/etc"),
-            ],
-            writable_paths: vec![PathBuf::from("/tmp")],
-            allow_dev_access: false,
-            allow_proc_access: false,
-            allow_sys_access: false,
-            tmpfs_size: "50M".to_string(),
-            resource_limits: Some(ResourceLimits {
-                max_memory: Some(512 * 1024 * 1024),
-                max_cpu: Some(50),
-                max_processes: Some(10),
-                max_file_size: Some(10 * 1024 * 1024),
-                max_execution_time: Some(60000),
-                max_file_descriptors: Some(100),
-            }),
-            ..Default::default()
-        });
+        presets.insert(
+            SandboxPreset::Strict,
+            SandboxConfig {
+                enabled: true,
+                sandbox_type: SandboxType::Bubblewrap,
+                allowed_paths: Vec::new(),
+                denied_paths: vec![PathBuf::from("/home"), PathBuf::from("/root")],
+                network_access: false,
+                read_only_paths: vec![
+                    PathBuf::from("/usr"),
+                    PathBuf::from("/lib"),
+                    PathBuf::from("/lib64"),
+                    PathBuf::from("/bin"),
+                    PathBuf::from("/sbin"),
+                    PathBuf::from("/etc"),
+                ],
+                writable_paths: vec![PathBuf::from("/tmp")],
+                allow_dev_access: false,
+                allow_proc_access: false,
+                allow_sys_access: false,
+                tmpfs_size: "50M".to_string(),
+                resource_limits: Some(ResourceLimits {
+                    max_memory: Some(512 * 1024 * 1024),
+                    max_cpu: Some(50),
+                    max_processes: Some(10),
+                    max_file_size: Some(10 * 1024 * 1024),
+                    max_execution_time: Some(60000),
+                    max_file_descriptors: Some(100),
+                }),
+                ..Default::default()
+            },
+        );
 
         // 开发环境预设
-        presets.insert(SandboxPreset::Development, SandboxConfig {
-            enabled: true,
-            sandbox_type: SandboxType::Bubblewrap,
-            network_access: true,
-            allow_dev_access: true,
-            allow_proc_access: true,
-            tmpfs_size: "200M".to_string(),
-            resource_limits: Some(ResourceLimits {
-                max_memory: Some(2 * 1024 * 1024 * 1024),
-                max_cpu: Some(80),
-                max_processes: Some(50),
-                max_execution_time: Some(300000),
+        presets.insert(
+            SandboxPreset::Development,
+            SandboxConfig {
+                enabled: true,
+                sandbox_type: SandboxType::Bubblewrap,
+                network_access: true,
+                allow_dev_access: true,
+                allow_proc_access: true,
+                tmpfs_size: "200M".to_string(),
+                resource_limits: Some(ResourceLimits {
+                    max_memory: Some(2 * 1024 * 1024 * 1024),
+                    max_cpu: Some(80),
+                    max_processes: Some(50),
+                    max_execution_time: Some(300000),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        });
+            },
+        );
 
         // 测试环境预设
-        presets.insert(SandboxPreset::Testing, SandboxConfig {
-            enabled: true,
-            sandbox_type: SandboxType::Bubblewrap,
-            network_access: true,
-            allow_dev_access: true,
-            allow_proc_access: true,
-            tmpfs_size: "200M".to_string(),
-            resource_limits: Some(ResourceLimits {
-                max_memory: Some(1024 * 1024 * 1024),
-                max_cpu: Some(75),
-                max_processes: Some(30),
-                max_execution_time: Some(120000),
+        presets.insert(
+            SandboxPreset::Testing,
+            SandboxConfig {
+                enabled: true,
+                sandbox_type: SandboxType::Bubblewrap,
+                network_access: true,
+                allow_dev_access: true,
+                allow_proc_access: true,
+                tmpfs_size: "200M".to_string(),
+                resource_limits: Some(ResourceLimits {
+                    max_memory: Some(1024 * 1024 * 1024),
+                    max_cpu: Some(75),
+                    max_processes: Some(30),
+                    max_execution_time: Some(120000),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        });
+            },
+        );
 
         presets
     });
-
 
 /// 验证结果
 #[derive(Debug, Clone)]
@@ -318,7 +319,6 @@ impl SandboxConfigManager {
             }
         }
     }
-
 
     /// 异步加载配置
     pub async fn load_config(&self) -> anyhow::Result<SandboxConfig> {
@@ -375,9 +375,12 @@ impl SandboxConfigManager {
         }
     }
 
-
     /// 合并配置
-    pub fn merge_configs(&self, base: &SandboxConfig, override_config: &SandboxConfig) -> SandboxConfig {
+    pub fn merge_configs(
+        &self,
+        base: &SandboxConfig,
+        override_config: &SandboxConfig,
+    ) -> SandboxConfig {
         SandboxConfig {
             enabled: override_config.enabled,
             sandbox_type: override_config.sandbox_type,
@@ -419,14 +422,23 @@ impl SandboxConfigManager {
             unshare_all: override_config.unshare_all,
             die_with_parent: override_config.die_with_parent,
             new_session: override_config.new_session,
-            docker: override_config.docker.clone().or_else(|| base.docker.clone()),
+            docker: override_config
+                .docker
+                .clone()
+                .or_else(|| base.docker.clone()),
             custom_args: if override_config.custom_args.is_empty() {
                 base.custom_args.clone()
             } else {
                 override_config.custom_args.clone()
             },
-            audit_logging: override_config.audit_logging.clone().or_else(|| base.audit_logging.clone()),
-            resource_limits: override_config.resource_limits.clone().or_else(|| base.resource_limits.clone()),
+            audit_logging: override_config
+                .audit_logging
+                .clone()
+                .or_else(|| base.audit_logging.clone()),
+            resource_limits: override_config
+                .resource_limits
+                .clone()
+                .or_else(|| base.resource_limits.clone()),
         }
     }
 
@@ -437,9 +449,11 @@ impl SandboxConfigManager {
 
     /// 获取当前配置
     pub fn get_config(&self) -> SandboxConfig {
-        self.current_config.read().map(|c| c.clone()).unwrap_or_default()
+        self.current_config
+            .read()
+            .map(|c| c.clone())
+            .unwrap_or_default()
     }
-
 
     /// 更新配置
     pub async fn update_config(&self, config: SandboxConfig) -> anyhow::Result<()> {
@@ -466,7 +480,7 @@ impl SandboxConfigManager {
     /// 检查路径是否允许访问
     pub fn is_path_allowed(&self, target_path: &std::path::Path) -> bool {
         let config = self.get_config();
-        
+
         // 禁止路径优先
         for denied in &config.denied_paths {
             if target_path.starts_with(denied) {

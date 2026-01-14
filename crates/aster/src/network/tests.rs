@@ -153,11 +153,8 @@ fn test_proxy_info() {
 
 #[test]
 fn test_build_proxy_url_with_auth() {
-    let url = build_proxy_url_with_auth(
-        "http://proxy.example.com:8080",
-        Some("user"),
-        Some("pass"),
-    );
+    let url =
+        build_proxy_url_with_auth("http://proxy.example.com:8080", Some("user"), Some("pass"));
     assert!(url.contains("user"));
     assert!(url.contains("pass"));
 }

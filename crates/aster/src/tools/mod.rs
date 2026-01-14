@@ -40,21 +40,23 @@ pub use base::{PermissionBehavior, PermissionCheckResult, Tool};
 pub use registry::{McpToolWrapper, PermissionRequestCallback, ToolRegistry};
 
 // Task management types
-pub use task::{TaskManager, TaskState, TaskStatus, DEFAULT_MAX_CONCURRENT, DEFAULT_MAX_RUNTIME_SECS};
+pub use task::{
+    TaskManager, TaskState, TaskStatus, DEFAULT_MAX_CONCURRENT, DEFAULT_MAX_RUNTIME_SECS,
+};
 
 // Tool implementations
 pub use bash::{BashTool, SafetyCheckResult, SandboxConfig, MAX_OUTPUT_LENGTH};
 
 // File tools
 pub use file::{
-    create_shared_history, compute_content_hash,
-    EditTool, FileReadHistory, FileReadRecord, ReadTool, SharedFileReadHistory, WriteTool,
+    compute_content_hash, create_shared_history, EditTool, FileReadHistory, FileReadRecord,
+    ReadTool, SharedFileReadHistory, WriteTool,
 };
 
 // Search tools
 pub use search::{
-    GlobTool, GrepOutputMode, GrepTool, SearchResult,
-    DEFAULT_MAX_RESULTS, DEFAULT_MAX_CONTEXT_LINES, MAX_OUTPUT_SIZE,
+    GlobTool, GrepOutputMode, GrepTool, SearchResult, DEFAULT_MAX_CONTEXT_LINES,
+    DEFAULT_MAX_RESULTS, MAX_OUTPUT_SIZE,
 };
 
 // Ask tool
@@ -62,8 +64,8 @@ pub use ask::{AskCallback, AskOption, AskResult, AskTool, DEFAULT_ASK_TIMEOUT_SE
 
 // LSP tool
 pub use lsp::{
-    CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, HoverInfo,
-    Location, LspCallback, LspOperation, LspResult, LspTool, Position, Range,
+    CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, HoverInfo, Location,
+    LspCallback, LspOperation, LspResult, LspTool, Position, Range,
 };
 
 // =============================================================================
@@ -84,8 +86,14 @@ pub struct ToolRegistrationConfig {
 impl std::fmt::Debug for ToolRegistrationConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ToolRegistrationConfig")
-            .field("ask_callback", &self.ask_callback.as_ref().map(|_| "<callback>"))
-            .field("lsp_callback", &self.lsp_callback.as_ref().map(|_| "<callback>"))
+            .field(
+                "ask_callback",
+                &self.ask_callback.as_ref().map(|_| "<callback>"),
+            )
+            .field(
+                "lsp_callback",
+                &self.lsp_callback.as_ref().map(|_| "<callback>"),
+            )
             .field("pdf_enabled", &self.pdf_enabled)
             .finish()
     }
@@ -157,8 +165,7 @@ pub fn register_all_tools(
     registry.register(Box::new(BashTool::new()));
 
     // Register file tools with shared history
-    let read_tool = ReadTool::new(shared_history.clone())
-        .with_pdf_enabled(config.pdf_enabled);
+    let read_tool = ReadTool::new(shared_history.clone()).with_pdf_enabled(config.pdf_enabled);
     registry.register(Box::new(read_tool));
 
     let write_tool = WriteTool::new(shared_history.clone());
@@ -227,8 +234,8 @@ mod tests {
 
     #[test]
     fn test_register_all_tools_with_config() {
-        use std::pin::Pin;
         use std::future::Future;
+        use std::pin::Pin;
         use std::sync::Arc;
 
         let mut registry = ToolRegistry::new();
@@ -281,13 +288,15 @@ mod tests {
         }
 
         // And read from it
-        assert!(history.read().unwrap().has_read(&std::path::PathBuf::from("/tmp/test.txt")));
+        assert!(history
+            .read()
+            .unwrap()
+            .has_read(&std::path::PathBuf::from("/tmp/test.txt")));
     }
 
     #[test]
     fn test_tool_registration_config_builder() {
-        let config = ToolRegistrationConfig::new()
-            .with_pdf_enabled(true);
+        let config = ToolRegistrationConfig::new().with_pdf_enabled(true);
 
         assert!(config.pdf_enabled);
         assert!(config.ask_callback.is_none());

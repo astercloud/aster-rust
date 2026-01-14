@@ -65,7 +65,6 @@ fn task_list_strategy(min_size: usize, max_size: usize) -> impl Strategy<Value =
     })
 }
 
-
 // ============================================================================
 // Property Tests - Property 21: Parallel Execution Concurrency
 // ============================================================================
@@ -226,7 +225,6 @@ proptest! {
     }
 }
 
-
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(30))]
 
@@ -329,23 +327,21 @@ fn dependent_task_chain_strategy(
     max_length: usize,
 ) -> impl Strategy<Value = Vec<AgentTask>> {
     (min_length..=max_length).prop_flat_map(|length| {
-        prop::collection::vec(
-            (task_type_strategy(), task_prompt_strategy()),
-            length,
+        prop::collection::vec((task_type_strategy(), task_prompt_strategy()), length).prop_map(
+            move |task_data| {
+                task_data
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (task_type, prompt))| {
+                        let mut task = AgentTask::new(format!("task-{}", i), task_type, prompt);
+                        if i > 0 {
+                            task = task.with_dependencies(vec![format!("task-{}", i - 1)]);
+                        }
+                        task
+                    })
+                    .collect()
+            },
         )
-        .prop_map(move |task_data| {
-            task_data
-                .into_iter()
-                .enumerate()
-                .map(|(i, (task_type, prompt))| {
-                    let mut task = AgentTask::new(format!("task-{}", i), task_type, prompt);
-                    if i > 0 {
-                        task = task.with_dependencies(vec![format!("task-{}", i - 1)]);
-                    }
-                    task
-                })
-                .collect()
-        })
     })
 }
 
@@ -369,10 +365,8 @@ fn diamond_dependency_strategy() -> impl Strategy<Value = Vec<AgentTask>> {
 fn circular_dependency_strategy() -> impl Strategy<Value = Vec<AgentTask>> {
     prop_oneof![
         // Self-dependency: A -> A
-        Just(vec![
-            AgentTask::new("task-a", "test", "Self dependent")
-                .with_dependencies(vec!["task-a".to_string()]),
-        ]),
+        Just(vec![AgentTask::new("task-a", "test", "Self dependent")
+            .with_dependencies(vec!["task-a".to_string()]),]),
         // Two-node cycle: A -> B -> A
         Just(vec![
             AgentTask::new("task-a", "test", "Task A")
@@ -830,7 +824,11 @@ fn agent_result_strategy(success: bool) -> impl Strategy<Value = AgentResult> {
             AgentResult {
                 task_id,
                 success,
-                result: if success { Some(serde_json::json!({"output": "test result"})) } else { None },
+                result: if success {
+                    Some(serde_json::json!({"output": "test result"}))
+                } else {
+                    None
+                },
                 error: if success { None } else { Some(error_msg) },
                 duration: Duration::from_millis(100),
                 retries: 0,
@@ -841,7 +839,10 @@ fn agent_result_strategy(success: bool) -> impl Strategy<Value = AgentResult> {
 }
 
 /// Strategy for generating a mix of successful and failed results
-fn mixed_results_strategy(min_size: usize, max_size: usize) -> impl Strategy<Value = Vec<AgentResult>> {
+fn mixed_results_strategy(
+    min_size: usize,
+    max_size: usize,
+) -> impl Strategy<Value = Vec<AgentResult>> {
     prop::collection::vec(
         prop::bool::ANY.prop_flat_map(|success| agent_result_strategy(success)),
         min_size..=max_size,
@@ -860,33 +861,37 @@ fn mixed_results_strategy(min_size: usize, max_size: usize) -> impl Strategy<Val
 }
 
 /// Strategy for generating all successful results
-fn all_successful_results_strategy(min_size: usize, max_size: usize) -> impl Strategy<Value = Vec<AgentResult>> {
-    prop::collection::vec(agent_result_strategy(true), min_size..=max_size)
-        .prop_map(|results| {
-            results
-                .into_iter()
-                .enumerate()
-                .map(|(i, mut r)| {
-                    r.task_id = format!("{}_{}", r.task_id, i);
-                    r
-                })
-                .collect()
-        })
+fn all_successful_results_strategy(
+    min_size: usize,
+    max_size: usize,
+) -> impl Strategy<Value = Vec<AgentResult>> {
+    prop::collection::vec(agent_result_strategy(true), min_size..=max_size).prop_map(|results| {
+        results
+            .into_iter()
+            .enumerate()
+            .map(|(i, mut r)| {
+                r.task_id = format!("{}_{}", r.task_id, i);
+                r
+            })
+            .collect()
+    })
 }
 
 /// Strategy for generating all failed results
-fn all_failed_results_strategy(min_size: usize, max_size: usize) -> impl Strategy<Value = Vec<AgentResult>> {
-    prop::collection::vec(agent_result_strategy(false), min_size..=max_size)
-        .prop_map(|results| {
-            results
-                .into_iter()
-                .enumerate()
-                .map(|(i, mut r)| {
-                    r.task_id = format!("{}_{}", r.task_id, i);
-                    r
-                })
-                .collect()
-        })
+fn all_failed_results_strategy(
+    min_size: usize,
+    max_size: usize,
+) -> impl Strategy<Value = Vec<AgentResult>> {
+    prop::collection::vec(agent_result_strategy(false), min_size..=max_size).prop_map(|results| {
+        results
+            .into_iter()
+            .enumerate()
+            .map(|(i, mut r)| {
+                r.task_id = format!("{}_{}", r.task_id, i);
+                r
+            })
+            .collect()
+    })
 }
 
 proptest! {

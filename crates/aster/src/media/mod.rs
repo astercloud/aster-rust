@@ -23,7 +23,6 @@ pub enum MediaType {
     Unknown,
 }
 
-
 /// 媒体读取结果
 #[derive(Debug, Clone)]
 pub enum MediaResult {
@@ -59,25 +58,18 @@ pub fn is_supported_media_file(file_path: &Path) -> bool {
     detect_media_type(file_path) != MediaType::Unknown
 }
 
-
 /// 二进制文件黑名单
 /// 这些文件类型不应该被读取
 pub static BINARY_FILE_BLACKLIST: &[&str] = &[
     // 音频格式
-    "mp3", "wav", "flac", "ogg", "aac", "m4a", "wma", "aiff", "opus",
-    // 视频格式
+    "mp3", "wav", "flac", "ogg", "aac", "m4a", "wma", "aiff", "opus", // 视频格式
     "mp4", "avi", "mov", "wmv", "flv", "mkv", "webm", "m4v", "mpeg", "mpg",
     // 压缩文件
-    "zip", "rar", "tar", "gz", "bz2", "7z", "xz", "z", "tgz", "iso",
-    // 可执行文件
-    "exe", "dll", "so", "dylib", "app", "msi", "deb", "rpm", "bin",
-    // 数据库文件
-    "dat", "db", "sqlite", "sqlite3", "mdb", "idx",
-    // Office 文档（旧格式）
-    "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp",
-    // 字体文件
-    "ttf", "otf", "woff", "woff2", "eot",
-    // 设计文件
+    "zip", "rar", "tar", "gz", "bz2", "7z", "xz", "z", "tgz", "iso", // 可执行文件
+    "exe", "dll", "so", "dylib", "app", "msi", "deb", "rpm", "bin", // 数据库文件
+    "dat", "db", "sqlite", "sqlite3", "mdb", "idx", // Office 文档（旧格式）
+    "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", // 字体文件
+    "ttf", "otf", "woff", "woff2", "eot", // 设计文件
     "psd", "ai", "eps", "sketch", "fig", "xd", "blend", "obj", "3ds", "max",
     // 编译文件
     "class", "jar", "war", "pyc", "pyo", "rlib", "swf", "fla",
@@ -93,7 +85,6 @@ pub fn is_blacklisted_file(file_path: &Path) -> bool {
 
     BINARY_FILE_BLACKLIST.contains(&ext.as_str())
 }
-
 
 #[cfg(test)]
 mod tests;

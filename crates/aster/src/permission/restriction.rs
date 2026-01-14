@@ -47,9 +47,9 @@ pub fn validate_restriction(restriction: &ParameterRestriction, value: &Value) -
 /// Requirements: 3.1
 fn validate_whitelist(restriction: &ParameterRestriction, value: &Value) -> bool {
     match &restriction.values {
-        Some(allowed_values) => {
-            allowed_values.iter().any(|allowed| values_equal(value, allowed))
-        }
+        Some(allowed_values) => allowed_values
+            .iter()
+            .any(|allowed| values_equal(value, allowed)),
         None => {
             // 没有指定白名单值，默认允许
             true
@@ -63,9 +63,9 @@ fn validate_whitelist(restriction: &ParameterRestriction, value: &Value) -> bool
 /// Requirements: 3.2
 fn validate_blacklist(restriction: &ParameterRestriction, value: &Value) -> bool {
     match &restriction.values {
-        Some(denied_values) => {
-            !denied_values.iter().any(|denied| values_equal(value, denied))
-        }
+        Some(denied_values) => !denied_values
+            .iter()
+            .any(|denied| values_equal(value, denied)),
         None => {
             // 没有指定黑名单值，默认允许
             true
@@ -179,7 +179,6 @@ fn values_equal(a: &Value, b: &Value) -> bool {
     }
 }
 
-
 /// 检查所有参数限制
 ///
 /// # Arguments
@@ -217,10 +216,7 @@ pub fn check_parameter_restrictions(
             None => {
                 // 参数不存在
                 if restriction.required {
-                    violations.push(format!(
-                        "Required parameter '{}' is missing",
-                        param_name
-                    ));
+                    violations.push(format!("Required parameter '{}' is missing", param_name));
                 }
                 // 非必需参数不存在时跳过验证
             }
@@ -289,7 +285,7 @@ fn format_violation(restriction: &ParameterRestriction, value: &Value) -> String
                 .map(|d| d.as_str())
                 .unwrap_or("custom validation");
             format!(
-                "Parameter '{}' value {} failed {}", 
+                "Parameter '{}' value {} failed {}",
                 param_name, value_str, desc
             )
         }
@@ -339,9 +335,18 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("ls".to_string())));
-        assert!(validate_restriction(&restriction, &Value::String("cat".to_string())));
-        assert!(!validate_restriction(&restriction, &Value::String("rm".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("ls".to_string())
+        ));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("cat".to_string())
+        ));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("rm".to_string())
+        ));
     }
 
     #[test]
@@ -371,7 +376,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(!validate_restriction(&restriction, &Value::String("ls".to_string())));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("ls".to_string())
+        ));
     }
 
     #[test]
@@ -383,7 +391,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("anything".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("anything".to_string())
+        ));
     }
 
     // ========================================================================
@@ -403,9 +414,18 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(!validate_restriction(&restriction, &Value::String("rm -rf".to_string())));
-        assert!(!validate_restriction(&restriction, &Value::String("sudo".to_string())));
-        assert!(validate_restriction(&restriction, &Value::String("ls".to_string())));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("rm -rf".to_string())
+        ));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("sudo".to_string())
+        ));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("ls".to_string())
+        ));
     }
 
     #[test]
@@ -417,7 +437,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("anything".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("anything".to_string())
+        ));
     }
 
     #[test]
@@ -429,7 +452,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("anything".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("anything".to_string())
+        ));
     }
 
     // ========================================================================
@@ -445,9 +471,18 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("/home/user/file.txt".to_string())));
-        assert!(validate_restriction(&restriction, &Value::String("/home/admin/docs".to_string())));
-        assert!(!validate_restriction(&restriction, &Value::String("/etc/passwd".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("/home/user/file.txt".to_string())
+        ));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("/home/admin/docs".to_string())
+        ));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("/etc/passwd".to_string())
+        ));
     }
 
     #[test]
@@ -473,7 +508,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(!validate_restriction(&restriction, &Value::String("anything".to_string())));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("anything".to_string())
+        ));
     }
 
     #[test]
@@ -485,7 +523,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("anything".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("anything".to_string())
+        ));
     }
 
     // ========================================================================
@@ -520,7 +561,10 @@ mod tests {
         };
 
         assert!(validate_restriction(&restriction, &serde_json::json!(0)));
-        assert!(validate_restriction(&restriction, &serde_json::json!(1000000)));
+        assert!(validate_restriction(
+            &restriction,
+            &serde_json::json!(1000000)
+        ));
         assert!(!validate_restriction(&restriction, &serde_json::json!(-1)));
     }
 
@@ -534,7 +578,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(validate_restriction(&restriction, &serde_json::json!(-1000)));
+        assert!(validate_restriction(
+            &restriction,
+            &serde_json::json!(-1000)
+        ));
         assert!(validate_restriction(&restriction, &serde_json::json!(100)));
         assert!(!validate_restriction(&restriction, &serde_json::json!(101)));
     }
@@ -549,8 +596,14 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("50".to_string())));
-        assert!(!validate_restriction(&restriction, &Value::String("0".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("50".to_string())
+        ));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("0".to_string())
+        ));
     }
 
     #[test]
@@ -563,7 +616,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(!validate_restriction(&restriction, &Value::String("not a number".to_string())));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("not a number".to_string())
+        ));
         assert!(!validate_restriction(&restriction, &Value::Bool(true)));
     }
 
@@ -586,8 +642,14 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("/safe/file.txt".to_string())));
-        assert!(!validate_restriction(&restriction, &Value::String("/unsafe/file.txt".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("/safe/file.txt".to_string())
+        ));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("/unsafe/file.txt".to_string())
+        ));
     }
 
     #[test]
@@ -599,7 +661,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("anything".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("anything".to_string())
+        ));
     }
 
     // ========================================================================

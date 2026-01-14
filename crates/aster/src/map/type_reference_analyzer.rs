@@ -5,8 +5,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use super::types::{ModuleNode, ClassNode, InterfaceNode};
-use super::types_enhanced::{TypeReference, TypeRefKind};
+use super::types::{ClassNode, InterfaceNode, ModuleNode};
+use super::types_enhanced::{TypeRefKind, TypeReference};
 
 /// 类型引用分析器
 pub struct TypeReferenceAnalyzer {
@@ -51,7 +51,6 @@ impl TypeReferenceAnalyzer {
 
         references
     }
-
 
     /// 构建类型索引
     fn build_type_index(&mut self, modules: &[ModuleNode]) {
@@ -115,7 +114,11 @@ impl TypeReferenceAnalyzer {
     }
 
     /// 分析接口的继承关系
-    fn analyze_interface_relations(&self, iface: &InterfaceNode, module: &ModuleNode) -> Vec<TypeReference> {
+    fn analyze_interface_relations(
+        &self,
+        iface: &InterfaceNode,
+        module: &ModuleNode,
+    ) -> Vec<TypeReference> {
         let mut refs = Vec::new();
 
         if let Some(ref extends) = iface.extends {
@@ -212,7 +215,6 @@ enum TypeKind {
     Class,
     Interface,
 }
-
 
 // ============================================================================
 // 类型使用分析
@@ -344,17 +346,65 @@ impl TypeUsageAnalyzer {
     /// 判断是否为自定义类型（非基础类型）
     fn is_custom_type(&self, type_name: &str) -> bool {
         let builtin_types: std::collections::HashSet<&str> = [
-            "string", "number", "boolean", "void", "null", "undefined",
-            "any", "unknown", "never", "object", "symbol", "bigint",
-            "String", "Number", "Boolean", "Object", "Symbol", "BigInt",
-            "Array", "Map", "Set", "WeakMap", "WeakSet", "Promise",
-            "Date", "RegExp", "Error", "Function",
+            "string",
+            "number",
+            "boolean",
+            "void",
+            "null",
+            "undefined",
+            "any",
+            "unknown",
+            "never",
+            "object",
+            "symbol",
+            "bigint",
+            "String",
+            "Number",
+            "Boolean",
+            "Object",
+            "Symbol",
+            "BigInt",
+            "Array",
+            "Map",
+            "Set",
+            "WeakMap",
+            "WeakSet",
+            "Promise",
+            "Date",
+            "RegExp",
+            "Error",
+            "Function",
             // Rust types
-            "str", "i8", "i16", "i32", "i64", "i128", "isize",
-            "u8", "u16", "u32", "u64", "u128", "usize",
-            "f32", "f64", "bool", "char", "Vec", "HashMap", "HashSet",
-            "Option", "Result", "Box", "Rc", "Arc", "RefCell", "Cell",
-        ].into_iter().collect();
+            "str",
+            "i8",
+            "i16",
+            "i32",
+            "i64",
+            "i128",
+            "isize",
+            "u8",
+            "u16",
+            "u32",
+            "u64",
+            "u128",
+            "usize",
+            "f32",
+            "f64",
+            "bool",
+            "char",
+            "Vec",
+            "HashMap",
+            "HashSet",
+            "Option",
+            "Result",
+            "Box",
+            "Rc",
+            "Arc",
+            "RefCell",
+            "Cell",
+        ]
+        .into_iter()
+        .collect();
 
         let base_name = self.extract_type_name(type_name);
         !builtin_types.contains(base_name.as_str())
@@ -370,10 +420,7 @@ impl TypeUsageAnalyzer {
             .replace('&', " ");
 
         // 取第一个单词
-        name.split_whitespace()
-            .next()
-            .unwrap_or(&name)
-            .to_string()
+        name.split_whitespace().next().unwrap_or(&name).to_string()
     }
 }
 
@@ -391,10 +438,7 @@ pub fn analyze_type_references(
 }
 
 /// 分析类型使用
-pub fn analyze_type_usages(
-    root_path: impl AsRef<Path>,
-    modules: &[ModuleNode],
-) -> Vec<TypeUsage> {
+pub fn analyze_type_usages(root_path: impl AsRef<Path>, modules: &[ModuleNode]) -> Vec<TypeUsage> {
     let analyzer = TypeUsageAnalyzer::new(root_path);
     analyzer.analyze(modules)
 }

@@ -6,13 +6,13 @@
 //! These tests verify that the new permission system correctly handles
 //! the existing Permission enum (AlwaysAllow, AllowOnce, Cancel, DenyOnce).
 
+use aster::config::permission::PermissionLevel;
 use aster::permission::{
     create_permission, is_permission_allowed, is_permission_permanent,
     permission_level_to_permission, permission_level_to_tool_permission,
-    permission_to_permission_level, permission_to_result, result_to_permission,
-    Permission, PermissionResult, PermissionScope,
+    permission_to_permission_level, permission_to_result, result_to_permission, Permission,
+    PermissionResult, PermissionScope,
 };
-use aster::config::permission::PermissionLevel;
 use proptest::prelude::*;
 
 // ============================================================================
@@ -429,6 +429,9 @@ mod unit_tests {
         // Edge case: special characters in tool name
         let result = permission_to_result(&Permission::AlwaysAllow, "tool_with_special_chars_123");
         assert!(result.allowed);
-        assert!(result.reason.unwrap().contains("tool_with_special_chars_123"));
+        assert!(result
+            .reason
+            .unwrap()
+            .contains("tool_with_special_chars_123"));
     }
 }

@@ -2,8 +2,8 @@
 //!
 //! 生成和格式化诊断报告
 
+use super::checker::{run_diagnostics, CheckStatus, DiagnosticCheck};
 use serde::{Deserialize, Serialize};
-use super::checker::{DiagnosticCheck, CheckStatus, run_diagnostics};
 
 /// 诊断选项
 #[derive(Debug, Clone, Default)]
@@ -15,7 +15,6 @@ pub struct DiagnosticOptions {
     /// 自动修复
     pub fix: bool,
 }
-
 
 /// 系统信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,7 +42,6 @@ pub struct CpuInfo {
     pub load_average: Vec<f64>,
 }
 
-
 /// 诊断报告
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosticReport {
@@ -69,16 +67,24 @@ pub struct ReportSummary {
     pub failed: usize,
 }
 
-
 impl DiagnosticReport {
     /// 生成诊断报告
     pub fn generate(options: &DiagnosticOptions) -> Self {
         let checks = run_diagnostics();
 
         let summary = ReportSummary {
-            passed: checks.iter().filter(|c| c.status == CheckStatus::Pass).count(),
-            warnings: checks.iter().filter(|c| c.status == CheckStatus::Warn).count(),
-            failed: checks.iter().filter(|c| c.status == CheckStatus::Fail).count(),
+            passed: checks
+                .iter()
+                .filter(|c| c.status == CheckStatus::Pass)
+                .count(),
+            warnings: checks
+                .iter()
+                .filter(|c| c.status == CheckStatus::Warn)
+                .count(),
+            failed: checks
+                .iter()
+                .filter(|c| c.status == CheckStatus::Fail)
+                .count(),
         };
 
         let system_info = if options.verbose {
@@ -115,7 +121,6 @@ impl DiagnosticReport {
         }
     }
 }
-
 
 /// 格式化诊断报告
 pub fn format_diagnostic_report(report: &DiagnosticReport, options: &DiagnosticOptions) -> String {

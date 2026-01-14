@@ -35,8 +35,7 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 
 use crate::mcp::error::{McpError, McpResult};
 use crate::mcp::types::{
-    HealthCheckResult, LifecycleOptions, McpServerConfig, ServerProcess, ServerState,
-    TransportType,
+    HealthCheckResult, LifecycleOptions, McpServerConfig, ServerProcess, ServerState, TransportType,
 };
 
 /// Lifecycle event for monitoring server state changes
@@ -45,7 +44,10 @@ pub enum LifecycleEvent {
     /// Server is starting
     Starting { server_name: String },
     /// Server started successfully
-    Started { server_name: String, pid: Option<u32> },
+    Started {
+        server_name: String,
+        pid: Option<u32>,
+    },
     /// Server is stopping
     Stopping {
         server_name: String,
@@ -552,7 +554,6 @@ impl Default for McpLifecycleManager {
     }
 }
 
-
 #[async_trait]
 impl LifecycleManager for McpLifecycleManager {
     fn register_server(&self, name: &str, config: McpServerConfig) {
@@ -567,7 +568,14 @@ impl LifecycleManager for McpLifecycleManager {
     async fn unregister_server(&self, name: &str) -> McpResult<()> {
         // Stop the server first if running
         if self.is_running(name) {
-            self.stop(name, Some(StopOptions { force: true, reason: Some("Unregistering server".to_string()) })).await?;
+            self.stop(
+                name,
+                Some(StopOptions {
+                    force: true,
+                    reason: Some("Unregistering server".to_string()),
+                }),
+            )
+            .await?;
         }
 
         let mut servers = self.servers.write().await;
@@ -607,7 +615,10 @@ impl LifecycleManager for McpLifecycleManager {
             // Only stdio servers can be started as processes
             if server.config.transport_type != TransportType::Stdio {
                 return Err(McpError::lifecycle(
-                    format!("Only stdio servers can be started as processes, got {:?}", server.config.transport_type),
+                    format!(
+                        "Only stdio servers can be started as processes, got {:?}",
+                        server.config.transport_type
+                    ),
                     Some(server_name.to_string()),
                 ));
             }
@@ -651,10 +662,7 @@ impl LifecycleManager for McpLifecycleManager {
 
         // Spawn process with timeout
         let startup_timeout = self.options.startup_timeout;
-        let spawn_result = tokio::time::timeout(startup_timeout, async {
-            cmd.spawn()
-        })
-        .await;
+        let spawn_result = tokio::time::timeout(startup_timeout, async { cmd.spawn() }).await;
 
         let mut child = match spawn_result {
             Ok(Ok(child)) => child,
@@ -814,9 +822,7 @@ impl LifecycleManager for McpLifecycleManager {
         // Get child process
         let mut child = {
             let mut servers = self.servers.write().await;
-            servers
-                .get_mut(server_name)
-                .and_then(|s| s.child.take())
+            servers.get_mut(server_name).and_then(|s| s.child.take())
         };
 
         if let Some(ref mut child) = child {
@@ -1044,7 +1050,6 @@ impl LifecycleManager for McpLifecycleManager {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

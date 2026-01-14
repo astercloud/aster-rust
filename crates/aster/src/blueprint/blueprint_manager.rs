@@ -7,13 +7,13 @@
 //! 3. 蓝图签字确认流程
 //! 4. 蓝图变更管理
 
+use anyhow::{anyhow, Result};
+use chrono::Utc;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::Utc;
 use uuid::Uuid;
-use anyhow::{Result, anyhow};
 
 use super::types::*;
 
@@ -50,7 +50,6 @@ impl BlueprintManager {
         Self::new(storage_dir)
     }
 
-
     // ------------------------------------------------------------------------
     // 创建蓝图
     // ------------------------------------------------------------------------
@@ -61,19 +60,15 @@ impl BlueprintManager {
     /// - 如果已有蓝图且处于 draft 状态，返回现有蓝图
     /// - 如果已有蓝图且处于其他状态，返回错误
     /// - 如果没有蓝图，创建新的
-    pub async fn create_blueprint(
-        &self,
-        name: String,
-        description: String,
-    ) -> Result<Blueprint> {
+    pub async fn create_blueprint(&self, name: String, description: String) -> Result<Blueprint> {
         let mut blueprints = self.blueprints.write().await;
-        
+
         // 单蓝图约束：检查是否已有蓝图
         let existing: Vec<_> = blueprints.values().collect();
-        
+
         if !existing.is_empty() {
             let existing_bp = existing[0];
-            
+
             match existing_bp.status {
                 BlueprintStatus::Draft => {
                     // 清空并重新生成
@@ -93,10 +88,10 @@ impl BlueprintManager {
                         changes: None,
                         author: ChangeAuthor::Agent,
                     });
-                    
+
                     blueprints.insert(bp.id.clone(), bp.clone());
                     *self.current_blueprint_id.write().await = Some(bp.id.clone());
-                    
+
                     return Ok(bp);
                 }
                 BlueprintStatus::Completed => {
@@ -115,13 +110,12 @@ impl BlueprintManager {
         // 创建新蓝图
         let blueprint = Blueprint::new(name, description);
         let id = blueprint.id.clone();
-        
+
         blueprints.insert(id.clone(), blueprint.clone());
         *self.current_blueprint_id.write().await = Some(id);
-        
+
         Ok(blueprint)
     }
-
 
     // ------------------------------------------------------------------------
     // 蓝图内容操作
@@ -207,7 +201,6 @@ impl BlueprintManager {
         });
     }
 
-
     // ------------------------------------------------------------------------
     // 蓝图状态流转
     // ------------------------------------------------------------------------
@@ -219,8 +212,8 @@ impl BlueprintManager {
             .get_mut(blueprint_id)
             .ok_or_else(|| anyhow!("Blueprint {} not found", blueprint_id))?;
 
-        if blueprint.status != BlueprintStatus::Draft 
-            && blueprint.status != BlueprintStatus::Modified 
+        if blueprint.status != BlueprintStatus::Draft
+            && blueprint.status != BlueprintStatus::Modified
         {
             return Err(anyhow!(
                 "Cannot submit blueprint in {:?} status for review",
@@ -280,11 +273,7 @@ impl BlueprintManager {
     }
 
     /// 拒绝蓝图
-    pub async fn reject_blueprint(
-        &self,
-        blueprint_id: &str,
-        reason: &str,
-    ) -> Result<Blueprint> {
+    pub async fn reject_blueprint(&self, blueprint_id: &str, reason: &str) -> Result<Blueprint> {
         let mut blueprints = self.blueprints.write().await;
         let blueprint = blueprints
             .get_mut(blueprint_id)
@@ -310,7 +299,6 @@ impl BlueprintManager {
 
         Ok(blueprint.clone())
     }
-
 
     /// 开始执行蓝图
     pub async fn start_execution(
@@ -406,7 +394,6 @@ impl BlueprintManager {
         Ok(blueprint.clone())
     }
 
-
     // ------------------------------------------------------------------------
     // 验证
     // ------------------------------------------------------------------------
@@ -442,9 +429,9 @@ impl BlueprintManager {
         }
 
         // 验证模块依赖关系
-        let module_ids: std::collections::HashSet<_> = 
+        let module_ids: std::collections::HashSet<_> =
             blueprint.modules.iter().map(|m| m.id.as_str()).collect();
-        
+
         for module in &blueprint.modules {
             for dep_id in &module.dependencies {
                 if !module_ids.contains(dep_id.as_str()) {
@@ -471,9 +458,9 @@ impl BlueprintManager {
     fn detect_cyclic_dependencies(&self, modules: &[SystemModule]) -> Option<Vec<String>> {
         use std::collections::{HashMap, HashSet};
 
-        let module_map: HashMap<&str, &SystemModule> = 
+        let module_map: HashMap<&str, &SystemModule> =
             modules.iter().map(|m| (m.id.as_str(), m)).collect();
-        
+
         let mut visited = HashSet::new();
         let mut rec_stack = HashSet::new();
 
@@ -494,7 +481,7 @@ impl BlueprintManager {
                         path.push(current_id.to_string());
                         return Some(path);
                     }
-                    
+
                     visited.insert(current_id);
                     rec_stack.insert(current_id);
                     path.push(current_id.to_string());
@@ -502,18 +489,18 @@ impl BlueprintManager {
 
                 if let Some(current_module) = module_map.get(current_id) {
                     let deps = &current_module.dependencies;
-                    
+
                     if dep_index < deps.len() {
                         // 还有依赖需要处理
                         stack.push((current_id, dep_index + 1));
-                        
+
                         let dep_id = &deps[dep_index];
                         if rec_stack.contains(dep_id.as_str()) {
                             // 发现循环
                             path.push(dep_id.clone());
                             return Some(path);
                         }
-                        
+
                         if !visited.contains(dep_id.as_str()) {
                             stack.push((dep_id, 0));
                         }
@@ -532,7 +519,6 @@ impl BlueprintManager {
         None
     }
 
-
     // ------------------------------------------------------------------------
     // 查询
     // ------------------------------------------------------------------------
@@ -549,13 +535,10 @@ impl BlueprintManager {
         if let Some(id) = current_id.as_ref() {
             return self.get_blueprint(id).await;
         }
-        
+
         // 返回最新的蓝图
         let blueprints = self.blueprints.read().await;
-        blueprints
-            .values()
-            .max_by_key(|b| b.updated_at)
-            .cloned()
+        blueprints.values().max_by_key(|b| b.updated_at).cloned()
     }
 
     /// 设置当前蓝图
@@ -591,10 +574,12 @@ impl BlueprintManager {
     /// 删除蓝图
     pub async fn delete_blueprint(&self, id: &str) -> Result<bool> {
         let mut blueprints = self.blueprints.write().await;
-        
+
         if let Some(blueprint) = blueprints.get(id) {
             if blueprint.status == BlueprintStatus::Executing {
-                return Err(anyhow!("Cannot delete blueprint that is currently executing"));
+                return Err(anyhow!(
+                    "Cannot delete blueprint that is currently executing"
+                ));
             }
         }
 
@@ -611,7 +596,6 @@ impl BlueprintManager {
     }
 }
 
-
 // ============================================================================
 // 辅助函数
 // ============================================================================
@@ -621,14 +605,20 @@ pub fn generate_blueprint_summary(blueprint: &Blueprint) -> String {
     let mut lines = Vec::new();
 
     lines.push(format!("# 蓝图：{}", blueprint.name));
-    lines.push(format!("版本：{} | 状态：{:?}", blueprint.version, blueprint.status));
+    lines.push(format!(
+        "版本：{} | 状态：{:?}",
+        blueprint.version, blueprint.status
+    ));
     lines.push(String::new());
     lines.push("## 描述".to_string());
     lines.push(blueprint.description.clone());
     lines.push(String::new());
 
     if !blueprint.business_processes.is_empty() {
-        lines.push(format!("## 业务流程 ({})", blueprint.business_processes.len()));
+        lines.push(format!(
+            "## 业务流程 ({})",
+            blueprint.business_processes.len()
+        ));
         for process in &blueprint.business_processes {
             lines.push(format!(
                 "- **{}** ({:?}): {} 个步骤",
@@ -701,7 +691,7 @@ mod tests {
     #[tokio::test]
     async fn test_single_blueprint_constraint() {
         let manager = BlueprintManager::default();
-        
+
         // 创建第一个蓝图
         let bp1 = manager
             .create_blueprint("蓝图1".to_string(), "描述1".to_string())

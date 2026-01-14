@@ -7,12 +7,12 @@
 //! - Request cancellations
 //! - Custom server events
 
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use chrono::{DateTime, Utc};
 use tokio::sync::{broadcast, RwLock};
-use serde::{Deserialize, Serialize};
 
 /// Notification types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -109,10 +109,7 @@ pub enum NotificationEvent {
         total: Option<u64>,
     },
     /// Progress completed
-    ProgressComplete {
-        server_name: String,
-        token: String,
-    },
+    ProgressComplete { server_name: String, token: String },
     /// Request cancelled
     Cancelled {
         server_name: String,
@@ -125,14 +122,9 @@ pub enum NotificationEvent {
         list_type: NotificationType,
     },
     /// Resource updated
-    ResourceUpdated {
-        server_name: String,
-        uri: String,
-    },
+    ResourceUpdated { server_name: String, uri: String },
     /// History cleared
-    HistoryCleared {
-        count: usize,
-    },
+    HistoryCleared { count: usize },
 }
 
 /// Manages notifications from MCP servers
@@ -181,10 +173,13 @@ impl McpNotificationManager {
         self.add_to_history(notification.clone()).await;
 
         // Emit general event
-        let _ = self.event_sender.send(NotificationEvent::Notification(notification.clone()));
+        let _ = self
+            .event_sender
+            .send(NotificationEvent::Notification(notification.clone()));
 
         // Handle specific types
-        self.handle_specific_type(server_name, notification_type, params).await;
+        self.handle_specific_type(server_name, notification_type, params)
+            .await;
     }
 
     /// Get notification type from method name
@@ -295,7 +290,10 @@ impl McpNotificationManager {
             .and_then(|v| v.as_str())
             .unwrap_or("unknown")
             .to_string();
-        let reason = params.get("reason").and_then(|v| v.as_str()).map(String::from);
+        let reason = params
+            .get("reason")
+            .and_then(|v| v.as_str())
+            .map(String::from);
 
         let _ = self.event_sender.send(NotificationEvent::Cancelled {
             server_name: server_name.to_string(),
@@ -345,7 +343,9 @@ impl McpNotificationManager {
         let mut history = self.history.write().await;
         let count = history.len();
         history.clear();
-        let _ = self.event_sender.send(NotificationEvent::HistoryCleared { count });
+        let _ = self
+            .event_sender
+            .send(NotificationEvent::HistoryCleared { count });
     }
 
     /// Clear history for a specific server
@@ -358,7 +358,12 @@ impl McpNotificationManager {
 
     /// Get active progress operations
     pub async fn get_active_progress(&self) -> Vec<ProgressState> {
-        self.progress_states.read().await.values().cloned().collect()
+        self.progress_states
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect()
     }
 
     /// Get progress for a specific server
@@ -392,7 +397,9 @@ impl McpNotificationManager {
 
         for notification in history.iter() {
             *by_type.entry(notification.notification_type).or_insert(0) += 1;
-            *by_server.entry(notification.server_name.clone()).or_insert(0) += 1;
+            *by_server
+                .entry(notification.server_name.clone())
+                .or_insert(0) += 1;
         }
 
         NotificationStats {
@@ -440,7 +447,11 @@ pub struct NotificationStats {
 }
 
 /// Create progress notification parameters
-pub fn create_progress_params(token: &str, progress: u64, total: Option<u64>) -> ProgressNotification {
+pub fn create_progress_params(
+    token: &str,
+    progress: u64,
+    total: Option<u64>,
+) -> ProgressNotification {
     ProgressNotification {
         progress_token: token.to_string(),
         progress,
@@ -455,7 +466,10 @@ mod tests {
     #[test]
     fn test_notification_type_display() {
         assert_eq!(NotificationType::Progress.to_string(), "progress");
-        assert_eq!(NotificationType::ToolsListChanged.to_string(), "tools/list_changed");
+        assert_eq!(
+            NotificationType::ToolsListChanged.to_string(),
+            "tools/list_changed"
+        );
     }
 
     #[test]
@@ -477,30 +491,33 @@ mod tests {
     #[tokio::test]
     async fn test_handle_notification() {
         let manager = McpNotificationManager::new(100);
-        
-        manager.handle_notification(
-            "test-server",
-            "notifications/tools/list_changed",
-            None,
-        ).await;
+
+        manager
+            .handle_notification("test-server", "notifications/tools/list_changed", None)
+            .await;
 
         let history = manager.get_history(None).await;
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].server_name, "test-server");
-        assert_eq!(history[0].notification_type, NotificationType::ToolsListChanged);
+        assert_eq!(
+            history[0].notification_type,
+            NotificationType::ToolsListChanged
+        );
     }
 
     #[tokio::test]
     async fn test_handle_progress() {
         let manager = McpNotificationManager::new(100);
-        
+
         let params = serde_json::json!({
             "progressToken": "token-1",
             "progress": 50,
             "total": 100
         });
 
-        manager.handle_notification("test-server", "notifications/progress", Some(params)).await;
+        manager
+            .handle_notification("test-server", "notifications/progress", Some(params))
+            .await;
 
         let progress = manager.get_active_progress().await;
         assert_eq!(progress.len(), 1);
@@ -511,14 +528,16 @@ mod tests {
     #[tokio::test]
     async fn test_progress_complete() {
         let manager = McpNotificationManager::new(100);
-        
+
         let params = serde_json::json!({
             "progressToken": "token-1",
             "progress": 100,
             "total": 100
         });
 
-        manager.handle_notification("test-server", "notifications/progress", Some(params)).await;
+        manager
+            .handle_notification("test-server", "notifications/progress", Some(params))
+            .await;
 
         // Progress should be removed when complete
         let progress = manager.get_active_progress().await;
@@ -528,10 +547,16 @@ mod tests {
     #[tokio::test]
     async fn test_history_filter() {
         let manager = McpNotificationManager::new(100);
-        
-        manager.handle_notification("server-1", "notifications/progress", None).await;
-        manager.handle_notification("server-2", "notifications/tools/list_changed", None).await;
-        manager.handle_notification("server-1", "notifications/cancelled", None).await;
+
+        manager
+            .handle_notification("server-1", "notifications/progress", None)
+            .await;
+        manager
+            .handle_notification("server-2", "notifications/tools/list_changed", None)
+            .await;
+        manager
+            .handle_notification("server-1", "notifications/cancelled", None)
+            .await;
 
         let filter = NotificationFilter {
             server_name: Some("server-1".to_string()),
@@ -545,9 +570,13 @@ mod tests {
     #[tokio::test]
     async fn test_clear_history() {
         let manager = McpNotificationManager::new(100);
-        
-        manager.handle_notification("test-server", "notifications/progress", None).await;
-        manager.handle_notification("test-server", "notifications/cancelled", None).await;
+
+        manager
+            .handle_notification("test-server", "notifications/progress", None)
+            .await;
+        manager
+            .handle_notification("test-server", "notifications/cancelled", None)
+            .await;
 
         manager.clear_history().await;
 
@@ -558,10 +587,16 @@ mod tests {
     #[tokio::test]
     async fn test_get_stats() {
         let manager = McpNotificationManager::new(100);
-        
-        manager.handle_notification("server-1", "notifications/progress", None).await;
-        manager.handle_notification("server-1", "notifications/progress", None).await;
-        manager.handle_notification("server-2", "notifications/tools/list_changed", None).await;
+
+        manager
+            .handle_notification("server-1", "notifications/progress", None)
+            .await;
+        manager
+            .handle_notification("server-1", "notifications/progress", None)
+            .await;
+        manager
+            .handle_notification("server-2", "notifications/tools/list_changed", None)
+            .await;
 
         let stats = manager.get_stats().await;
         assert_eq!(stats.total_notifications, 3);

@@ -22,7 +22,6 @@ pub struct PdfReadResult {
     pub original_size: u64,
 }
 
-
 /// 检查是否支持 PDF
 pub fn is_pdf_supported() -> bool {
     std::env::var("ASTER_PDF_SUPPORT")
@@ -47,11 +46,10 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
-
 /// 读取 PDF 文件并返回 base64
 pub fn read_pdf_file(file_path: &Path) -> Result<PdfReadResult, String> {
-    let metadata = fs::metadata(file_path)
-        .map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    let metadata =
+        fs::metadata(file_path).map_err(|e| format!("Failed to read file metadata: {}", e))?;
 
     let size = metadata.len();
 
@@ -67,8 +65,7 @@ pub fn read_pdf_file(file_path: &Path) -> Result<PdfReadResult, String> {
         ));
     }
 
-    let buffer = fs::read(file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let buffer = fs::read(file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     let base64 = STANDARD.encode(&buffer);
 
@@ -79,15 +76,14 @@ pub fn read_pdf_file(file_path: &Path) -> Result<PdfReadResult, String> {
     })
 }
 
-
 /// 验证 PDF 文件是否有效
 pub fn validate_pdf_file(file_path: &Path) -> Result<(), String> {
     if !file_path.exists() {
         return Err("File does not exist".to_string());
     }
 
-    let metadata = fs::metadata(file_path)
-        .map_err(|e| format!("Failed to read metadata: {}", e))?;
+    let metadata =
+        fs::metadata(file_path).map_err(|e| format!("Failed to read metadata: {}", e))?;
 
     let size = metadata.len();
 
@@ -104,8 +100,7 @@ pub fn validate_pdf_file(file_path: &Path) -> Result<(), String> {
     }
 
     // 验证文件头（PDF 文件应以 %PDF- 开头）
-    let buffer = fs::read(file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let buffer = fs::read(file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     if buffer.len() >= 5 {
         let header = std::str::from_utf8(&buffer[..5]).unwrap_or("");

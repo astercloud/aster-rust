@@ -175,7 +175,10 @@ fn test_handle_context_overflow_success() {
 fn test_handle_context_overflow_not_overflow() {
     let message = "some other error";
     let result = handle_context_overflow(400, message, 0);
-    assert!(matches!(result, Err(OverflowRecoveryError::NotOverflowError)));
+    assert!(matches!(
+        result,
+        Err(OverflowRecoveryError::NotOverflowError)
+    ));
 }
 
 #[test]

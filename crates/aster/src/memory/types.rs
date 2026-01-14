@@ -44,7 +44,6 @@ pub enum MemoryEmotion {
     Meaningful,
 }
 
-
 /// 对话摘要
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationSummary {
@@ -107,7 +106,6 @@ pub enum MessageRole {
     User,
     Assistant,
 }
-
 
 /// 对话记忆存储
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,7 +181,6 @@ pub struct LinkMemoryStore {
     pub last_updated: Timestamp,
 }
 
-
 /// 用户画像
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UserProfile {
@@ -238,7 +235,6 @@ pub struct IdentityMemoryStore {
     /// 最后更新时间
     pub last_updated: Timestamp,
 }
-
 
 /// 记忆检索结果
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -320,7 +316,6 @@ pub enum MemoryEventType {
     CodeChange,
     ExplicitRemember,
 }
-
 
 /// 层级记忆配置
 #[derive(Debug, Clone, Serialize, Deserialize)]

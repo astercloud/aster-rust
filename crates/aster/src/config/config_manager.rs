@@ -47,7 +47,6 @@ impl ConfigSource {
     }
 }
 
-
 /// 配置源信息
 #[derive(Debug, Clone)]
 pub struct ConfigSourceInfo {
@@ -77,7 +76,6 @@ pub struct ConfigKeySource {
     /// 被哪些来源覆盖
     pub overridden_by: Vec<ConfigSource>,
 }
-
 
 /// 企业策略配置
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -110,7 +108,6 @@ pub struct PolicyMetadata {
     pub organization_id: Option<String>,
     pub policy_name: Option<String>,
 }
-
 
 /// 配置管理器选项
 #[derive(Debug, Clone, Default)]
@@ -162,7 +159,6 @@ pub struct ConfigManager {
     debug_mode: bool,
 }
 
-
 impl ConfigManager {
     /// 创建新的配置管理器
     pub fn new(options: ConfigManagerOptions) -> Self {
@@ -173,11 +169,7 @@ impl ConfigManager {
         // 全局配置目录
         let global_config_dir = std::env::var("ASTER_CONFIG_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| {
-                dirs::home_dir()
-                    .unwrap_or_default()
-                    .join(".aster")
-            });
+            .unwrap_or_else(|_| dirs::home_dir().unwrap_or_default().join(".aster"));
 
         // 用户配置文件
         let user_config_file = global_config_dir.join("settings.yaml");
@@ -198,7 +190,9 @@ impl ConfigManager {
         let local_config_file = working_dir.join(".aster").join("settings.local.yaml");
 
         let debug_mode = options.debug_mode
-            || std::env::var("ASTER_DEBUG").map(|v| v == "true").unwrap_or(false);
+            || std::env::var("ASTER_DEBUG")
+                .map(|v| v == "true")
+                .unwrap_or(false);
 
         let mut manager = Self {
             global_config_dir,
@@ -222,7 +216,6 @@ impl ConfigManager {
         manager.load_and_merge_config();
         manager
     }
-
 
     /// 加载并合并所有配置源
     ///
@@ -258,7 +251,12 @@ impl ConfigManager {
         // 2. 加载企业策略默认值
         if let Some(policy) = self.load_enterprise_policy() {
             if !policy.defaults.is_empty() {
-                self.merge_config(&mut config, &policy.defaults, ConfigSource::PolicySettings, Some(&self.policy_config_file.clone()));
+                self.merge_config(
+                    &mut config,
+                    &policy.defaults,
+                    ConfigSource::PolicySettings,
+                    Some(&self.policy_config_file.clone()),
+                );
                 self.debug_log("加载企业策略默认值");
             }
             *self.enterprise_policy.write() = Some(policy);
@@ -275,7 +273,12 @@ impl ConfigManager {
         });
         if user_exists {
             if let Some(user_config) = self.load_config_file(&self.user_config_file) {
-                self.merge_config(&mut config, &user_config, ConfigSource::UserSettings, Some(&self.user_config_file.clone()));
+                self.merge_config(
+                    &mut config,
+                    &user_config,
+                    ConfigSource::UserSettings,
+                    Some(&self.user_config_file.clone()),
+                );
                 self.debug_log(&format!("加载用户配置: {:?}", self.user_config_file));
             }
         }
@@ -291,7 +294,12 @@ impl ConfigManager {
         });
         if project_exists {
             if let Some(project_config) = self.load_config_file(&self.project_config_file) {
-                self.merge_config(&mut config, &project_config, ConfigSource::ProjectSettings, Some(&self.project_config_file.clone()));
+                self.merge_config(
+                    &mut config,
+                    &project_config,
+                    ConfigSource::ProjectSettings,
+                    Some(&self.project_config_file.clone()),
+                );
                 self.debug_log(&format!("加载项目配置: {:?}", self.project_config_file));
             }
         }
@@ -307,7 +315,12 @@ impl ConfigManager {
         });
         if local_exists {
             if let Some(local_config) = self.load_config_file(&self.local_config_file) {
-                self.merge_config(&mut config, &local_config, ConfigSource::LocalSettings, Some(&self.local_config_file.clone()));
+                self.merge_config(
+                    &mut config,
+                    &local_config,
+                    ConfigSource::LocalSettings,
+                    Some(&self.local_config_file.clone()),
+                );
                 self.debug_log(&format!("加载本地配置: {:?}", self.local_config_file));
             }
         }
@@ -338,7 +351,12 @@ impl ConfigManager {
             });
             if flag_exists {
                 if let Some(flag_config) = self.load_config_file(flag_file) {
-                    self.merge_config(&mut config, &flag_config, ConfigSource::FlagSettings, Some(flag_file));
+                    self.merge_config(
+                        &mut config,
+                        &flag_config,
+                        ConfigSource::FlagSettings,
+                        Some(flag_file),
+                    );
                     self.debug_log(&format!("加载标志配置: {:?}", flag_file));
                 }
             }
@@ -346,14 +364,24 @@ impl ConfigManager {
 
         // 8. CLI 标志
         if !self.cli_flags.is_empty() {
-            self.merge_config(&mut config, &self.cli_flags, ConfigSource::FlagSettings, None);
+            self.merge_config(
+                &mut config,
+                &self.cli_flags,
+                ConfigSource::FlagSettings,
+                None,
+            );
             self.debug_log(&format!("应用 {} 个 CLI 标志", self.cli_flags.len()));
         }
 
         // 9. 企业策略强制设置（最高优先级）
         if let Some(ref policy) = *self.enterprise_policy.read() {
             if !policy.enforced.is_empty() {
-                self.merge_config(&mut config, &policy.enforced, ConfigSource::PolicySettings, Some(&self.policy_config_file.clone()));
+                self.merge_config(
+                    &mut config,
+                    &policy.enforced,
+                    ConfigSource::PolicySettings,
+                    Some(&self.policy_config_file.clone()),
+                );
                 self.loaded_sources.write().push(ConfigSourceInfo {
                     source: ConfigSource::PolicySettings,
                     path: Some(self.policy_config_file.clone()),
@@ -372,13 +400,18 @@ impl ConfigManager {
         }
     }
 
-
     /// 获取默认配置
     fn get_default_config(&self) -> HashMap<String, Value> {
         let mut defaults = HashMap::new();
-        defaults.insert("model".to_string(), Value::String("claude-3-5-sonnet".to_string()));
+        defaults.insert(
+            "model".to_string(),
+            Value::String("claude-3-5-sonnet".to_string()),
+        );
         defaults.insert("max_tokens".to_string(), Value::Number(4096.into()));
-        defaults.insert("temperature".to_string(), Value::Number(serde_json::Number::from_f64(0.7).unwrap()));
+        defaults.insert(
+            "temperature".to_string(),
+            Value::Number(serde_json::Number::from_f64(0.7).unwrap()),
+        );
         defaults.insert("enable_telemetry".to_string(), Value::Bool(false));
         defaults.insert("theme".to_string(), Value::String("auto".to_string()));
         defaults
@@ -404,7 +437,6 @@ impl ConfigManager {
         }
         config
     }
-
 
     /// 解析环境变量值
     fn parse_env_value(&self, val: &str) -> Option<Value> {
@@ -438,7 +470,6 @@ impl ConfigManager {
         Some(Value::String(val.to_string()))
     }
 
-
     /// 加载配置文件
     fn load_config_file(&self, path: &Path) -> Option<HashMap<String, Value>> {
         if !path.exists() {
@@ -471,7 +502,6 @@ impl ConfigManager {
         }
     }
 
-
     /// 加载企业策略配置
     fn load_enterprise_policy(&self) -> Option<EnterprisePolicyConfig> {
         if !self.policy_config_file.exists() {
@@ -500,7 +530,6 @@ impl ConfigManager {
         }
     }
 
-
     /// 合并配置并追踪来源
     fn merge_config(
         &self,
@@ -528,14 +557,15 @@ impl ConfigManager {
             // 更新来源
             self.config_sources.write().insert(key.clone(), source);
             if let Some(path) = source_path {
-                self.config_source_paths.write().insert(key.clone(), path.clone());
+                self.config_source_paths
+                    .write()
+                    .insert(key.clone(), path.clone());
             }
 
             // 深度合并
             base.insert(key.clone(), self.deep_merge(base.get(key), value));
         }
     }
-
 
     /// 深度合并值
     fn deep_merge(&self, base: Option<&Value>, override_val: &Value) -> Value {
@@ -562,11 +592,12 @@ impl ConfigManager {
         for key in config.keys() {
             self.config_sources.write().insert(key.clone(), source);
             if let Some(path) = source_path {
-                self.config_source_paths.write().insert(key.clone(), path.clone());
+                self.config_source_paths
+                    .write()
+                    .insert(key.clone(), path.clone());
             }
         }
     }
-
 
     /// 调试日志
     fn debug_log(&self, message: &str) {
@@ -581,15 +612,26 @@ impl ConfigManager {
         tracing::debug!("已加载的配置源:");
         for source in self.loaded_sources.read().iter() {
             let status = if source.exists { "OK" } else { "未找到" };
-            let path_info = source.path.as_ref()
+            let path_info = source
+                .path
+                .as_ref()
                 .map(|p| format!(" ({:?})", p))
                 .unwrap_or_default();
-            tracing::debug!("  [{}] {:?}{}: {}", source.priority, source.source, path_info, status);
+            tracing::debug!(
+                "  [{}] {:?}{}: {}",
+                source.priority,
+                source.source,
+                path_info,
+                status
+            );
         }
 
         tracing::debug!("\n配置项来源:");
         for (key, source) in self.config_sources.read().iter() {
-            let path_info = self.config_source_paths.read().get(key)
+            let path_info = self
+                .config_source_paths
+                .read()
+                .get(key)
                 .map(|p| format!(" ({:?})", p))
                 .unwrap_or_default();
             tracing::debug!("  {}: {:?}{}", key, source, path_info);
@@ -597,12 +639,13 @@ impl ConfigManager {
         tracing::debug!("================================\n");
     }
 
-
     // ============ 公共 API ============
 
     /// 获取配置项
     pub fn get<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Option<T> {
-        self.merged_config.read().get(key)
+        self.merged_config
+            .read()
+            .get(key)
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 
@@ -619,7 +662,9 @@ impl ConfigManager {
     /// 设置配置项
     pub fn set<T: Serialize>(&self, key: &str, value: T) {
         if let Ok(json_value) = serde_json::to_value(value) {
-            self.merged_config.write().insert(key.to_string(), json_value);
+            self.merged_config
+                .write()
+                .insert(key.to_string(), json_value);
         }
     }
 
@@ -628,11 +673,18 @@ impl ConfigManager {
         self.merged_config.read().clone()
     }
 
-
     /// 获取配置项及其来源
-    pub fn get_with_source<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Option<(T, ConfigSource, Option<PathBuf>)> {
+    pub fn get_with_source<T: for<'de> Deserialize<'de>>(
+        &self,
+        key: &str,
+    ) -> Option<(T, ConfigSource, Option<PathBuf>)> {
         let value = self.get::<T>(key)?;
-        let source = self.config_sources.read().get(key).copied().unwrap_or(ConfigSource::Default);
+        let source = self
+            .config_sources
+            .read()
+            .get(key)
+            .copied()
+            .unwrap_or(ConfigSource::Default);
         let path = self.config_source_paths.read().get(key).cloned();
         Some((value, source, path))
     }
@@ -654,13 +706,17 @@ impl ConfigManager {
 
     /// 获取配置项的覆盖历史
     pub fn get_config_history(&self, key: &str) -> Vec<ConfigKeySource> {
-        self.config_history.read().get(key).cloned().unwrap_or_default()
+        self.config_history
+            .read()
+            .get(key)
+            .cloned()
+            .unwrap_or_default()
     }
-
 
     /// 检查配置项是否被企业策略强制
     pub fn is_enforced_by_policy(&self, key: &str) -> bool {
-        self.enterprise_policy.read()
+        self.enterprise_policy
+            .read()
             .as_ref()
             .map(|p| p.enforced.contains_key(key))
             .unwrap_or(false)
@@ -673,7 +729,8 @@ impl ConfigManager {
 
     /// 检查功能是否被禁用
     pub fn is_feature_disabled(&self, feature: &str) -> bool {
-        self.enterprise_policy.read()
+        self.enterprise_policy
+            .read()
             .as_ref()
             .map(|p| p.disabled_features.contains(&feature.to_string()))
             .unwrap_or(false)
@@ -683,16 +740,24 @@ impl ConfigManager {
     pub fn get_config_paths(&self) -> HashMap<String, PathBuf> {
         let mut paths = HashMap::new();
         paths.insert("user_settings".to_string(), self.user_config_file.clone());
-        paths.insert("project_settings".to_string(), self.project_config_file.clone());
+        paths.insert(
+            "project_settings".to_string(),
+            self.project_config_file.clone(),
+        );
         paths.insert("local_settings".to_string(), self.local_config_file.clone());
-        paths.insert("policy_settings".to_string(), self.policy_config_file.clone());
-        paths.insert("global_config_dir".to_string(), self.global_config_dir.clone());
+        paths.insert(
+            "policy_settings".to_string(),
+            self.policy_config_file.clone(),
+        );
+        paths.insert(
+            "global_config_dir".to_string(),
+            self.global_config_dir.clone(),
+        );
         if let Some(ref flag_file) = self.flag_config_file {
             paths.insert("flag_settings".to_string(), flag_file.clone());
         }
         paths
     }
-
 
     // ============ 保存和重载 ============
 
@@ -732,7 +797,9 @@ impl ConfigManager {
         }
 
         // 合并现有本地配置
-        let mut local_config = self.load_config_file(&self.local_config_file).unwrap_or_default();
+        let mut local_config = self
+            .load_config_file(&self.local_config_file)
+            .unwrap_or_default();
         local_config.extend(filtered_config);
 
         self.backup_config(&self.local_config_file)?;
@@ -742,14 +809,15 @@ impl ConfigManager {
         fs::write(&self.local_config_file, yaml)
     }
 
-
     /// 保存到项目配置文件
     pub fn save_project(&self, config: &HashMap<String, Value>) -> Result<(), std::io::Error> {
         if let Some(parent) = self.project_config_file.parent() {
             fs::create_dir_all(parent)?;
         }
 
-        let mut project_config = self.load_config_file(&self.project_config_file).unwrap_or_default();
+        let mut project_config = self
+            .load_config_file(&self.project_config_file)
+            .unwrap_or_default();
         project_config.extend(config.clone());
 
         let yaml = serde_yaml::to_string(&project_config)
@@ -811,7 +879,6 @@ impl ConfigManager {
         Ok(())
     }
 
-
     // ============ 备份和恢复 ============
 
     /// 备份配置文件
@@ -820,14 +887,16 @@ impl ConfigManager {
             return Ok(());
         }
 
-        let backup_dir = file_path.parent()
+        let backup_dir = file_path
+            .parent()
             .map(|p| p.join(".backups"))
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "无效路径"))?;
 
         fs::create_dir_all(&backup_dir)?;
 
         let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H-%M-%S");
-        let filename = file_path.file_stem()
+        let filename = file_path
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("config");
         let backup_path = backup_dir.join(format!("{}.{}.yaml", filename, timestamp));
@@ -852,7 +921,6 @@ impl ConfigManager {
         Ok(())
     }
 
-
     /// 列出可用备份
     pub fn list_backups(&self, config_type: &str) -> Vec<String> {
         let config_file = match config_type {
@@ -871,7 +939,8 @@ impl ConfigManager {
             return Vec::new();
         }
 
-        let filename = config_file.file_stem()
+        let filename = config_file
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("settings");
 
@@ -890,23 +959,35 @@ impl ConfigManager {
             .unwrap_or_default()
     }
 
-
     /// 从备份恢复
-    pub fn restore_from_backup(&mut self, backup_filename: &str, config_type: &str) -> Result<(), std::io::Error> {
+    pub fn restore_from_backup(
+        &mut self,
+        backup_filename: &str,
+        config_type: &str,
+    ) -> Result<(), std::io::Error> {
         let config_file = match config_type {
             "user" => &self.user_config_file,
             "project" => &self.project_config_file,
             "local" => &self.local_config_file,
-            _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "无效的配置类型")),
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "无效的配置类型",
+                ))
+            }
         };
 
-        let backup_dir = config_file.parent()
+        let backup_dir = config_file
+            .parent()
             .map(|p| p.join(".backups"))
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "无效路径"))?;
 
         let backup_path = backup_dir.join(backup_filename);
         if !backup_path.exists() {
-            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "备份文件不存在"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "备份文件不存在",
+            ));
         }
 
         // 备份当前配置
@@ -925,7 +1006,6 @@ impl ConfigManager {
         *self.merged_config.write() = self.get_default_config();
         let _ = self.save(None);
     }
-
 
     // ============ 导出和导入 ============
 
@@ -951,7 +1031,7 @@ impl ConfigManager {
             if sensitive_keys.iter().any(|s| key_lower.contains(s)) {
                 if let Value::String(s) = value {
                     if s.len() > 8 {
-                        *value = Value::String(format!("{}...{}", &s[..4], &s[s.len()-4..]));
+                        *value = Value::String(format!("{}...{}", &s[..4], &s[s.len() - 4..]));
                     } else {
                         *value = Value::String("****".to_string());
                     }
@@ -963,15 +1043,14 @@ impl ConfigManager {
 
     /// 导入配置
     pub fn import(&mut self, config_json: &str) -> Result<(), String> {
-        let config: HashMap<String, Value> = serde_json::from_str(config_json)
-            .map_err(|e| format!("JSON 解析失败: {}", e))?;
+        let config: HashMap<String, Value> =
+            serde_json::from_str(config_json).map_err(|e| format!("JSON 解析失败: {}", e))?;
 
         *self.merged_config.write() = config;
         self.save(None).map_err(|e| format!("保存失败: {}", e))?;
         Ok(())
     }
 }
-
 
 impl Default for ConfigManager {
     fn default() -> Self {
@@ -1018,19 +1097,33 @@ mod tests {
 
         assert_eq!(manager.parse_env_value("true"), Some(Value::Bool(true)));
         assert_eq!(manager.parse_env_value("false"), Some(Value::Bool(false)));
-        assert_eq!(manager.parse_env_value("42"), Some(Value::Number(42.into())));
-        assert_eq!(manager.parse_env_value("hello"), Some(Value::String("hello".to_string())));
+        assert_eq!(
+            manager.parse_env_value("42"),
+            Some(Value::Number(42.into()))
+        );
+        assert_eq!(
+            manager.parse_env_value("hello"),
+            Some(Value::String("hello".to_string()))
+        );
     }
 
     #[test]
     fn test_mask_sensitive_fields() {
         let manager = ConfigManager::default();
         let mut config = HashMap::new();
-        config.insert("api_key".to_string(), Value::String("sk-1234567890abcdef".to_string()));
+        config.insert(
+            "api_key".to_string(),
+            Value::String("sk-1234567890abcdef".to_string()),
+        );
         config.insert("model".to_string(), Value::String("claude-3".to_string()));
 
         let masked = manager.mask_sensitive_fields(&config);
-        assert!(masked.get("api_key").unwrap().as_str().unwrap().contains("..."));
+        assert!(masked
+            .get("api_key")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("..."));
         assert_eq!(masked.get("model").unwrap().as_str().unwrap(), "claude-3");
     }
 }

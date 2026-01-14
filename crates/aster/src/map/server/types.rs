@@ -26,7 +26,6 @@ pub struct ModuleDetailInfo {
     pub internal_imports: Vec<String>,
 }
 
-
 /// 模块符号分组
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ModuleSymbols {
@@ -63,7 +62,6 @@ pub struct SymbolLocation {
     pub start_line: usize,
     pub end_line: usize,
 }
-
 
 // ============================================================================
 // 符号引用接口 - 展示调用关系
@@ -105,7 +103,6 @@ pub struct LineLocation {
     pub line: usize,
 }
 
-
 /// 类型引用信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -140,7 +137,6 @@ pub struct DependencyTreeNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_circular: Option<bool>,
 }
-
 
 // ============================================================================
 // 逻辑架构图 - 按目录/功能聚合模块
@@ -186,7 +182,6 @@ pub struct LogicBlock {
     pub dependencies: Vec<String>,
 }
 
-
 /// 架构图
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -230,7 +225,6 @@ pub struct FlowchartNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub y: Option<f64>,
 }
-
 
 /// 流程图边类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -281,7 +275,6 @@ pub struct ScenarioInfo {
     pub related_modules: Vec<String>,
 }
 
-
 // ============================================================================
 // 新手导览数据结构
 // ============================================================================
@@ -330,7 +323,6 @@ pub struct BeginnerGuide {
     pub main_languages: Vec<String>,
     pub cards: Vec<GuideCard>,
 }
-
 
 // ============================================================================
 // 业务故事视图
@@ -384,7 +376,6 @@ pub struct StoryGuide {
     pub main_story: BusinessStory,
     pub sub_stories: Vec<BusinessStory>,
 }
-
 
 // ============================================================================
 // 代码阅读引擎
@@ -440,7 +431,6 @@ pub struct CodeReadingGuide {
     pub difficulty: ReadingDifficulty,
     pub paths: Vec<ReadingPath>,
 }
-
 
 // ============================================================================
 // 知识快照

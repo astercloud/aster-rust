@@ -17,8 +17,8 @@
 //! - Requirement 15.4: Configurable retry behavior
 
 mod error_handler;
-mod timeout_handler;
 mod retry_handler;
+mod timeout_handler;
 
 #[cfg(test)]
 mod error_handling_property_tests;
@@ -26,5 +26,7 @@ mod error_handling_property_tests;
 pub use error_handler::{
     AgentError, AgentErrorKind, ErrorContext, ErrorHandler, ErrorRecord as UnifiedErrorRecord,
 };
+pub use retry_handler::{
+    RetryConfig as UnifiedRetryConfig, RetryHandler, RetryResult, RetryStrategy,
+};
 pub use timeout_handler::{TimeoutConfig, TimeoutEvent, TimeoutHandler, TimeoutStatus};
-pub use retry_handler::{RetryConfig as UnifiedRetryConfig, RetryHandler, RetryResult, RetryStrategy};

@@ -14,9 +14,7 @@ pub fn send_desktop_notification(notification: &Notification) -> anyhow::Result<
             notification.message.replace('"', r#"\""#),
             notification.title.replace('"', r#"\""#)
         );
-        Command::new("osascript")
-            .args(["-e", &script])
-            .output()?;
+        Command::new("osascript").args(["-e", &script]).output()?;
     }
 
     #[cfg(target_os = "linux")]
@@ -47,7 +45,6 @@ pub fn send_desktop_notification(notification: &Notification) -> anyhow::Result<
     Ok(())
 }
 
-
 /// 播放通知声音
 pub fn play_sound(notification_type: NotificationType) -> anyhow::Result<()> {
     #[cfg(target_os = "macos")]
@@ -72,7 +69,10 @@ pub fn play_sound(notification_type: NotificationType) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
         Command::new("powershell")
-            .args(["-c", r#"(New-Object Media.SoundPlayer "C:\Windows\Media\notify.wav").PlaySync()"#])
+            .args([
+                "-c",
+                r#"(New-Object Media.SoundPlayer "C:\Windows\Media\notify.wav").PlaySync()"#,
+            ])
             .output()?;
     }
 

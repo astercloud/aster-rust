@@ -1,7 +1,7 @@
 //! 蓝图系统测试
 //!
 //! 测试蓝图管理器、任务树管理器、时光倒流、边界检查等核心功能
-//! 
+//!
 //! 测试覆盖：
 //! - 蓝图生命周期管理
 //! - 任务树生成和执行
@@ -37,7 +37,7 @@ mod blueprint_manager_tests {
     #[tokio::test]
     async fn test_single_blueprint_constraint() {
         let manager = BlueprintManager::default();
-        
+
         let bp1 = manager
             .create_blueprint("蓝图1".to_string(), "描述1".to_string())
             .await
@@ -253,7 +253,10 @@ mod blueprint_manager_tests {
         assert_eq!(reviewed.status, BlueprintStatus::Review);
 
         // 批准
-        let approved = manager.approve_blueprint(&bp.id, Some("admin".to_string())).await.unwrap();
+        let approved = manager
+            .approve_blueprint(&bp.id, Some("admin".to_string()))
+            .await
+            .unwrap();
         assert_eq!(approved.status, BlueprintStatus::Approved);
         assert!(approved.approved_at.is_some());
         assert_eq!(approved.approved_by, Some("admin".to_string()));
@@ -359,7 +362,10 @@ mod blueprint_manager_tests {
         manager.approve_blueprint(&bp.id, None).await.unwrap();
 
         // 开始执行
-        let executing = manager.start_execution(&bp.id, "tree-1".to_string()).await.unwrap();
+        let executing = manager
+            .start_execution(&bp.id, "tree-1".to_string())
+            .await
+            .unwrap();
         assert_eq!(executing.status, BlueprintStatus::Executing);
         assert_eq!(executing.task_tree_id, Some("tree-1".to_string()));
 
@@ -384,10 +390,14 @@ mod blueprint_manager_tests {
             .await
             .unwrap();
 
-        let drafts = manager.get_blueprints_by_status(BlueprintStatus::Draft).await;
+        let drafts = manager
+            .get_blueprints_by_status(BlueprintStatus::Draft)
+            .await;
         assert_eq!(drafts.len(), 1);
 
-        let approved = manager.get_blueprints_by_status(BlueprintStatus::Approved).await;
+        let approved = manager
+            .get_blueprints_by_status(BlueprintStatus::Approved)
+            .await;
         assert!(approved.is_empty());
     }
 
@@ -409,7 +419,7 @@ mod blueprint_manager_tests {
     #[tokio::test]
     async fn test_generate_blueprint_summary() {
         let mut bp = Blueprint::new("测试项目".to_string(), "项目描述".to_string());
-        
+
         bp.business_processes.push(BusinessProcess {
             id: "p1".to_string(),
             name: "流程1".to_string(),
@@ -440,7 +450,6 @@ mod blueprint_manager_tests {
     }
 }
 
-
 // ============================================================================
 // 任务树管理器测试
 // ============================================================================
@@ -452,7 +461,7 @@ mod task_tree_manager_tests {
 
     fn create_test_blueprint() -> Blueprint {
         let mut bp = Blueprint::new("测试项目".to_string(), "测试描述".to_string());
-        
+
         bp.modules.push(SystemModule {
             id: Uuid::new_v4().to_string(),
             name: "后端模块".to_string(),
@@ -486,7 +495,7 @@ mod task_tree_manager_tests {
         let blueprint = create_test_blueprint();
 
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         assert_eq!(tree.blueprint_id, blueprint.id);
         assert!(!tree.root.children.is_empty());
         assert!(tree.stats.total_tasks > 0);
@@ -498,14 +507,14 @@ mod task_tree_manager_tests {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         let leaves = manager.get_leaf_tasks(&tree.id).await;
         if let Some(leaf) = leaves.first() {
             let updated = manager
                 .update_task_status(&tree.id, &leaf.id, TaskStatus::Coding)
                 .await
                 .unwrap();
-            
+
             assert_eq!(updated.status, TaskStatus::Coding);
             assert!(updated.started_at.is_some());
         }
@@ -516,14 +525,14 @@ mod task_tree_manager_tests {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         let leaves = manager.get_leaf_tasks(&tree.id).await;
         if let Some(leaf) = leaves.first() {
             let updated = manager
                 .update_task_status(&tree.id, &leaf.id, TaskStatus::Passed)
                 .await
                 .unwrap();
-            
+
             assert_eq!(updated.status, TaskStatus::Passed);
             assert!(updated.completed_at.is_some());
         }
@@ -534,7 +543,7 @@ mod task_tree_manager_tests {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         let leaves = manager.get_leaf_tasks(&tree.id).await;
         if let Some(leaf) = leaves.first() {
             let (can_start, blockers) = manager.can_start_task(&tree.id, &leaf.id).await;
@@ -551,13 +560,13 @@ mod task_tree_manager_tests {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         let executable = manager.get_executable_tasks(&tree.id).await;
         assert!(!executable.is_empty());
-        
+
         // 可执行任务应该按优先级排序
         for i in 1..executable.len() {
-            assert!(executable[i-1].priority >= executable[i].priority);
+            assert!(executable[i - 1].priority >= executable[i].priority);
         }
     }
 
@@ -566,10 +575,10 @@ mod task_tree_manager_tests {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         let leaves = manager.get_leaf_tasks(&tree.id).await;
         assert!(!leaves.is_empty());
-        
+
         // 叶子任务不应该有子任务
         for leaf in &leaves {
             assert!(leaf.children.is_empty());
@@ -581,7 +590,7 @@ mod task_tree_manager_tests {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         let leaves = manager.get_leaf_tasks(&tree.id).await;
         if let Some(leaf) = leaves.first() {
             let path = manager.get_task_path(&tree.id, &leaf.id).await;
@@ -595,15 +604,18 @@ mod task_tree_manager_tests {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         let parent_id = tree.root.id.clone();
-        let new_task = manager.add_sub_task(
-            &tree.id,
-            &parent_id,
-            "新子任务".to_string(),
-            "描述".to_string(),
-            50,
-        ).await.unwrap();
+        let new_task = manager
+            .add_sub_task(
+                &tree.id,
+                &parent_id,
+                "新子任务".to_string(),
+                "描述".to_string(),
+                50,
+            )
+            .await
+            .unwrap();
 
         assert_eq!(new_task.name, "新子任务");
         assert_eq!(new_task.parent_id, Some(parent_id));
@@ -615,15 +627,18 @@ mod task_tree_manager_tests {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         let leaves = manager.get_leaf_tasks(&tree.id).await;
         if let Some(leaf) = leaves.first() {
-            let checkpoint = manager.create_task_checkpoint(
-                &tree.id,
-                &leaf.id,
-                "测试检查点".to_string(),
-                Some("描述".to_string()),
-            ).await.unwrap();
+            let checkpoint = manager
+                .create_task_checkpoint(
+                    &tree.id,
+                    &leaf.id,
+                    "测试检查点".to_string(),
+                    Some("描述".to_string()),
+                )
+                .await
+                .unwrap();
 
             assert_eq!(checkpoint.name, "测试检查点");
             assert_eq!(checkpoint.task_id, leaf.id);
@@ -636,12 +651,11 @@ mod task_tree_manager_tests {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
-        let checkpoint = manager.create_global_checkpoint(
-            &tree.id,
-            "全局检查点".to_string(),
-            Some("描述".to_string()),
-        ).await.unwrap();
+
+        let checkpoint = manager
+            .create_global_checkpoint(&tree.id, "全局检查点".to_string(), Some("描述".to_string()))
+            .await
+            .unwrap();
 
         assert_eq!(checkpoint.name, "全局检查点");
         assert_eq!(checkpoint.tree_id, tree.id);
@@ -653,7 +667,7 @@ mod task_tree_manager_tests {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         assert!(tree.stats.total_tasks > 0);
         assert!(tree.stats.pending_tasks > 0);
         assert_eq!(tree.stats.passed_tasks, 0);
@@ -664,15 +678,14 @@ mod task_tree_manager_tests {
     async fn test_set_current_blueprint() {
         let manager = TaskTreeManager::default();
         let blueprint = create_test_blueprint();
-        
+
         manager.set_current_blueprint(blueprint.clone()).await;
         let current = manager.get_current_blueprint().await;
-        
+
         assert!(current.is_some());
         assert_eq!(current.unwrap().id, blueprint.id);
     }
 }
-
 
 // ============================================================================
 // 时光倒流测试
@@ -683,19 +696,11 @@ mod time_travel_tests {
     use super::*;
 
     fn create_test_tree() -> TaskTree {
-        let mut root = TaskNode::new(
-            "根任务".to_string(),
-            "描述".to_string(),
-            0,
-        );
-        
-        let mut child = TaskNode::new(
-            "子任务".to_string(),
-            "描述".to_string(),
-            1,
-        );
+        let mut root = TaskNode::new("根任务".to_string(), "描述".to_string(), 0);
+
+        let mut child = TaskNode::new("子任务".to_string(), "描述".to_string(), 1);
         child.parent_id = Some(root.id.clone());
-        
+
         // 添加检查点
         child.checkpoints.push(Checkpoint {
             id: "cp1".to_string(),
@@ -709,9 +714,9 @@ mod time_travel_tests {
             can_restore: true,
             metadata: None,
         });
-        
+
         root.children.push(child);
-        
+
         let mut tree = TaskTree::new("bp-1".to_string(), root);
         tree.global_checkpoints.push(GlobalCheckpoint {
             id: "gcp1".to_string(),
@@ -723,7 +728,7 @@ mod time_travel_tests {
             file_changes: vec![],
             can_restore: true,
         });
-        
+
         tree
     }
 
@@ -738,13 +743,17 @@ mod time_travel_tests {
     fn test_get_all_checkpoints() {
         let manager = TimeTravelManager::new();
         let tree = create_test_tree();
-        
+
         let checkpoints = manager.get_all_checkpoints(&tree);
         assert!(!checkpoints.is_empty());
-        
+
         // 应该包含全局和任务检查点
-        let has_global = checkpoints.iter().any(|c| c.checkpoint_type == CheckpointType::Global);
-        let has_task = checkpoints.iter().any(|c| c.checkpoint_type == CheckpointType::Task);
+        let has_global = checkpoints
+            .iter()
+            .any(|c| c.checkpoint_type == CheckpointType::Global);
+        let has_task = checkpoints
+            .iter()
+            .any(|c| c.checkpoint_type == CheckpointType::Task);
         assert!(has_global);
         assert!(has_task);
     }
@@ -753,7 +762,7 @@ mod time_travel_tests {
     fn test_get_timeline_view() {
         let manager = TimeTravelManager::new();
         let tree = create_test_tree();
-        
+
         let timeline = manager.get_timeline_view(&tree);
         assert!(!timeline.checkpoints.is_empty());
     }
@@ -762,12 +771,12 @@ mod time_travel_tests {
     fn test_get_checkpoint_details() {
         let manager = TimeTravelManager::new();
         let tree = create_test_tree();
-        
+
         // 获取全局检查点详情
         let details = manager.get_checkpoint_details(&tree, "gcp1");
         assert!(details.is_some());
         assert_eq!(details.unwrap().checkpoint.name, "全局检查点");
-        
+
         // 获取任务检查点详情
         let details = manager.get_checkpoint_details(&tree, "cp1");
         assert!(details.is_some());
@@ -778,7 +787,7 @@ mod time_travel_tests {
     fn test_compare_checkpoints() {
         let manager = TimeTravelManager::new();
         let tree = create_test_tree();
-        
+
         let result = manager.compare_checkpoints(&tree, "gcp1", "cp1");
         assert!(result.is_ok());
     }
@@ -787,7 +796,7 @@ mod time_travel_tests {
     fn test_generate_checkpoint_tree() {
         let manager = TimeTravelManager::new();
         let tree = create_test_tree();
-        
+
         let output = manager.generate_checkpoint_tree(&tree);
         assert!(output.contains("检查点时间线"));
     }
@@ -796,7 +805,7 @@ mod time_travel_tests {
     fn test_generate_timeline_ascii() {
         let manager = TimeTravelManager::new();
         let tree = create_test_tree();
-        
+
         let output = manager.generate_timeline_ascii(&tree);
         assert!(output.contains("时间线"));
     }
@@ -825,7 +834,6 @@ mod time_travel_tests {
     }
 }
 
-
 // ============================================================================
 // 边界检查器测试
 // ============================================================================
@@ -835,10 +843,7 @@ mod boundary_checker_tests {
     use super::*;
 
     fn create_test_blueprint() -> Blueprint {
-        let mut blueprint = Blueprint::new(
-            "测试项目".to_string(),
-            "测试描述".to_string(),
-        );
+        let mut blueprint = Blueprint::new("测试项目".to_string(), "测试描述".to_string());
 
         blueprint.modules.push(SystemModule {
             id: "frontend".to_string(),
@@ -899,10 +904,8 @@ mod boundary_checker_tests {
         let blueprint = create_test_blueprint();
         let checker = BoundaryChecker::new(blueprint, None);
 
-        let result = checker.check_task_boundary(
-            Some("frontend"),
-            "src/frontend/components/Button.tsx",
-        );
+        let result =
+            checker.check_task_boundary(Some("frontend"), "src/frontend/components/Button.tsx");
         assert!(result.allowed);
     }
 
@@ -911,10 +914,7 @@ mod boundary_checker_tests {
         let blueprint = create_test_blueprint();
         let checker = BoundaryChecker::new(blueprint, None);
 
-        let result = checker.check_task_boundary(
-            Some("frontend"),
-            "src/backend/api/handler.rs",
-        );
+        let result = checker.check_task_boundary(Some("frontend"), "src/backend/api/handler.rs");
         assert!(!result.allowed);
         assert_eq!(result.violation_type, Some(ViolationType::CrossModule));
     }
@@ -935,7 +935,10 @@ mod boundary_checker_tests {
 
         let result = checker.check_tech_stack("frontend", "src/frontend/main.rs");
         assert!(!result.allowed);
-        assert_eq!(result.violation_type, Some(ViolationType::TechStackMismatch));
+        assert_eq!(
+            result.violation_type,
+            Some(ViolationType::TechStackMismatch)
+        );
     }
 
     #[test]
@@ -1009,10 +1012,7 @@ mod boundary_checker_tests {
 
     #[test]
     fn test_boundary_check_result_deny() {
-        let result = BoundaryCheckResult::deny(
-            "测试原因".to_string(),
-            ViolationType::CrossModule,
-        );
+        let result = BoundaryCheckResult::deny("测试原因".to_string(), ViolationType::CrossModule);
         assert!(!result.allowed);
         assert_eq!(result.reason, Some("测试原因".to_string()));
         assert_eq!(result.violation_type, Some(ViolationType::CrossModule));
@@ -1020,11 +1020,9 @@ mod boundary_checker_tests {
 
     #[test]
     fn test_boundary_check_result_with_suggestion() {
-        let result = BoundaryCheckResult::deny(
-            "原因".to_string(),
-            ViolationType::ProtectedFile,
-        ).with_suggestion("建议".to_string());
-        
+        let result = BoundaryCheckResult::deny("原因".to_string(), ViolationType::ProtectedFile)
+            .with_suggestion("建议".to_string());
+
         assert_eq!(result.suggestion, Some("建议".to_string()));
     }
 
@@ -1035,7 +1033,6 @@ mod boundary_checker_tests {
         assert_eq!(checker.get_module_ids().len(), 2);
     }
 }
-
 
 // ============================================================================
 // 类型测试
@@ -1048,7 +1045,7 @@ mod types_tests {
     #[test]
     fn test_blueprint_new() {
         let bp = Blueprint::new("测试".to_string(), "描述".to_string());
-        
+
         assert!(!bp.id.is_empty());
         assert_eq!(bp.name, "测试");
         assert_eq!(bp.description, "描述");
@@ -1063,7 +1060,7 @@ mod types_tests {
     #[test]
     fn test_task_node_new() {
         let task = TaskNode::new("任务".to_string(), "描述".to_string(), 2);
-        
+
         assert!(!task.id.is_empty());
         assert_eq!(task.name, "任务");
         assert_eq!(task.depth, 2);
@@ -1076,7 +1073,7 @@ mod types_tests {
     fn test_task_tree_new() {
         let root = TaskNode::new("根".to_string(), "描述".to_string(), 0);
         let tree = TaskTree::new("bp-1".to_string(), root);
-        
+
         assert!(!tree.id.is_empty());
         assert_eq!(tree.blueprint_id, "bp-1");
         assert_eq!(tree.status, TaskTreeStatus::Pending);
@@ -1141,62 +1138,131 @@ mod types_tests {
     #[test]
     fn test_status_serialization() {
         // BlueprintStatus
-        assert_eq!(serde_json::to_string(&BlueprintStatus::Draft).unwrap(), "\"draft\"");
-        assert_eq!(serde_json::to_string(&BlueprintStatus::Approved).unwrap(), "\"approved\"");
-        
+        assert_eq!(
+            serde_json::to_string(&BlueprintStatus::Draft).unwrap(),
+            "\"draft\""
+        );
+        assert_eq!(
+            serde_json::to_string(&BlueprintStatus::Approved).unwrap(),
+            "\"approved\""
+        );
+
         // TaskStatus
-        assert_eq!(serde_json::to_string(&TaskStatus::Pending).unwrap(), "\"pending\"");
-        assert_eq!(serde_json::to_string(&TaskStatus::Coding).unwrap(), "\"coding\"");
-        
+        assert_eq!(
+            serde_json::to_string(&TaskStatus::Pending).unwrap(),
+            "\"pending\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TaskStatus::Coding).unwrap(),
+            "\"coding\""
+        );
+
         // ModuleType
-        assert_eq!(serde_json::to_string(&ModuleType::Backend).unwrap(), "\"backend\"");
-        assert_eq!(serde_json::to_string(&ModuleType::Frontend).unwrap(), "\"frontend\"");
+        assert_eq!(
+            serde_json::to_string(&ModuleType::Backend).unwrap(),
+            "\"backend\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ModuleType::Frontend).unwrap(),
+            "\"frontend\""
+        );
     }
 
     #[test]
     fn test_process_type_serialization() {
-        assert_eq!(serde_json::to_string(&ProcessType::AsIs).unwrap(), "\"as-is\"");
-        assert_eq!(serde_json::to_string(&ProcessType::ToBe).unwrap(), "\"to-be\"");
+        assert_eq!(
+            serde_json::to_string(&ProcessType::AsIs).unwrap(),
+            "\"as-is\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ProcessType::ToBe).unwrap(),
+            "\"to-be\""
+        );
     }
 
     #[test]
     fn test_nfr_category_serialization() {
-        assert_eq!(serde_json::to_string(&NfrCategory::Performance).unwrap(), "\"performance\"");
-        assert_eq!(serde_json::to_string(&NfrCategory::Security).unwrap(), "\"security\"");
+        assert_eq!(
+            serde_json::to_string(&NfrCategory::Performance).unwrap(),
+            "\"performance\""
+        );
+        assert_eq!(
+            serde_json::to_string(&NfrCategory::Security).unwrap(),
+            "\"security\""
+        );
     }
 
     #[test]
     fn test_moscow_priority_serialization() {
-        assert_eq!(serde_json::to_string(&MoscowPriority::Must).unwrap(), "\"must\"");
-        assert_eq!(serde_json::to_string(&MoscowPriority::Should).unwrap(), "\"should\"");
-        assert_eq!(serde_json::to_string(&MoscowPriority::Could).unwrap(), "\"could\"");
-        assert_eq!(serde_json::to_string(&MoscowPriority::Wont).unwrap(), "\"wont\"");
+        assert_eq!(
+            serde_json::to_string(&MoscowPriority::Must).unwrap(),
+            "\"must\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MoscowPriority::Should).unwrap(),
+            "\"should\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MoscowPriority::Could).unwrap(),
+            "\"could\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MoscowPriority::Wont).unwrap(),
+            "\"wont\""
+        );
     }
 
     #[test]
     fn test_test_type_serialization() {
         assert_eq!(serde_json::to_string(&TestType::Unit).unwrap(), "\"unit\"");
-        assert_eq!(serde_json::to_string(&TestType::Integration).unwrap(), "\"integration\"");
+        assert_eq!(
+            serde_json::to_string(&TestType::Integration).unwrap(),
+            "\"integration\""
+        );
         assert_eq!(serde_json::to_string(&TestType::E2e).unwrap(), "\"e2e\"");
     }
 
     #[test]
     fn test_artifact_type_serialization() {
-        assert_eq!(serde_json::to_string(&ArtifactType::File).unwrap(), "\"file\"");
-        assert_eq!(serde_json::to_string(&ArtifactType::Patch).unwrap(), "\"patch\"");
-        assert_eq!(serde_json::to_string(&ArtifactType::Command).unwrap(), "\"command\"");
+        assert_eq!(
+            serde_json::to_string(&ArtifactType::File).unwrap(),
+            "\"file\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ArtifactType::Patch).unwrap(),
+            "\"patch\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ArtifactType::Command).unwrap(),
+            "\"command\""
+        );
     }
 
     #[test]
     fn test_change_type_serialization() {
-        assert_eq!(serde_json::to_string(&ChangeType::Create).unwrap(), "\"create\"");
-        assert_eq!(serde_json::to_string(&ChangeType::Update).unwrap(), "\"update\"");
-        assert_eq!(serde_json::to_string(&ChangeType::Approve).unwrap(), "\"approve\"");
+        assert_eq!(
+            serde_json::to_string(&ChangeType::Create).unwrap(),
+            "\"create\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ChangeType::Update).unwrap(),
+            "\"update\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ChangeType::Approve).unwrap(),
+            "\"approve\""
+        );
     }
 
     #[test]
     fn test_timeline_event_type_serialization() {
-        assert_eq!(serde_json::to_string(&TimelineEventType::TaskStart).unwrap(), "\"task_start\"");
-        assert_eq!(serde_json::to_string(&TimelineEventType::Checkpoint).unwrap(), "\"checkpoint\"");
+        assert_eq!(
+            serde_json::to_string(&TimelineEventType::TaskStart).unwrap(),
+            "\"task_start\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TimelineEventType::Checkpoint).unwrap(),
+            "\"checkpoint\""
+        );
     }
 }

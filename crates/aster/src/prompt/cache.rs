@@ -46,7 +46,12 @@ pub fn estimate_tokens(text: &str) -> usize {
     // 特殊字符计数
     let special_chars = text
         .chars()
-        .filter(|c| matches!(c, '{' | '}' | '[' | ']' | '(' | ')' | '.' | ',' | ';' | ':' | '!' | '?' | '<' | '>'))
+        .filter(|c| {
+            matches!(
+                c,
+                '{' | '}' | '[' | ']' | '(' | ')' | '.' | ',' | ';' | ':' | '!' | '?' | '<' | '>'
+            )
+        })
         .count();
     tokens += special_chars as f64 * 0.1;
 
@@ -56,7 +61,6 @@ pub fn estimate_tokens(text: &str) -> usize {
 
     tokens.ceil() as usize
 }
-
 
 /// 缓存条目
 struct CacheEntry {
@@ -116,7 +120,12 @@ impl PromptCache {
     }
 
     /// 设置缓存
-    pub fn set(&mut self, key: String, content: String, hash_info: Option<PromptHashInfo>) -> PromptHashInfo {
+    pub fn set(
+        &mut self,
+        key: String,
+        content: String,
+        hash_info: Option<PromptHashInfo>,
+    ) -> PromptHashInfo {
         // 清理过期条目
         self.cleanup();
 
@@ -146,7 +155,6 @@ impl PromptCache {
 
         computed_hash_info
     }
-
 
     /// 检查缓存是否有效
     pub fn is_valid(&self, key: &str, hash: &str) -> bool {

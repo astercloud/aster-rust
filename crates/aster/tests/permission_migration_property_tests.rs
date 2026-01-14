@@ -58,12 +58,8 @@ fn arb_tool_names(max_count: usize) -> impl Strategy<Value = Vec<String>> {
 
 /// Generate arbitrary PermissionConfig
 fn arb_permission_config() -> impl Strategy<Value = PermissionConfig> {
-    (
-        arb_tool_names(5),
-        arb_tool_names(5),
-        arb_tool_names(5),
-    )
-        .prop_map(|(always_allow, ask_before, never_allow)| {
+    (arb_tool_names(5), arb_tool_names(5), arb_tool_names(5)).prop_map(
+        |(always_allow, ask_before, never_allow)| {
             // Ensure no overlap between lists
             let mut seen = std::collections::HashSet::new();
             let always_allow: Vec<_> = always_allow
@@ -84,7 +80,8 @@ fn arb_permission_config() -> impl Strategy<Value = PermissionConfig> {
                 ask_before,
                 never_allow,
             }
-        })
+        },
+    )
 }
 
 // ============================================================================
@@ -432,17 +429,38 @@ mod unit_tests {
         assert_eq!(result.never_allow_count, 1);
 
         // Verify each tool
-        let tool1 = result.permissions.iter().find(|p| p.tool == "tool1").unwrap();
+        let tool1 = result
+            .permissions
+            .iter()
+            .find(|p| p.tool == "tool1")
+            .unwrap();
         assert!(tool1.allowed);
-        assert_eq!(get_original_permission_level(tool1), Some(PermissionLevel::AlwaysAllow));
+        assert_eq!(
+            get_original_permission_level(tool1),
+            Some(PermissionLevel::AlwaysAllow)
+        );
 
-        let tool2 = result.permissions.iter().find(|p| p.tool == "tool2").unwrap();
+        let tool2 = result
+            .permissions
+            .iter()
+            .find(|p| p.tool == "tool2")
+            .unwrap();
         assert!(tool2.allowed);
-        assert_eq!(get_original_permission_level(tool2), Some(PermissionLevel::AskBefore));
+        assert_eq!(
+            get_original_permission_level(tool2),
+            Some(PermissionLevel::AskBefore)
+        );
 
-        let tool3 = result.permissions.iter().find(|p| p.tool == "tool3").unwrap();
+        let tool3 = result
+            .permissions
+            .iter()
+            .find(|p| p.tool == "tool3")
+            .unwrap();
         assert!(!tool3.allowed);
-        assert_eq!(get_original_permission_level(tool3), Some(PermissionLevel::NeverAllow));
+        assert_eq!(
+            get_original_permission_level(tool3),
+            Some(PermissionLevel::NeverAllow)
+        );
     }
 
     #[test]
@@ -496,11 +514,8 @@ mod unit_tests {
         ];
 
         for scope in scopes {
-            let migrated = migrate_permission_level(
-                "test_tool",
-                PermissionLevel::AlwaysAllow,
-                scope,
-            );
+            let migrated =
+                migrate_permission_level("test_tool", PermissionLevel::AlwaysAllow, scope);
             assert_eq!(migrated.scope, scope);
         }
     }
@@ -508,11 +523,8 @@ mod unit_tests {
     #[test]
     fn test_empty_tool_name_handled() {
         // Edge case: empty tool name (should still work)
-        let migrated = migrate_permission_level(
-            "",
-            PermissionLevel::AlwaysAllow,
-            PermissionScope::Global,
-        );
+        let migrated =
+            migrate_permission_level("", PermissionLevel::AlwaysAllow, PermissionScope::Global);
         assert_eq!(migrated.tool, "");
         assert!(migrated.allowed);
     }

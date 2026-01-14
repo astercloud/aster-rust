@@ -23,8 +23,7 @@ use uuid::Uuid;
 
 use crate::mcp::error::{McpError, McpResult};
 use crate::mcp::transport::{
-    BoxedTransport, McpRequest, McpResponse, TransportConfig, TransportFactory,
-    TransportState,
+    BoxedTransport, McpRequest, McpResponse, TransportConfig, TransportFactory, TransportState,
 };
 use crate::mcp::types::{
     ConnectionOptions, ConnectionStatus, McpConnection, McpServerInfo, TransportType,
@@ -142,7 +141,6 @@ pub struct McpConnectionManager {
     enable_heartbeat: bool,
     /// Enable auto-reconnect
     enable_auto_reconnect: bool,
-
 }
 
 impl McpConnectionManager {
@@ -279,7 +277,8 @@ impl McpConnectionManager {
         }
 
         // Send initialized notification
-        let initialized_notification = crate::mcp::transport::McpNotification::new("notifications/initialized");
+        let initialized_notification =
+            crate::mcp::transport::McpNotification::new("notifications/initialized");
         transport
             .send(crate::mcp::transport::McpMessage::Notification(
                 initialized_notification,
@@ -759,7 +758,6 @@ impl ConnectionManager for McpConnectionManager {
             *event_tx.lock().await = Some(tx);
         });
         rx
-
     }
 }
 

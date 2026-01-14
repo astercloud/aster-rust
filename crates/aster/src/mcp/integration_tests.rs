@@ -32,8 +32,8 @@ fn arb_server_name() -> impl Strategy<Value = String> {
 /// Generate a random permission context
 fn arb_permission_context() -> impl Strategy<Value = PermissionContext> {
     (
-        "[a-z0-9]{8,16}",  // session_id
-        prop::option::of("[a-z]{3,10}"),  // user
+        "[a-z0-9]{8,16}",                // session_id
+        prop::option::of("[a-z]{3,10}"), // user
     )
         .prop_map(|(session_id, user)| PermissionContext {
             working_directory: std::path::PathBuf::from("/tmp"),
@@ -332,8 +332,16 @@ mod unit_tests {
             metadata: HashMap::new(),
         };
 
-        assert!(!integration.is_tool_allowed("server", "blocked", &context).await);
-        assert!(integration.is_tool_allowed("server", "other", &context).await);
+        assert!(
+            !integration
+                .is_tool_allowed("server", "blocked", &context)
+                .await
+        );
+        assert!(
+            integration
+                .is_tool_allowed("server", "other", &context)
+                .await
+        );
     }
 
     #[tokio::test]

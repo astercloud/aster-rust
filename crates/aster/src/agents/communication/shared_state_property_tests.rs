@@ -7,7 +7,7 @@
 
 #[cfg(test)]
 mod property_tests {
-    use crate::agents::communication::shared_state::{SharedStateManager, Lock};
+    use crate::agents::communication::shared_state::{Lock, SharedStateManager};
     use chrono::{Duration, Utc};
     use proptest::prelude::*;
     use serde_json::{json, Value};
@@ -42,7 +42,10 @@ mod property_tests {
     }
 
     // Strategy for generating key-value pairs
-    fn key_value_pairs_strategy(min: usize, max: usize) -> impl Strategy<Value = Vec<(String, Value)>> {
+    fn key_value_pairs_strategy(
+        min: usize,
+        max: usize,
+    ) -> impl Strategy<Value = Vec<(String, Value)>> {
         prop::collection::vec((key_strategy(), value_strategy()), min..max)
     }
 

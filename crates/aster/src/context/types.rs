@@ -73,7 +73,6 @@ impl From<serde_json::Error> for ContextError {
     }
 }
 
-
 // ============================================================================
 // Token Usage Types
 // ============================================================================
@@ -151,7 +150,6 @@ impl TokenUsage {
     }
 }
 
-
 // ============================================================================
 // Context Configuration
 // ============================================================================
@@ -220,7 +218,6 @@ impl ContextConfig {
         ((self.max_tokens as f64) * self.summarize_threshold) as usize
     }
 }
-
 
 // ============================================================================
 // Conversation Turn
@@ -309,7 +306,6 @@ impl ConversationTurn {
     }
 }
 
-
 // ============================================================================
 // Context Statistics
 // ============================================================================
@@ -375,7 +371,6 @@ impl ContextUsage {
         self.percentage > threshold
     }
 }
-
 
 // ============================================================================
 // Context Export/Import
@@ -443,7 +438,11 @@ pub struct CompressionResult {
 
 impl CompressionResult {
     /// Create a new CompressionResult
-    pub fn new(original_tokens: usize, compressed_tokens: usize, method: impl Into<String>) -> Self {
+    pub fn new(
+        original_tokens: usize,
+        compressed_tokens: usize,
+        method: impl Into<String>,
+    ) -> Self {
         let ratio = if original_tokens > 0 {
             compressed_tokens as f64 / original_tokens as f64
         } else {
@@ -485,7 +484,6 @@ pub struct CompressionDetails {
     /// Total tokens saved
     pub saved_tokens: usize,
 }
-
 
 // ============================================================================
 // Compression Configuration
@@ -618,7 +616,6 @@ pub struct CacheStats {
     /// Cache hit rate (0.0-1.0)
     pub cache_hit_rate: f64,
 }
-
 
 // ============================================================================
 // Priority Types

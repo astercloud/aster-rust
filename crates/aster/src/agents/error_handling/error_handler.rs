@@ -229,8 +229,7 @@ impl ErrorRecord {
 
     /// Create an API call error
     pub fn api_call(message: impl Into<String>) -> Self {
-        Self::new(AgentErrorKind::ApiCall, message)
-            .with_severity(ErrorSeverity::Error)
+        Self::new(AgentErrorKind::ApiCall, message).with_severity(ErrorSeverity::Error)
     }
 
     /// Create a tool execution error
@@ -424,20 +423,13 @@ impl ErrorHandler {
     pub fn get_by_agent(&self, agent_id: &str) -> Vec<&ErrorRecord> {
         self.errors_by_agent
             .get(agent_id)
-            .map(|ids| {
-                ids.iter()
-                    .filter_map(|id| self.errors.get(id))
-                    .collect()
-            })
+            .map(|ids| ids.iter().filter_map(|id| self.errors.get(id)).collect())
             .unwrap_or_default()
     }
 
     /// Get all errors of a specific kind
     pub fn get_by_kind(&self, kind: &AgentErrorKind) -> Vec<&ErrorRecord> {
-        self.errors
-            .values()
-            .filter(|e| &e.kind == kind)
-            .collect()
+        self.errors.values().filter(|e| &e.kind == kind).collect()
     }
 
     /// Get all errors with severity >= threshold

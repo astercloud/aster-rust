@@ -72,7 +72,11 @@ pub struct Lock {
 
 impl Lock {
     /// Create a new lock
-    pub fn new(key: impl Into<String>, holder: impl Into<String>, timeout: Option<Duration>) -> Self {
+    pub fn new(
+        key: impl Into<String>,
+        holder: impl Into<String>,
+        timeout: Option<Duration>,
+    ) -> Self {
         let now = Utc::now();
         Self {
             id: uuid::Uuid::new_v4().to_string(),
@@ -219,7 +223,11 @@ impl SharedStateManager {
     }
 
     /// Set a typed value by key
-    pub fn set_typed<T: Serialize>(&mut self, key: impl Into<String>, value: &T) -> SharedStateResult<()> {
+    pub fn set_typed<T: Serialize>(
+        &mut self,
+        key: impl Into<String>,
+        value: &T,
+    ) -> SharedStateResult<()> {
         let json_value = serde_json::to_value(value)
             .map_err(|e| SharedStateError::SerializationError(e.to_string()))?;
         self.set(key, json_value);
@@ -460,7 +468,8 @@ impl SharedStateManager {
         self.emit_event(StateEvent::LockReleased(released_lock));
 
         // Process wait queue - take ownership to avoid borrow issues
-        let waiter = self.lock_wait_queue
+        let waiter = self
+            .lock_wait_queue
             .get_mut(&lock.key)
             .and_then(|waiters| waiters.pop());
 
@@ -475,7 +484,12 @@ impl SharedStateManager {
         }
 
         // Clean up empty wait queue
-        if self.lock_wait_queue.get(&lock.key).map(|w| w.is_empty()).unwrap_or(false) {
+        if self
+            .lock_wait_queue
+            .get(&lock.key)
+            .map(|w| w.is_empty())
+            .unwrap_or(false)
+        {
             self.lock_wait_queue.remove(&lock.key);
         }
 
@@ -484,12 +498,19 @@ impl SharedStateManager {
 
     /// Check if a key is locked
     pub fn is_locked(&self, key: &str) -> bool {
-        self.locks.get(key).map(|l| !l.is_expired()).unwrap_or(false)
+        self.locks
+            .get(key)
+            .map(|l| !l.is_expired())
+            .unwrap_or(false)
     }
 
     /// Get all active locks
     pub fn get_all_locks(&self) -> Vec<Lock> {
-        self.locks.values().filter(|l| !l.is_expired()).cloned().collect()
+        self.locks
+            .values()
+            .filter(|l| !l.is_expired())
+            .cloned()
+            .collect()
     }
 
     /// Get lock for a specific key
@@ -534,11 +555,7 @@ impl SharedStateManager {
     /// Increments the value by delta. If the key doesn't exist, initializes to delta.
     /// Returns the new value.
     pub fn increment(&mut self, key: &str, delta: i64) -> i64 {
-        let current = self
-            .state
-            .get(key)
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+        let current = self.state.get(key).and_then(|v| v.as_i64()).unwrap_or(0);
 
         let new_value = current + delta;
         self.set(key.to_string(), Value::Number(new_value.into()));
@@ -568,7 +585,8 @@ impl SharedStateManager {
                 self.emit_event(StateEvent::LockReleased(lock));
 
                 // Process wait queue for this key - take ownership to avoid borrow issues
-                let waiter = self.lock_wait_queue
+                let waiter = self
+                    .lock_wait_queue
                     .get_mut(&key)
                     .and_then(|waiters| waiters.pop());
 
@@ -580,7 +598,12 @@ impl SharedStateManager {
                 }
 
                 // Clean up empty wait queue
-                if self.lock_wait_queue.get(&key).map(|w| w.is_empty()).unwrap_or(false) {
+                if self
+                    .lock_wait_queue
+                    .get(&key)
+                    .map(|w| w.is_empty())
+                    .unwrap_or(false)
+                {
                     self.lock_wait_queue.remove(&key);
                 }
             }

@@ -19,7 +19,7 @@ impl Version {
         if parts.len() < 3 {
             return None;
         }
-        
+
         Some(Self {
             major: parts[0].parse().ok()?,
             minor: parts[1].parse().ok()?,

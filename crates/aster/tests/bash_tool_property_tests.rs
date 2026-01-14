@@ -75,8 +75,7 @@ fn arb_warning_command() -> impl Strategy<Value = String> {
 
 /// Generate arbitrary output strings of various lengths
 fn arb_output(max_len: usize) -> impl Strategy<Value = String> {
-    prop::collection::vec(any::<char>(), 0..max_len)
-        .prop_map(|chars| chars.into_iter().collect())
+    prop::collection::vec(any::<char>(), 0..max_len).prop_map(|chars| chars.into_iter().collect())
 }
 
 // ============================================================================
@@ -356,7 +355,7 @@ proptest! {
         if !test_cmd.contains(&custom_cmd) {
             let default_tool = BashTool::new();
             let default_result = default_tool.check_command_safety(&test_cmd);
-            
+
             // If default tool allows it, custom tool should also allow it
             // (unless test_cmd happens to contain custom_cmd)
             if default_result.safe && !test_cmd.contains(&custom_cmd) {

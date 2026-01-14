@@ -155,7 +155,9 @@ impl AgentPool {
         Ok(None)
     }
 
-    pub fn prepare_acquire(&mut self) -> PoolResult<Result<AgentWorker, oneshot::Receiver<AgentWorker>>> {
+    pub fn prepare_acquire(
+        &mut self,
+    ) -> PoolResult<Result<AgentWorker, oneshot::Receiver<AgentWorker>>> {
         if self.shutting_down {
             return Err(PoolError::ShuttingDown);
         }
@@ -194,7 +196,9 @@ impl AgentPool {
 
     pub fn resize(&mut self, new_size: usize) -> PoolResult<()> {
         if new_size == 0 {
-            return Err(PoolError::InvalidPoolSize("Pool size must be at least 1".to_string()));
+            return Err(PoolError::InvalidPoolSize(
+                "Pool size must be at least 1".to_string(),
+            ));
         }
         if new_size > self.pool_size {
             let to_add = new_size - self.pool_size;

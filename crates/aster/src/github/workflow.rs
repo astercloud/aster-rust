@@ -40,7 +40,6 @@ jobs:
           echo "Claude Code Review placeholder"
 "#;
 
-
 /// GitHub CLI 状态
 #[derive(Debug, Clone)]
 pub struct GitHubCLIStatus {
@@ -52,10 +51,7 @@ pub struct GitHubCLIStatus {
 
 /// 检查 GitHub CLI 是否可用
 pub async fn check_github_cli() -> GitHubCLIStatus {
-    let output = Command::new("gh")
-        .args(["auth", "status"])
-        .output()
-        .await;
+    let output = Command::new("gh").args(["auth", "status"]).output().await;
 
     match output {
         Ok(output) => {
@@ -86,7 +82,6 @@ pub async fn check_github_cli() -> GitHubCLIStatus {
         },
     }
 }
-
 
 /// 设置 GitHub Actions 工作流结果
 #[derive(Debug, Clone)]

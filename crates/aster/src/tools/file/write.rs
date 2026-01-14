@@ -37,7 +37,6 @@ pub struct WriteTool {
     require_read_before_overwrite: bool,
 }
 
-
 impl WriteTool {
     /// Create a new WriteTool with shared history
     pub fn new(read_history: SharedFileReadHistory) -> Self {
@@ -182,7 +181,6 @@ impl WriteTool {
     }
 }
 
-
 // =============================================================================
 // Tool Trait Implementation
 // =============================================================================
@@ -279,7 +277,6 @@ impl Tool for WriteTool {
     }
 }
 
-
 // =============================================================================
 // Unit Tests
 // =============================================================================
@@ -347,9 +344,7 @@ mod tests {
         let context = create_test_context(temp_dir.path());
 
         // Try to write without reading first
-        let result = tool
-            .write_file(&file_path, "New content", &context)
-            .await;
+        let result = tool.write_file(&file_path, "New content", &context).await;
 
         assert!(result.is_err());
         // Original content should be preserved

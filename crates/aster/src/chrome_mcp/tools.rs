@@ -55,7 +55,8 @@ fn javascript_tool() -> McpTool {
 fn read_page() -> McpTool {
     McpTool {
         name: "read_page".to_string(),
-        description: "Get an accessibility tree representation of elements on the page.".to_string(),
+        description: "Get an accessibility tree representation of elements on the page."
+            .to_string(),
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -312,8 +313,21 @@ pub fn get_tool_names_with_prefix() -> Vec<String> {
 
 /// Chrome MCP 工具常量
 pub const CHROME_MCP_TOOLS: &[&str] = &[
-    "javascript_tool", "read_page", "find", "form_input", "computer",
-    "navigate", "resize_window", "gif_creator", "upload_image", "get_page_text",
-    "tabs_context_mcp", "tabs_create_mcp", "update_plan", "read_console_messages",
-    "read_network_requests", "shortcuts_list", "shortcuts_execute",
+    "javascript_tool",
+    "read_page",
+    "find",
+    "form_input",
+    "computer",
+    "navigate",
+    "resize_window",
+    "gif_creator",
+    "upload_image",
+    "get_page_text",
+    "tabs_context_mcp",
+    "tabs_create_mcp",
+    "update_plan",
+    "read_console_messages",
+    "read_network_requests",
+    "shortcuts_list",
+    "shortcuts_execute",
 ];

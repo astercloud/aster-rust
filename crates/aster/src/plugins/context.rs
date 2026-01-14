@@ -28,7 +28,6 @@ pub trait PluginLogger: Send + Sync {
     fn error(&self, message: &str);
 }
 
-
 /// 默认配置 API 实现
 pub struct DefaultConfigAPI {
     config: Arc<RwLock<HashMap<String, serde_json::Value>>>,
@@ -64,7 +63,10 @@ impl PluginConfigAPI for DefaultConfigAPI {
     }
 
     fn has(&self, key: &str) -> bool {
-        self.config.read().map(|c| c.contains_key(key)).unwrap_or(false)
+        self.config
+            .read()
+            .map(|c| c.contains_key(key))
+            .unwrap_or(false)
     }
 
     fn delete(&self, key: &str) {

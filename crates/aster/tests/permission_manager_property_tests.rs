@@ -20,9 +20,8 @@
 //! **Validates: Requirements 2.4**
 
 use aster::permission::{
-    ConditionOperator, ConditionType, ParameterRestriction, PermissionCondition,
-    PermissionContext, PermissionScope, RestrictionType,
-    ToolPermission, ToolPermissionManager,
+    ConditionOperator, ConditionType, ParameterRestriction, PermissionCondition, PermissionContext,
+    PermissionScope, RestrictionType, ToolPermission, ToolPermissionManager,
 };
 use proptest::prelude::*;
 use serde_json::Value;
@@ -69,7 +68,6 @@ fn create_test_context(timestamp: i64) -> PermissionContext {
 fn arb_timestamp() -> impl Strategy<Value = i64> {
     1600000000i64..1800000000i64
 }
-
 
 // ============================================================================
 // Property Tests - Property 9: Permission Result Completeness
@@ -288,7 +286,7 @@ proptest! {
             "Should have suggestions"
         );
         // Check that suggestions mention conditions
-        let has_condition_suggestion = result.suggestions.iter().any(|s| 
+        let has_condition_suggestion = result.suggestions.iter().any(|s|
             s.contains("condition") || s.contains("Condition")
         );
         prop_assert!(
@@ -297,7 +295,6 @@ proptest! {
         );
     }
 }
-
 
 // ============================================================================
 // Property Tests - Property 5: Permission Priority Evaluation
@@ -487,7 +484,6 @@ proptest! {
         );
     }
 }
-
 
 // ============================================================================
 // Property Tests - Property 6: Permission Expiry Handling

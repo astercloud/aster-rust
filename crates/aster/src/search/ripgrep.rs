@@ -66,7 +66,6 @@ pub struct RipgrepMatch {
     pub match_end: u32,
 }
 
-
 /// Ripgrep 搜索结果
 #[derive(Debug, Clone, Default)]
 pub struct RipgrepResult {
@@ -89,7 +88,8 @@ pub fn get_system_rg_path() -> Option<PathBuf> {
         Command::new("which").arg("rg").output()
     };
 
-    output.ok()
+    output
+        .ok()
         .filter(|o| o.status.success())
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| PathBuf::from(s.trim().lines().next().unwrap_or("")))
@@ -110,11 +110,13 @@ pub fn get_vendored_rg_path() -> Option<PathBuf> {
     possible_paths.into_iter().find(|p| p.exists())
 }
 
-
 /// 获取可用的 ripgrep 路径
 pub fn get_rg_path() -> Option<PathBuf> {
     // 检查环境变量
-    if std::env::var("USE_BUILTIN_RIPGREP").map(|v| v == "1" || v == "true").unwrap_or(false) {
+    if std::env::var("USE_BUILTIN_RIPGREP")
+        .map(|v| v == "1" || v == "true")
+        .unwrap_or(false)
+    {
         if let Some(path) = get_system_rg_path() {
             return Some(path);
         }
@@ -134,10 +136,7 @@ pub fn is_ripgrep_available() -> bool {
 pub fn get_ripgrep_version() -> Option<String> {
     let rg_path = get_rg_path()?;
 
-    let output = Command::new(&rg_path)
-        .arg("--version")
-        .output()
-        .ok()?;
+    let output = Command::new(&rg_path).arg("--version").output().ok()?;
 
     let version_str = String::from_utf8(output.stdout).ok()?;
 
@@ -148,7 +147,6 @@ pub fn get_ripgrep_version() -> Option<String> {
         .and_then(|line| line.split_whitespace().nth(1))
         .map(|v| v.to_string())
 }
-
 
 /// 构建 ripgrep 命令参数
 fn build_rg_args(options: &RipgrepOptions) -> Vec<String> {
@@ -195,7 +193,6 @@ fn build_rg_args(options: &RipgrepOptions) -> Vec<String> {
         args.push("--hidden".to_string());
     }
 
-
     // 输出限制
     if let Some(max) = options.max_count {
         args.push("--max-count".to_string());
@@ -241,7 +238,6 @@ fn build_rg_args(options: &RipgrepOptions) -> Vec<String> {
     args
 }
 
-
 /// 异步执行 ripgrep 搜索
 pub async fn search(options: RipgrepOptions) -> Result<RipgrepResult, String> {
     let rg_path = get_rg_path().ok_or("ripgrep 不可用")?;
@@ -250,7 +246,9 @@ pub async fn search(options: RipgrepOptions) -> Result<RipgrepResult, String> {
     search_options.json = true;
 
     let args = build_rg_args(&search_options);
-    let cwd = options.cwd.unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let cwd = options
+        .cwd
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
     let output = AsyncCommand::new(&rg_path)
         .args(&args)
@@ -271,13 +269,14 @@ pub async fn search(options: RipgrepOptions) -> Result<RipgrepResult, String> {
     parse_json_output(&stdout)
 }
 
-
 /// 同步执行 ripgrep 搜索
 pub fn search_sync(options: RipgrepOptions) -> Result<String, String> {
     let rg_path = get_rg_path().ok_or("ripgrep 不可用")?;
 
     let args = build_rg_args(&options);
-    let cwd = options.cwd.unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let cwd = options
+        .cwd
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
     let output = Command::new(&rg_path)
         .args(&args)
@@ -303,18 +302,21 @@ fn parse_json_output(output: &str) -> Result<RipgrepResult, String> {
         if let Ok(obj) = serde_json::from_str::<serde_json::Value>(line) {
             if obj.get("type").and_then(|t| t.as_str()) == Some("match") {
                 if let Some(data) = obj.get("data") {
-                    let path = data.get("path")
+                    let path = data
+                        .get("path")
                         .and_then(|p| p.get("text"))
                         .and_then(|t| t.as_str())
                         .unwrap_or("");
 
                     files.insert(path.to_string());
 
-                    let line_number = data.get("line_number")
+                    let line_number = data
+                        .get("line_number")
                         .and_then(|n| n.as_u64())
                         .unwrap_or(0) as u32;
 
-                    let line_content = data.get("lines")
+                    let line_content = data
+                        .get("lines")
                         .and_then(|l| l.get("text"))
                         .and_then(|t| t.as_str())
                         .unwrap_or("")
@@ -322,8 +324,10 @@ fn parse_json_output(output: &str) -> Result<RipgrepResult, String> {
 
                     if let Some(submatches) = data.get("submatches").and_then(|s| s.as_array()) {
                         for submatch in submatches {
-                            let start = submatch.get("start").and_then(|s| s.as_u64()).unwrap_or(0) as u32;
-                            let end = submatch.get("end").and_then(|e| e.as_u64()).unwrap_or(0) as u32;
+                            let start =
+                                submatch.get("start").and_then(|s| s.as_u64()).unwrap_or(0) as u32;
+                            let end =
+                                submatch.get("end").and_then(|e| e.as_u64()).unwrap_or(0) as u32;
 
                             matches.push(RipgrepMatch {
                                 path: path.to_string(),
@@ -347,7 +351,6 @@ fn parse_json_output(output: &str) -> Result<RipgrepResult, String> {
         truncated: false,
     })
 }
-
 
 /// 列出文件（使用 rg --files）
 pub async fn list_files(
@@ -394,9 +397,12 @@ pub async fn list_files(
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(stdout.lines().filter(|l| !l.is_empty()).map(|s| s.to_string()).collect())
+    Ok(stdout
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|s| s.to_string())
+        .collect())
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -741,12 +747,12 @@ mod tests {
             None,
             false,
             false,
-        ).await;
+        )
+        .await;
 
         assert!(result.is_ok());
     }
 }
-
 
 // ============ Vendored Ripgrep 下载 ============
 
@@ -785,17 +791,13 @@ fn get_download_url() -> Option<String> {
     ))
 }
 
-
 /// 下载 vendored ripgrep
 pub async fn download_vendored_rg(target_dir: &Path) -> Result<PathBuf, String> {
-    let binary_name = get_platform_binary_name()
-        .ok_or("不支持的平台")?;
-    let download_url = get_download_url()
-        .ok_or("无法获取下载 URL")?;
+    let binary_name = get_platform_binary_name().ok_or("不支持的平台")?;
+    let download_url = get_download_url().ok_or("无法获取下载 URL")?;
 
     // 确保目录存在
-    std::fs::create_dir_all(target_dir)
-        .map_err(|e| format!("创建目录失败: {}", e))?;
+    std::fs::create_dir_all(target_dir).map_err(|e| format!("创建目录失败: {}", e))?;
 
     let target_path = target_dir.join(binary_name);
 
@@ -807,22 +809,22 @@ pub async fn download_vendored_rg(target_dir: &Path) -> Result<PathBuf, String> 
         let response = reqwest::get(&download_url)
             .await
             .map_err(|e| format!("下载失败: {}", e))?;
-        
-        let bytes = response.bytes()
+
+        let bytes = response
+            .bytes()
             .await
             .map_err(|e| format!("读取响应失败: {}", e))?;
-        
+
         // 解压并保存
         // 简化实现：假设已经是二进制文件
-        std::fs::write(&target_path, &bytes)
-            .map_err(|e| format!("写入文件失败: {}", e))?;
+        std::fs::write(&target_path, &bytes).map_err(|e| format!("写入文件失败: {}", e))?;
     }
 
     #[cfg(not(feature = "reqwest"))]
     {
         // 使用 curl 下载
         let temp_file = std::env::temp_dir().join("rg_download.tar.gz");
-        
+
         let status = Command::new("curl")
             .args(["-L", "-o"])
             .arg(&temp_file)
@@ -854,8 +856,7 @@ pub async fn download_vendored_rg(target_dir: &Path) -> Result<PathBuf, String> 
         // 重命名
         let extracted = target_dir.join("rg");
         if extracted.exists() && extracted != target_path {
-            std::fs::rename(&extracted, &target_path)
-                .map_err(|e| format!("重命名失败: {}", e))?;
+            std::fs::rename(&extracted, &target_path).map_err(|e| format!("重命名失败: {}", e))?;
         }
 
         // 设置执行权限

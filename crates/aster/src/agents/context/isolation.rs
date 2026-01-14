@@ -14,9 +14,7 @@ use std::collections::{HashMap, HashSet};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::types::{
-    AgentContext, AgentContextError, AgentContextResult, ContextUpdate,
-};
+use super::types::{AgentContext, AgentContextError, AgentContextResult, ContextUpdate};
 
 /// Sandbox state representing the lifecycle of a sandboxed context
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -132,7 +130,10 @@ impl SandboxRestrictions {
     }
 
     /// Set allowed tools (whitelist)
-    pub fn with_allowed_tools(mut self, tools: impl IntoIterator<Item = impl Into<String>>) -> Self {
+    pub fn with_allowed_tools(
+        mut self,
+        tools: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
         self.allowed_tools = Some(tools.into_iter().map(|t| t.into()).collect());
         self
     }
@@ -204,10 +205,18 @@ impl std::fmt::Display for ResourceLimitViolation {
                 write!(f, "Token limit exceeded: {} used, {} allowed", used, limit)
             }
             ResourceLimitViolation::FilesExceeded { used, limit } => {
-                write!(f, "File limit exceeded: {} accessed, {} allowed", used, limit)
+                write!(
+                    f,
+                    "File limit exceeded: {} accessed, {} allowed",
+                    used, limit
+                )
             }
             ResourceLimitViolation::ToolResultsExceeded { used, limit } => {
-                write!(f, "Tool results limit exceeded: {} stored, {} allowed", used, limit)
+                write!(
+                    f,
+                    "Tool results limit exceeded: {} stored, {} allowed",
+                    used, limit
+                )
             }
         }
     }
@@ -316,7 +325,9 @@ impl SandboxedContext {
         if let Some(violation) = self.check_limits() {
             self.state = SandboxState::Suspended;
             self.suspension_reason = Some(violation.to_string());
-            return Err(AgentContextError::ResourceLimitExceeded(violation.to_string()));
+            return Err(AgentContextError::ResourceLimitExceeded(
+                violation.to_string(),
+            ));
         }
         Ok(())
     }
@@ -372,8 +383,7 @@ impl ContextIsolation {
         ttl: Duration,
     ) -> SandboxedContext {
         let agent_id = agent_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let sandbox = SandboxedContext::new(context, agent_id.clone(), restrictions)
-            .with_ttl(ttl);
+        let sandbox = SandboxedContext::new(context, agent_id.clone(), restrictions).with_ttl(ttl);
 
         let sandbox_id = sandbox.sandbox_id.clone();
         self.sandboxes.insert(sandbox_id.clone(), sandbox.clone());
@@ -422,21 +432,24 @@ impl ContextIsolation {
         sandbox_id: &str,
         updates: ContextUpdate,
     ) -> AgentContextResult<()> {
-        let sandbox = self.sandboxes.get_mut(sandbox_id)
+        let sandbox = self
+            .sandboxes
+            .get_mut(sandbox_id)
             .ok_or_else(|| AgentContextError::NotFound(sandbox_id.to_string()))?;
 
         // Check if sandbox is active
         if sandbox.state != SandboxState::Active {
-            return Err(AgentContextError::InvalidStateTransition(
-                format!("Cannot update sandbox in {:?} state", sandbox.state)
-            ));
+            return Err(AgentContextError::InvalidStateTransition(format!(
+                "Cannot update sandbox in {:?} state",
+                sandbox.state
+            )));
         }
 
         // Check if expired
         if sandbox.is_expired() {
             sandbox.state = SandboxState::Terminated;
             return Err(AgentContextError::InvalidStateTransition(
-                "Sandbox has expired".to_string()
+                "Sandbox has expired".to_string(),
             ));
         }
 
@@ -503,13 +516,16 @@ impl ContextIsolation {
 
     /// Suspend a sandbox
     pub fn suspend(&mut self, sandbox_id: &str) -> AgentContextResult<()> {
-        let sandbox = self.sandboxes.get_mut(sandbox_id)
+        let sandbox = self
+            .sandboxes
+            .get_mut(sandbox_id)
             .ok_or_else(|| AgentContextError::NotFound(sandbox_id.to_string()))?;
 
         if !sandbox.state.can_transition_to(SandboxState::Suspended) {
-            return Err(AgentContextError::InvalidStateTransition(
-                format!("Cannot suspend sandbox in {:?} state", sandbox.state)
-            ));
+            return Err(AgentContextError::InvalidStateTransition(format!(
+                "Cannot suspend sandbox in {:?} state",
+                sandbox.state
+            )));
         }
 
         sandbox.state = SandboxState::Suspended;
@@ -519,20 +535,23 @@ impl ContextIsolation {
 
     /// Resume a suspended sandbox
     pub fn resume(&mut self, sandbox_id: &str) -> AgentContextResult<()> {
-        let sandbox = self.sandboxes.get_mut(sandbox_id)
+        let sandbox = self
+            .sandboxes
+            .get_mut(sandbox_id)
             .ok_or_else(|| AgentContextError::NotFound(sandbox_id.to_string()))?;
 
         if !sandbox.state.can_transition_to(SandboxState::Active) {
-            return Err(AgentContextError::InvalidStateTransition(
-                format!("Cannot resume sandbox in {:?} state", sandbox.state)
-            ));
+            return Err(AgentContextError::InvalidStateTransition(format!(
+                "Cannot resume sandbox in {:?} state",
+                sandbox.state
+            )));
         }
 
         // Check if expired before resuming
         if sandbox.is_expired() {
             sandbox.state = SandboxState::Terminated;
             return Err(AgentContextError::InvalidStateTransition(
-                "Cannot resume expired sandbox".to_string()
+                "Cannot resume expired sandbox".to_string(),
             ));
         }
 
@@ -543,13 +562,16 @@ impl ContextIsolation {
 
     /// Terminate a sandbox
     pub fn terminate(&mut self, sandbox_id: &str) -> AgentContextResult<()> {
-        let sandbox = self.sandboxes.get_mut(sandbox_id)
+        let sandbox = self
+            .sandboxes
+            .get_mut(sandbox_id)
             .ok_or_else(|| AgentContextError::NotFound(sandbox_id.to_string()))?;
 
         if !sandbox.state.can_transition_to(SandboxState::Terminated) {
-            return Err(AgentContextError::InvalidStateTransition(
-                format!("Cannot terminate sandbox in {:?} state", sandbox.state)
-            ));
+            return Err(AgentContextError::InvalidStateTransition(format!(
+                "Cannot terminate sandbox in {:?} state",
+                sandbox.state
+            )));
         }
 
         sandbox.state = SandboxState::Terminated;
@@ -566,7 +588,8 @@ impl ContextIsolation {
     /// Cleanup all expired sandboxes
     /// Returns the number of sandboxes cleaned up
     pub fn cleanup_expired(&mut self) -> usize {
-        let expired_ids: Vec<String> = self.sandboxes
+        let expired_ids: Vec<String> = self
+            .sandboxes
             .iter()
             .filter(|(_, sandbox)| sandbox.is_expired())
             .map(|(id, _)| id.clone())
@@ -604,7 +627,6 @@ impl ContextIsolation {
         self.sandboxes.values().filter(|s| s.is_active()).count()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -665,15 +687,14 @@ mod tests {
         assert!(restrictions.is_tool_allowed("read_file"));
 
         // With allowed list
-        let restrictions = SandboxRestrictions::default()
-            .with_allowed_tools(vec!["bash", "read_file"]);
+        let restrictions =
+            SandboxRestrictions::default().with_allowed_tools(vec!["bash", "read_file"]);
         assert!(restrictions.is_tool_allowed("bash"));
         assert!(restrictions.is_tool_allowed("read_file"));
         assert!(!restrictions.is_tool_allowed("write_file"));
 
         // With denied list
-        let restrictions = SandboxRestrictions::default()
-            .with_denied_tools(vec!["bash"]);
+        let restrictions = SandboxRestrictions::default().with_denied_tools(vec!["bash"]);
         assert!(!restrictions.is_tool_allowed("bash"));
         assert!(restrictions.is_tool_allowed("read_file"));
 
@@ -752,16 +773,15 @@ mod tests {
     #[test]
     fn test_sandboxed_context_with_ttl() {
         let context = AgentContext::new();
-        let sandbox = SandboxedContext::new(context, "agent-1", None)
-            .with_ttl(Duration::hours(1));
+        let sandbox = SandboxedContext::new(context, "agent-1", None).with_ttl(Duration::hours(1));
 
         assert!(sandbox.expires_at.is_some());
         assert!(!sandbox.is_expired());
 
         // Create an already expired sandbox
         let context = AgentContext::new();
-        let sandbox = SandboxedContext::new(context, "agent-2", None)
-            .with_ttl(Duration::seconds(-1));
+        let sandbox =
+            SandboxedContext::new(context, "agent-2", None).with_ttl(Duration::seconds(-1));
 
         assert!(sandbox.is_expired());
         assert!(!sandbox.is_active());
@@ -890,10 +910,11 @@ mod tests {
     fn test_context_isolation_is_tool_allowed() {
         let mut isolation = ContextIsolation::new();
         let context = AgentContext::new();
-        let restrictions = SandboxRestrictions::default()
-            .with_allowed_tools(vec!["bash", "read_file"]);
+        let restrictions =
+            SandboxRestrictions::default().with_allowed_tools(vec!["bash", "read_file"]);
 
-        let sandbox = isolation.create_sandbox(context, Some("agent-1".to_string()), Some(restrictions));
+        let sandbox =
+            isolation.create_sandbox(context, Some("agent-1".to_string()), Some(restrictions));
 
         assert!(isolation.is_tool_allowed(&sandbox.sandbox_id, "bash"));
         assert!(isolation.is_tool_allowed(&sandbox.sandbox_id, "read_file"));

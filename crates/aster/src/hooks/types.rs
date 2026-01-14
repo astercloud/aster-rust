@@ -75,7 +75,6 @@ impl std::fmt::Display for HookEvent {
     }
 }
 
-
 /// Hook 类型
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -135,7 +134,6 @@ pub struct PromptHookConfig {
     #[serde(default)]
     pub matcher: Option<String>,
 }
-
 
 /// Agent Hook 配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,7 +197,6 @@ pub struct UrlHookConfig {
     pub matcher: Option<String>,
 }
 
-
 /// HTTP 方法
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -251,7 +248,6 @@ impl HookConfig {
     }
 }
 
-
 /// 错误类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -299,7 +295,6 @@ pub enum CompactTrigger {
     Manual,
     Auto,
 }
-
 
 /// Hook 输入数据
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -361,7 +356,6 @@ pub struct HookInput {
     #[serde(default)]
     pub current_tokens: Option<u64>,
 }
-
 
 /// Hook 决策
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -429,7 +423,6 @@ impl HookResult {
         }
     }
 }
-
 
 // 默认值函数
 fn default_timeout() -> u64 {

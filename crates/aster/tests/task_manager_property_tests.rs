@@ -565,7 +565,7 @@ proptest! {
             );
 
             // Verify all task IDs are present
-            let listed_ids: std::collections::HashSet<_> = 
+            let listed_ids: std::collections::HashSet<_> =
                 all_tasks.iter().map(|t| t.task_id.clone()).collect();
             for task_id in &task_ids {
                 prop_assert!(
@@ -643,7 +643,10 @@ mod edge_case_tests {
 
         // Create a task with multiple lines of output
         let task_id = manager
-            .start("echo line1; echo line2; echo line3; echo line4; echo line5", &context)
+            .start(
+                "echo line1; echo line2; echo line3; echo line4; echo line5",
+                &context,
+            )
             .await
             .unwrap();
 
@@ -726,7 +729,10 @@ mod edge_case_tests {
     #[tokio::test]
     async fn test_task_manager_default_values() {
         let manager = TaskManager::new();
-        assert_eq!(manager.max_concurrent(), aster::tools::DEFAULT_MAX_CONCURRENT);
+        assert_eq!(
+            manager.max_concurrent(),
+            aster::tools::DEFAULT_MAX_CONCURRENT
+        );
         assert_eq!(
             manager.max_runtime(),
             Duration::from_secs(aster::tools::DEFAULT_MAX_RUNTIME_SECS)

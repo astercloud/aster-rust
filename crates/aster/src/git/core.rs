@@ -81,7 +81,6 @@ impl GitUtils {
     }
 }
 
-
 /// 检查是否在 Git 仓库中
 pub fn is_git_repository(cwd: &Path) -> bool {
     GitUtils::exec_git_ok(&["rev-parse", "--is-inside-work-tree"], cwd)
@@ -122,7 +121,6 @@ pub fn get_remote_url(cwd: &Path, remote: &str) -> Option<String> {
 pub fn get_current_commit(cwd: &Path) -> Result<String, String> {
     GitUtils::exec_git(&["rev-parse", "HEAD"], cwd)
 }
-
 
 /// 获取 Git 状态
 pub fn get_git_status(cwd: &Path) -> Result<GitStatus, String> {
@@ -176,7 +174,6 @@ pub fn get_recent_commits(cwd: &Path, count: u32) -> Vec<String> {
         .unwrap_or_default()
 }
 
-
 /// 获取完整的 Git 信息
 pub fn get_git_info(cwd: &Path) -> Option<GitInfo> {
     if !is_git_repository(cwd) {
@@ -210,7 +207,11 @@ pub fn get_push_status(cwd: &Path) -> PushStatus {
     // 获取相对默认分支的提交数
     let default_branch = get_default_branch(cwd);
     let commits_ahead_of_default = GitUtils::exec_git(
-        &["rev-list", "--count", &format!("origin/{}..HEAD", default_branch)],
+        &[
+            "rev-list",
+            "--count",
+            &format!("origin/{}..HEAD", default_branch),
+        ],
         cwd,
     )
     .ok()

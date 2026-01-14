@@ -52,18 +52,12 @@ fn arb_priority() -> impl Strategy<Value = i32> {
 
 /// Generate arbitrary optional expiry timestamp
 fn arb_expires_at() -> impl Strategy<Value = Option<i64>> {
-    prop_oneof![
-        Just(None),
-        (1700000000i64..1900000000i64).prop_map(Some),
-    ]
+    prop_oneof![Just(None), (1700000000i64..1900000000i64).prop_map(Some),]
 }
 
 /// Generate arbitrary optional reason
 fn arb_reason() -> impl Strategy<Value = Option<String>> {
-    prop_oneof![
-        Just(None),
-        "[a-zA-Z0-9 ]{5,30}".prop_map(Some),
-    ]
+    prop_oneof![Just(None), "[a-zA-Z0-9 ]{5,30}".prop_map(Some),]
 }
 
 /// Generate arbitrary ConditionType
@@ -255,13 +249,16 @@ fn permissions_equal(a: &ToolPermission, b: &ToolPermission) -> bool {
         && a.metadata == b.metadata
         && a.conditions.len() == b.conditions.len()
         && a.parameter_restrictions.len() == b.parameter_restrictions.len()
-        && a.conditions.iter().zip(b.conditions.iter()).all(|(ca, cb)| {
-            ca.condition_type == cb.condition_type
-                && ca.field == cb.field
-                && ca.operator == cb.operator
-                && ca.value == cb.value
-                && ca.description == cb.description
-        })
+        && a.conditions
+            .iter()
+            .zip(b.conditions.iter())
+            .all(|(ca, cb)| {
+                ca.condition_type == cb.condition_type
+                    && ca.field == cb.field
+                    && ca.operator == cb.operator
+                    && ca.value == cb.value
+                    && ca.description == cb.description
+            })
         && a.parameter_restrictions
             .iter()
             .zip(b.parameter_restrictions.iter())
@@ -629,7 +626,10 @@ mod unit_tests {
         let manager = ToolPermissionManager::new(None);
         let result = manager.save_permissions(PermissionScope::Global);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No config directory"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("No config directory"));
     }
 
     #[test]

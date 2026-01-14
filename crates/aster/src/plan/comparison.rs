@@ -44,7 +44,6 @@ pub fn default_criteria() -> Vec<ComparisonCriteria> {
     ]
 }
 
-
 /// 计划对比管理器
 pub struct PlanComparisonManager;
 
@@ -95,7 +94,10 @@ impl PlanComparisonManager {
 
         let analysis = Self::generate_analysis(&plans, &scores, &criteria);
         let recommendation = Self::generate_recommendation(
-            plans.iter().find(|p| p.metadata.id == recommended_plan_id).unwrap(),
+            plans
+                .iter()
+                .find(|p| p.metadata.id == recommended_plan_id)
+                .unwrap(),
             &plans,
             &total_scores,
         );
@@ -111,7 +113,6 @@ impl PlanComparisonManager {
             generated_at: current_timestamp(),
         })
     }
-
 
     /// 计算单个计划在某个标准上的得分
     fn calculate_score(plan: &SavedPlan, criterion: &ComparisonCriteria) -> f32 {
@@ -141,14 +142,16 @@ impl PlanComparisonManager {
             return 10.0;
         }
 
-        let total: f32 = plan.risks.iter().map(|r| {
-            match r.level {
+        let total: f32 = plan
+            .risks
+            .iter()
+            .map(|r| match r.level {
                 RiskLevel::Low => 1.0,
                 RiskLevel::Medium => 2.0,
                 RiskLevel::High => 3.0,
                 RiskLevel::Critical => 4.0,
-            }
-        }).sum();
+            })
+            .sum();
 
         let avg = total / plan.risks.len() as f32;
         (10.0 - avg * 2.5).max(1.0)
@@ -162,20 +165,25 @@ impl PlanComparisonManager {
             score += (plan.architectural_decisions.len() as f32 * 0.5).min(2.0);
         }
 
-        if plan.recommendations.as_ref().map_or(false, |r| !r.is_empty()) {
+        if plan
+            .recommendations
+            .as_ref()
+            .map_or(false, |r| !r.is_empty())
+        {
             score += 1.0;
         }
 
         score.min(10.0).max(1.0)
     }
 
-
     /// 评估性能影响得分
     fn score_performance(plan: &SavedPlan) -> f32 {
         let mut score = 5.0;
 
         let perf_keywords = ["performance", "optimize", "fast", "speed", "efficient"];
-        let has_perf_focus = plan.requirements_analysis.non_functional_requirements
+        let has_perf_focus = plan
+            .requirements_analysis
+            .non_functional_requirements
             .iter()
             .any(|req| perf_keywords.iter().any(|k| req.to_lowercase().contains(k)));
 
@@ -183,19 +191,23 @@ impl PlanComparisonManager {
             score += 2.0;
         }
 
-        let perf_risks: Vec<_> = plan.risks.iter()
+        let perf_risks: Vec<_> = plan
+            .risks
+            .iter()
             .filter(|r| matches!(r.category, RiskCategory::Performance))
             .collect();
 
         if !perf_risks.is_empty() {
-            let avg_level: f32 = perf_risks.iter().map(|r| {
-                match r.level {
+            let avg_level: f32 = perf_risks
+                .iter()
+                .map(|r| match r.level {
                     RiskLevel::Low => 1.0,
                     RiskLevel::Medium => 2.0,
                     RiskLevel::High => 3.0,
                     RiskLevel::Critical => 4.0,
-                }
-            }).sum::<f32>() / perf_risks.len() as f32;
+                })
+                .sum::<f32>()
+                / perf_risks.len() as f32;
             score -= avg_level * 0.5;
         }
 
@@ -206,14 +218,20 @@ impl PlanComparisonManager {
     fn score_time_to_implement(plan: &SavedPlan) -> f32 {
         let hours = plan.estimated_hours.unwrap_or(8.0);
 
-        if hours <= 4.0 { 10.0 }
-        else if hours <= 8.0 { 9.0 }
-        else if hours <= 16.0 { 7.0 }
-        else if hours <= 40.0 { 5.0 }
-        else if hours <= 80.0 { 3.0 }
-        else { 1.0 }
+        if hours <= 4.0 {
+            10.0
+        } else if hours <= 8.0 {
+            9.0
+        } else if hours <= 16.0 {
+            7.0
+        } else if hours <= 40.0 {
+            5.0
+        } else if hours <= 80.0 {
+            3.0
+        } else {
+            1.0
+        }
     }
-
 
     /// 生成详细分析
     fn generate_analysis(
@@ -232,19 +250,28 @@ impl PlanComparisonManager {
             let mut plan_weaknesses = Vec::new();
 
             for criterion in criteria {
-                let score = scores.get(plan_id)
+                let score = scores
+                    .get(plan_id)
                     .and_then(|s| s.get(&criterion.name))
                     .copied()
                     .unwrap_or(5.0);
 
-                let avg_score: f32 = scores.values()
+                let avg_score: f32 = scores
+                    .values()
                     .filter_map(|s| s.get(&criterion.name))
-                    .sum::<f32>() / plans.len() as f32;
+                    .sum::<f32>()
+                    / plans.len() as f32;
 
                 if score > avg_score + 1.0 {
-                    plan_strengths.push(format!("Strong {} (score: {:.1})", criterion.description, score));
+                    plan_strengths.push(format!(
+                        "Strong {} (score: {:.1})",
+                        criterion.description, score
+                    ));
                 } else if score < avg_score - 1.0 {
-                    plan_weaknesses.push(format!("Weak {} (score: {:.1})", criterion.description, score));
+                    plan_weaknesses.push(format!(
+                        "Weak {} (score: {:.1})",
+                        criterion.description, score
+                    ));
                 }
             }
 
@@ -255,7 +282,8 @@ impl PlanComparisonManager {
             strengths.insert(plan_id.clone(), plan_strengths);
             weaknesses.insert(plan_id.clone(), plan_weaknesses);
             risk_comparison.insert(plan_id.clone(), plan.risks.clone());
-            complexity_comparison.insert(plan_id.clone(), format!("{:?}", plan.estimated_complexity));
+            complexity_comparison
+                .insert(plan_id.clone(), format!("{:?}", plan.estimated_complexity));
         }
 
         ComparisonAnalysis {
@@ -266,14 +294,16 @@ impl PlanComparisonManager {
         }
     }
 
-
     /// 生成推荐理由
     fn generate_recommendation(
         recommended: &SavedPlan,
         all_plans: &[SavedPlan],
         total_scores: &HashMap<String, f32>,
     ) -> String {
-        let score = total_scores.get(&recommended.metadata.id).copied().unwrap_or(0.0);
+        let score = total_scores
+            .get(&recommended.metadata.id)
+            .copied()
+            .unwrap_or(0.0);
         let avg_score: f32 = total_scores.values().sum::<f32>() / all_plans.len() as f32;
         let diff_pct = ((score / avg_score - 1.0) * 100.0).round();
 
@@ -285,11 +315,15 @@ impl PlanComparisonManager {
             format!(
                 "\nThis plan has {:?} complexity with an estimated {} hours to implement.",
                 recommended.estimated_complexity,
-                recommended.estimated_hours.map_or("unknown".to_string(), |h| format!("{:.1}", h))
+                recommended
+                    .estimated_hours
+                    .map_or("unknown".to_string(), |h| format!("{:.1}", h))
             ),
         ];
 
-        let high_risks: Vec<_> = recommended.risks.iter()
+        let high_risks: Vec<_> = recommended
+            .risks
+            .iter()
             .filter(|r| matches!(r.level, RiskLevel::High | RiskLevel::Critical))
             .collect();
 
@@ -314,10 +348,16 @@ impl PlanComparisonManager {
         lines.push(format!("Comparing {} plans:", comparison.plans.len()));
 
         for (idx, plan) in comparison.plans.iter().enumerate() {
-            let score = comparison.total_scores.get(&plan.metadata.id).unwrap_or(&0.0);
+            let score = comparison
+                .total_scores
+                .get(&plan.metadata.id)
+                .unwrap_or(&0.0);
             lines.push(format!(
                 "{}. **{}** ({:?}) - Score: {:.1}/10",
-                idx + 1, plan.metadata.title, plan.metadata.status, score
+                idx + 1,
+                plan.metadata.title,
+                plan.metadata.status,
+                score
             ));
         }
 

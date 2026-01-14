@@ -48,7 +48,6 @@ impl Default for CompressorConfig {
     }
 }
 
-
 /// 记忆压缩器
 pub struct MemoryCompressor {
     config: CompressorConfig,
@@ -80,7 +79,10 @@ impl MemoryCompressor {
 
         Ok(CompressionResult {
             compressed_summary,
-            preserved_topics: all_topics.into_iter().take(self.config.max_topics).collect(),
+            preserved_topics: all_topics
+                .into_iter()
+                .take(self.config.max_topics)
+                .collect(),
             preserved_files: all_files.into_iter().take(self.config.max_files).collect(),
             original_count: summaries.len(),
             time_range,
@@ -148,7 +150,6 @@ impl MemoryCompressor {
             _ => MemoryImportance::Ephemeral,
         }
     }
-
 
     // === 私有方法 ===
 

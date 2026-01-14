@@ -7,9 +7,9 @@
 //! 4. 更新 index.json 的统计信息
 
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::fs;
 
 use super::types_chunked::*;
 
@@ -51,7 +51,6 @@ struct GitDiffResult {
     /// 删除的文件
     deleted_files: Vec<String>,
 }
-
 
 /// 增量蓝图更新器
 pub struct IncrementalBlueprintUpdater {
@@ -115,15 +114,24 @@ impl IncrementalBlueprintUpdater {
             };
         }
 
-        self.log(options, &format!("检测到 {} 个变更文件", changed_files.len()));
+        self.log(
+            options,
+            &format!("检测到 {} 个变更文件", changed_files.len()),
+        );
 
         // 2. 分析影响范围
         let affected_dirs = self.analyze_impact(&changed_files, options);
-        self.log(options, &format!("影响范围：{} 个目录", affected_dirs.len()));
+        self.log(
+            options,
+            &format!("影响范围：{} 个目录", affected_dirs.len()),
+        );
 
         // 3. 重新生成受影响的 chunk
         let updated_chunks = self.regenerate_chunks(&affected_dirs, options);
-        self.log(options, &format!("已更新 {} 个 chunk", updated_chunks.len()));
+        self.log(
+            options,
+            &format!("已更新 {} 个 chunk", updated_chunks.len()),
+        );
 
         // 4. 更新 index.json
         self.update_index(&updated_chunks, &changed_files, options);
@@ -138,13 +146,12 @@ impl IncrementalBlueprintUpdater {
 
     /// 加载索引
     fn load_index(&mut self) -> Result<(), String> {
-        let content = fs::read_to_string(&self.index_path)
-            .map_err(|e| format!("读取索引失败: {}", e))?;
-        self.index = Some(serde_json::from_str(&content)
-            .map_err(|e| format!("解析索引失败: {}", e))?);
+        let content =
+            fs::read_to_string(&self.index_path).map_err(|e| format!("读取索引失败: {}", e))?;
+        self.index =
+            Some(serde_json::from_str(&content).map_err(|e| format!("解析索引失败: {}", e))?);
         Ok(())
     }
-
 
     /// 检测变更文件
     fn detect_changed_files(&self, options: &UpdateOptions) -> Vec<String> {
@@ -155,7 +162,8 @@ impl IncrementalBlueprintUpdater {
 
         // 手动指定文件
         if let Some(ref files) = options.files {
-            return files.iter()
+            return files
+                .iter()
                 .filter(|f| self.is_source_file(f))
                 .cloned()
                 .collect();
@@ -173,7 +181,8 @@ impl IncrementalBlueprintUpdater {
                 all_changed.extend(git_diff.modified_files);
                 all_changed.extend(git_diff.added_files);
                 all_changed.extend(git_diff.deleted_files);
-                all_changed.into_iter()
+                all_changed
+                    .into_iter()
                     .filter(|f| self.is_source_file(f))
                     .collect()
             }
@@ -248,7 +257,6 @@ impl IncrementalBlueprintUpdater {
         }
     }
 
-
     /// 获取所有源文件
     fn get_all_source_files(&self) -> Vec<String> {
         let mut files = Vec::new();
@@ -311,7 +319,11 @@ impl IncrementalBlueprintUpdater {
     }
 
     /// 分析影响范围
-    fn analyze_impact(&self, changed_files: &[String], _options: &UpdateOptions) -> HashSet<String> {
+    fn analyze_impact(
+        &self,
+        changed_files: &[String],
+        _options: &UpdateOptions,
+    ) -> HashSet<String> {
         let mut affected_dirs = HashSet::new();
 
         if let Some(ref index) = self.index {
@@ -319,7 +331,11 @@ impl IncrementalBlueprintUpdater {
                 // 1. 该文件所属的目录必须更新
                 if let Some(parent) = Path::new(file).parent() {
                     let dir_path = parent.to_string_lossy().to_string();
-                    affected_dirs.insert(if dir_path == "." { String::new() } else { dir_path });
+                    affected_dirs.insert(if dir_path == "." {
+                        String::new()
+                    } else {
+                        dir_path
+                    });
                 }
 
                 // 2. 如果有全局依赖图，检查级联影响
@@ -327,7 +343,11 @@ impl IncrementalBlueprintUpdater {
                 for dep in dependents {
                     if let Some(parent) = Path::new(&dep).parent() {
                         let dir_path = parent.to_string_lossy().to_string();
-                        affected_dirs.insert(if dir_path == "." { String::new() } else { dir_path });
+                        affected_dirs.insert(if dir_path == "." {
+                            String::new()
+                        } else {
+                            dir_path
+                        });
                     }
                 }
             }
@@ -335,7 +355,6 @@ impl IncrementalBlueprintUpdater {
 
         affected_dirs
     }
-
 
     /// 查找依赖当前模块的其他模块
     fn find_dependents(&self, module_id: &str, index: &ChunkedIndex) -> Vec<String> {
@@ -354,11 +373,25 @@ impl IncrementalBlueprintUpdater {
     }
 
     /// 重新生成受影响的 chunk
-    fn regenerate_chunks(&self, affected_dirs: &HashSet<String>, options: &UpdateOptions) -> Vec<String> {
+    fn regenerate_chunks(
+        &self,
+        affected_dirs: &HashSet<String>,
+        options: &UpdateOptions,
+    ) -> Vec<String> {
         let mut updated_chunks = Vec::new();
 
         for dir_path in affected_dirs {
-            self.log(options, &format!("正在更新 chunk: {}", if dir_path.is_empty() { "root" } else { dir_path }));
+            self.log(
+                options,
+                &format!(
+                    "正在更新 chunk: {}",
+                    if dir_path.is_empty() {
+                        "root"
+                    } else {
+                        dir_path
+                    }
+                ),
+            );
 
             // 获取该目录下的所有文件
             let files = if dir_path.is_empty() {
@@ -449,7 +482,6 @@ impl IncrementalBlueprintUpdater {
         Ok(chunk_data)
     }
 
-
     /// 获取 chunk 文件名
     fn get_chunk_file_name(&self, dir_path: &str) -> String {
         if dir_path.is_empty() || dir_path == "." {
@@ -460,13 +492,21 @@ impl IncrementalBlueprintUpdater {
     }
 
     /// 更新 index.json
-    fn update_index(&mut self, updated_chunks: &[String], changed_files: &[String], options: &UpdateOptions) {
+    fn update_index(
+        &mut self,
+        updated_chunks: &[String],
+        changed_files: &[String],
+        options: &UpdateOptions,
+    ) {
         // 预先计算 chunk 文件名，避免借用冲突
-        let chunk_updates: Vec<_> = updated_chunks.iter().map(|dir_path| {
-            let chunk_file_name = Self::get_chunk_file_name_static(dir_path);
-            let chunk_path = self.chunks_dir.join(&chunk_file_name);
-            (dir_path.clone(), chunk_file_name, chunk_path.exists())
-        }).collect();
+        let chunk_updates: Vec<_> = updated_chunks
+            .iter()
+            .map(|dir_path| {
+                let chunk_file_name = Self::get_chunk_file_name_static(dir_path);
+                let chunk_path = self.chunks_dir.join(&chunk_file_name);
+                (dir_path.clone(), chunk_file_name, chunk_path.exists())
+            })
+            .collect();
 
         if let Some(ref mut index) = self.index {
             // 更新元数据
@@ -478,10 +518,9 @@ impl IncrementalBlueprintUpdater {
             // 更新 chunk_index
             for (dir_path, chunk_file_name, exists) in chunk_updates {
                 if exists {
-                    index.chunk_index.insert(
-                        dir_path,
-                        format!("chunks/{}", chunk_file_name),
-                    );
+                    index
+                        .chunk_index
+                        .insert(dir_path, format!("chunks/{}", chunk_file_name));
                 } else {
                     index.chunk_index.remove(&dir_path);
                 }
@@ -564,9 +603,12 @@ impl IncrementalBlueprintUpdater {
         Self::recalculate_statistics_static(&self.chunks_dir, index);
     }
 
-
     /// 更新全局依赖图（静态版本）
-    fn update_global_dependency_graph_static(chunks_dir: &Path, changed_files: &[String], index: &mut ChunkedIndex) {
+    fn update_global_dependency_graph_static(
+        chunks_dir: &Path,
+        changed_files: &[String],
+        index: &mut ChunkedIndex,
+    ) {
         if index.global_dependency_graph.is_none() {
             return;
         }
@@ -578,7 +620,11 @@ impl IncrementalBlueprintUpdater {
                 .parent()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default();
-            let dir_path = if dir_path == "." { String::new() } else { dir_path };
+            let dir_path = if dir_path == "." {
+                String::new()
+            } else {
+                dir_path
+            };
 
             let chunk_file_name = Self::get_chunk_file_name_static(&dir_path);
             let chunk_path = chunks_dir.join(&chunk_file_name);
@@ -591,7 +637,8 @@ impl IncrementalBlueprintUpdater {
                 if let Ok(chunk) = serde_json::from_str::<ChunkData>(&content) {
                     if let Some(module_info) = chunk.modules.get(file) {
                         // 更新该模块的依赖节点
-                        let import_sources: Vec<String> = module_info.imports
+                        let import_sources: Vec<String> = module_info
+                            .imports
                             .iter()
                             .map(|imp| imp.source.clone())
                             .collect();
@@ -601,11 +648,14 @@ impl IncrementalBlueprintUpdater {
                             .map(|n| n.imported_by.clone())
                             .unwrap_or_default();
 
-                        graph.insert(file.clone(), GlobalDependencyNode {
-                            imports: import_sources,
-                            imported_by: existing_imported_by,
-                            exports_symbols: !module_info.exports.is_empty(),
-                        });
+                        graph.insert(
+                            file.clone(),
+                            GlobalDependencyNode {
+                                imports: import_sources,
+                                imported_by: existing_imported_by,
+                                exports_symbols: !module_info.exports.is_empty(),
+                            },
+                        );
 
                         // 更新反向依赖
                         for dep in &chunk.references.module_deps {

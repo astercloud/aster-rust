@@ -105,7 +105,6 @@ fn non_retryable_error_type_strategy() -> impl Strategy<Value = String> {
     ]
 }
 
-
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -341,7 +340,6 @@ proptest! {
     }
 }
 
-
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -574,7 +572,6 @@ proptest! {
     }
 }
 
-
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -643,7 +640,7 @@ proptest! {
             let delay = config.calculate_delay(attempt);
             let expected = Duration::from_millis(base_delay_ms * (attempt as u64 + 1));
             prop_assert_eq!(delay, expected,
-                "Linear strategy delay at attempt {} should be {} * {}", 
+                "Linear strategy delay at attempt {} should be {} * {}",
                 attempt, base_delay_ms, attempt + 1);
         }
     }
@@ -662,7 +659,7 @@ proptest! {
             let delay = config.calculate_delay(attempt);
             let expected = Duration::from_millis(base_delay_ms * 2u64.pow(attempt));
             prop_assert_eq!(delay, expected,
-                "Exponential strategy delay at attempt {} should be {} * 2^{}", 
+                "Exponential strategy delay at attempt {} should be {} * 2^{}",
                 attempt, base_delay_ms, attempt);
         }
     }
@@ -852,7 +849,10 @@ mod additional_tests {
         let mut handler = ErrorHandler::with_config(5, false);
 
         for i in 0..10 {
-            handler.record(ErrorRecord::new(AgentErrorKind::ApiCall, format!("Error {}", i)));
+            handler.record(ErrorRecord::new(
+                AgentErrorKind::ApiCall,
+                format!("Error {}", i),
+            ));
         }
 
         assert_eq!(handler.count(), 5, "Should enforce max errors limit");
@@ -873,9 +873,21 @@ mod additional_tests {
 
         handler.clear_by_agent("agent-1");
 
-        assert_eq!(handler.count(), 1, "Should have 1 error after clearing agent-1");
-        assert_eq!(handler.count_by_agent("agent-1"), 0, "agent-1 should have 0 errors");
-        assert_eq!(handler.count_by_agent("agent-2"), 1, "agent-2 should have 1 error");
+        assert_eq!(
+            handler.count(),
+            1,
+            "Should have 1 error after clearing agent-1"
+        );
+        assert_eq!(
+            handler.count_by_agent("agent-1"),
+            0,
+            "agent-1 should have 0 errors"
+        );
+        assert_eq!(
+            handler.count_by_agent("agent-2"),
+            1,
+            "agent-2 should have 1 error"
+        );
     }
 
     #[test]
@@ -889,7 +901,11 @@ mod additional_tests {
 
         handler.clear();
 
-        assert_eq!(handler.tracked_count(), 0, "Should have 0 tracked agents after clear");
+        assert_eq!(
+            handler.tracked_count(),
+            0,
+            "Should have 0 tracked agents after clear"
+        );
     }
 
     #[test]
@@ -898,7 +914,11 @@ mod additional_tests {
 
         let result = handler.handle_failure("unknown", "network", "Error");
 
-        assert_eq!(result, RetryResult::Skipped, "Unknown operation should be skipped");
+        assert_eq!(
+            result,
+            RetryResult::Skipped,
+            "Unknown operation should be skipped"
+        );
     }
 
     #[test]
@@ -925,8 +945,8 @@ mod additional_tests {
 
     #[test]
     fn test_timeout_config_with_grace_period() {
-        let config = TimeoutConfig::new(Duration::from_secs(60))
-            .with_grace_period(Duration::from_secs(10));
+        let config =
+            TimeoutConfig::new(Duration::from_secs(60)).with_grace_period(Duration::from_secs(10));
 
         assert_eq!(config.grace_period, Some(Duration::from_secs(10)));
     }

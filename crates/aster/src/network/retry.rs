@@ -34,11 +34,21 @@ pub struct RetryConfig {
     pub retryable_status_codes: Vec<u16>,
 }
 
-fn default_max_retries() -> u32 { 4 }
-fn default_base_delay() -> u64 { 1000 }
-fn default_max_delay() -> u64 { 30000 }
-fn default_exponential_backoff() -> bool { true }
-fn default_jitter() -> f64 { 0.1 }
+fn default_max_retries() -> u32 {
+    4
+}
+fn default_base_delay() -> u64 {
+    1000
+}
+fn default_max_delay() -> u64 {
+    30000
+}
+fn default_exponential_backoff() -> bool {
+    true
+}
+fn default_jitter() -> f64 {
+    0.1
+}
 
 fn default_retryable_errors() -> Vec<String> {
     vec![
@@ -206,10 +216,7 @@ where
 }
 
 /// 简化的重试函数
-pub async fn retry<T, E, F, Fut>(
-    operation: F,
-    config: &RetryConfig,
-) -> Result<T, RetryError<E>>
+pub async fn retry<T, E, F, Fut>(operation: F, config: &RetryConfig) -> Result<T, RetryError<E>>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<T, E>>,

@@ -6,9 +6,9 @@
 //! 2. 阶段转换和状态跟踪
 //! 3. 测试执行和结果解析
 
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use super::types::*;
 
@@ -88,7 +88,6 @@ impl Default for TddConfig {
         }
     }
 }
-
 
 // ============================================================================
 // TDD 提示词模板
@@ -177,7 +176,6 @@ impl TddPrompts {
     }
 }
 
-
 // ============================================================================
 // TDD 执行器
 // ============================================================================
@@ -234,7 +232,9 @@ impl TddExecutor {
 
     /// 推进到下一阶段
     pub fn advance_phase(&mut self, task_id: &str) -> Result<TddPhase, String> {
-        let state = self.active_loops.get_mut(task_id)
+        let state = self
+            .active_loops
+            .get_mut(task_id)
             .ok_or_else(|| format!("任务 {} 不在 TDD 循环中", task_id))?;
 
         let next_phase = match state.phase {
@@ -269,14 +269,11 @@ impl TddExecutor {
         Ok(next_phase)
     }
 
-
     /// 记录测试结果
-    pub fn record_test_result(
-        &mut self,
-        task_id: &str,
-        result: TestResult,
-    ) -> Result<(), String> {
-        let state = self.active_loops.get_mut(task_id)
+    pub fn record_test_result(&mut self, task_id: &str, result: TestResult) -> Result<(), String> {
+        let state = self
+            .active_loops
+            .get_mut(task_id)
             .ok_or_else(|| format!("任务 {} 不在 TDD 循环中", task_id))?;
 
         state.last_test_result = Some(result);
@@ -285,7 +282,9 @@ impl TddExecutor {
 
     /// 记录错误
     pub fn record_error(&mut self, task_id: &str, error: String) -> Result<(), String> {
-        let state = self.active_loops.get_mut(task_id)
+        let state = self
+            .active_loops
+            .get_mut(task_id)
             .ok_or_else(|| format!("任务 {} 不在 TDD 循环中", task_id))?;
 
         state.last_error = Some(error);
@@ -294,7 +293,9 @@ impl TddExecutor {
 
     /// 设置测试规格
     pub fn set_test_spec(&mut self, task_id: &str, spec: TestSpec) -> Result<(), String> {
-        let state = self.active_loops.get_mut(task_id)
+        let state = self
+            .active_loops
+            .get_mut(task_id)
             .ok_or_else(|| format!("任务 {} 不在 TDD 循环中", task_id))?;
 
         state.test_spec = Some(spec);
@@ -304,7 +305,9 @@ impl TddExecutor {
 
     /// 标记代码已编写
     pub fn mark_code_written(&mut self, task_id: &str) -> Result<(), String> {
-        let state = self.active_loops.get_mut(task_id)
+        let state = self
+            .active_loops
+            .get_mut(task_id)
             .ok_or_else(|| format!("任务 {} 不在 TDD 循环中", task_id))?;
 
         state.code_written = true;
@@ -313,7 +316,8 @@ impl TddExecutor {
 
     /// 获取当前阶段的提示词
     pub fn get_current_prompt(&self, task_id: &str) -> Option<&'static str> {
-        self.active_loops.get(task_id)
+        self.active_loops
+            .get(task_id)
             .map(|state| TddPrompts::get_prompt(state.phase))
     }
 
@@ -329,7 +333,9 @@ impl TddExecutor {
 
     /// 跳过编写测试阶段（当已有验收测试时）
     pub fn skip_write_test(&mut self, task_id: &str) -> Result<(), String> {
-        let state = self.active_loops.get_mut(task_id)
+        let state = self
+            .active_loops
+            .get_mut(task_id)
             .ok_or_else(|| format!("任务 {} 不在 TDD 循环中", task_id))?;
 
         if state.phase != TddPhase::WriteTest {

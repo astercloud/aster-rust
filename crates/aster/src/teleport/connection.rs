@@ -97,9 +97,10 @@ impl WebSocketManager {
 
     /// 发送消息
     pub async fn send(&self, message: RemoteMessage) -> anyhow::Result<()> {
-        let tx = self.outgoing_tx.as_ref().ok_or_else(|| {
-            anyhow::anyhow!("未连接")
-        })?;
+        let tx = self
+            .outgoing_tx
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("未连接"))?;
         tx.send(message).await?;
         Ok(())
     }
@@ -122,7 +123,9 @@ impl WebSocketManager {
                         return Err(e);
                     }
 
-                    let _ = self.event_tx.send(ConnectionEvent::Reconnecting { attempt: attempts });
+                    let _ = self
+                        .event_tx
+                        .send(ConnectionEvent::Reconnecting { attempt: attempts });
                     tokio::time::sleep(Duration::from_secs(self.config.reconnect_delay)).await;
                 }
             }
@@ -251,7 +254,6 @@ pub async fn can_teleport_to_session(_session_id: &str) -> bool {
     // 检查是否在 git 仓库中
     super::validation::get_current_repo_url().await.is_some()
 }
-
 
 #[cfg(test)]
 mod tests {

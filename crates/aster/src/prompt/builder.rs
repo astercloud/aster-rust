@@ -11,8 +11,7 @@ use super::templates::{
     CORE_IDENTITY, GIT_GUIDELINES, OUTPUT_STYLE, SUBAGENT_SYSTEM, TASK_MANAGEMENT, TOOL_GUIDELINES,
 };
 use super::types::{
-    Attachment, BuildResult, PermissionMode, PromptContext, PromptTooLongError,
-    SystemPromptOptions,
+    Attachment, BuildResult, PermissionMode, PromptContext, PromptTooLongError, SystemPromptOptions,
 };
 
 /// 系统提示词构建器
@@ -59,7 +58,10 @@ impl SystemPromptBuilder {
             let cache_key = generate_cache_key(
                 &context.working_dir.display().to_string(),
                 context.model.as_deref(),
-                context.permission_mode.map(|m| format!("{:?}", m)).as_deref(),
+                context
+                    .permission_mode
+                    .map(|m| format!("{:?}", m))
+                    .as_deref(),
                 context.plan_mode,
             );
 
@@ -76,7 +78,6 @@ impl SystemPromptBuilder {
                 });
             }
         }
-
 
         // 生成附件
         let attachments = self.attachment_manager.generate_attachments(context);
@@ -168,7 +169,6 @@ impl SystemPromptBuilder {
             }
         }
 
-
         // 计算哈希
         let hash_info = self.cache.compute_hash(&content);
 
@@ -177,10 +177,14 @@ impl SystemPromptBuilder {
             let cache_key = generate_cache_key(
                 &context.working_dir.display().to_string(),
                 context.model.as_deref(),
-                context.permission_mode.map(|m| format!("{:?}", m)).as_deref(),
+                context
+                    .permission_mode
+                    .map(|m| format!("{:?}", m))
+                    .as_deref(),
                 context.plan_mode,
             );
-            self.cache.set(cache_key, content.clone(), Some(hash_info.clone()));
+            self.cache
+                .set(cache_key, content.clone(), Some(hash_info.clone()));
         }
 
         let build_time_ms = start_time.elapsed().as_millis() as u64;

@@ -380,7 +380,8 @@ mod edge_case_tests {
     async fn test_cancellation_respected() {
         let tool = DelayedTool::new("test", 1000, 2000);
         let token = tokio_util::sync::CancellationToken::new();
-        let context = ToolContext::new(PathBuf::from("/tmp")).with_cancellation_token(token.clone());
+        let context =
+            ToolContext::new(PathBuf::from("/tmp")).with_cancellation_token(token.clone());
         let params = serde_json::json!({"input": "test"});
 
         // Cancel immediately

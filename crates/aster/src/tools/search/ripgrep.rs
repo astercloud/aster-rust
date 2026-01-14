@@ -83,7 +83,10 @@ pub fn get_vendored_rg_path() -> Option<PathBuf> {
         // Current executable directory
         std::env::current_exe()
             .ok()
-            .and_then(|p| p.parent().map(|p| p.join("vendor/ripgrep").join(PLATFORM_BINARY)))
+            .and_then(|p| {
+                p.parent()
+                    .map(|p| p.join("vendor/ripgrep").join(PLATFORM_BINARY))
+            })
             .unwrap_or_default(),
     ];
 
@@ -144,10 +147,7 @@ pub fn is_ripgrep_available() -> bool {
 pub fn get_ripgrep_version() -> Option<String> {
     let rg_path = get_rg_path()?;
 
-    let output = Command::new(&rg_path)
-        .arg("--version")
-        .output()
-        .ok()?;
+    let output = Command::new(&rg_path).arg("--version").output().ok()?;
 
     if !output.status.success() {
         return None;
@@ -158,11 +158,7 @@ pub fn get_ripgrep_version() -> Option<String> {
     version_str
         .lines()
         .next()
-        .and_then(|line| {
-            line.split_whitespace()
-                .nth(1)
-                .map(|v| v.to_string())
-        })
+        .and_then(|line| line.split_whitespace().nth(1).map(|v| v.to_string()))
 }
 
 /// Build ripgrep command arguments
@@ -265,10 +261,18 @@ fn build_rg_args(options: &RipgrepOptions) -> Vec<String> {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum RgJsonMessage {
-    Begin { data: RgBeginData },
-    Match { data: RgMatchData },
-    End { data: RgEndData },
-    Summary { data: RgSummaryData },
+    Begin {
+        data: RgBeginData,
+    },
+    Match {
+        data: RgMatchData,
+    },
+    End {
+        data: RgEndData,
+    },
+    Summary {
+        data: RgSummaryData,
+    },
     #[serde(other)]
     Other,
 }
@@ -372,7 +376,10 @@ pub async fn search(options: RipgrepOptions) -> Result<RipgrepResult, String> {
         cmd.current_dir(cwd);
     }
 
-    let output = cmd.output().await.map_err(|e| format!("Failed to execute ripgrep: {}", e))?;
+    let output = cmd
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute ripgrep: {}", e))?;
 
     // ripgrep returns 1 when no matches found, which is not an error
     if !output.status.success() && output.status.code() != Some(1) {
@@ -397,7 +404,9 @@ pub fn search_sync(options: &RipgrepOptions) -> Result<String, String> {
         cmd.current_dir(cwd);
     }
 
-    let output = cmd.output().map_err(|e| format!("Failed to execute ripgrep: {}", e))?;
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to execute ripgrep: {}", e))?;
 
     // ripgrep returns 1 when no matches found
     if output.status.code() == Some(1) {
@@ -443,7 +452,10 @@ pub async fn list_files(options: ListFilesOptions) -> Result<Vec<String>, String
         cmd.current_dir(cwd);
     }
 
-    let output = cmd.output().await.map_err(|e| format!("Failed to execute ripgrep: {}", e))?;
+    let output = cmd
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute ripgrep: {}", e))?;
 
     if !output.status.success() && output.status.code() != Some(1) {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -469,7 +481,6 @@ pub struct ListFilesOptions {
     pub hidden: bool,
     pub no_ignore: bool,
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -509,7 +520,6 @@ mod tests {
         assert!(!result.truncated);
     }
 
-
     #[test]
     fn test_build_rg_args_basic() {
         let opts = RipgrepOptions {
@@ -539,7 +549,6 @@ mod tests {
         assert!(args.contains(&"--max-count".to_string()));
     }
 
-
     #[test]
     fn test_build_rg_args_with_context() {
         let opts = RipgrepOptions {
@@ -567,7 +576,6 @@ mod tests {
         assert!(args.contains(&"tests".to_string()));
         assert!(!args.contains(&".".to_string()));
     }
-
 
     #[test]
     fn test_parse_json_output_empty() {

@@ -16,9 +16,9 @@ use std::time::Instant;
 use tokio::process::Command;
 use tokio::sync::RwLock;
 
-use super::types::{AcceptanceTest, TaskNode};
-use super::task_tree_manager::TaskTreeManager;
 use super::blueprint_manager::BlueprintManager;
+use super::task_tree_manager::TaskTreeManager;
+use super::types::{AcceptanceTest, TaskNode};
 
 // ============================================================================
 // 类型定义
@@ -93,7 +93,7 @@ impl AcceptanceTestRunner {
     /// 运行与修改文件相关的验收测试
     pub async fn run_tests_for_file(&self, file_path: &str) -> Vec<AcceptanceTestRunResult> {
         let tree_manager = self.task_tree_manager.read().await;
-        
+
         // 获取当前任务树
         let tree = match tree_manager.get_current_task_tree().await {
             Some(t) => t,
@@ -106,11 +106,17 @@ impl AcceptanceTestRunner {
         // 找到相关的验收测试
         let relevant_tests = self.find_relevant_tests(file_path, &tree.root).await;
         if relevant_tests.is_empty() {
-            self.log(&format!("[AcceptanceTestRunner] 没有找到与 {} 相关的验收测试", file_path));
+            self.log(&format!(
+                "[AcceptanceTestRunner] 没有找到与 {} 相关的验收测试",
+                file_path
+            ));
             return vec![];
         }
 
-        self.log(&format!("[AcceptanceTestRunner] 找到 {} 个相关测试", relevant_tests.len()));
+        self.log(&format!(
+            "[AcceptanceTestRunner] 找到 {} 个相关测试",
+            relevant_tests.len()
+        ));
 
         let mut results = Vec::new();
 
@@ -172,7 +178,9 @@ impl AcceptanceTestRunner {
             println!("[AcceptanceTestRunner] 运行测试: {}", test.name);
         }
 
-        match Self::execute_test_command(config, &test.test_command, Some(&test.test_file_path)).await {
+        match Self::execute_test_command(config, &test.test_command, Some(&test.test_file_path))
+            .await
+        {
             Ok(output) => {
                 let duration = start_time.elapsed().as_millis() as u64;
                 let passed = Self::parse_test_success(&output);
@@ -183,7 +191,11 @@ impl AcceptanceTestRunner {
                     passed,
                     output: output.clone(),
                     duration,
-                    error_message: if passed { None } else { Some(Self::extract_error_message(&output)) },
+                    error_message: if passed {
+                        None
+                    } else {
+                        Some(Self::extract_error_message(&output))
+                    },
                 };
 
                 if passed {
@@ -217,13 +229,16 @@ impl AcceptanceTestRunner {
     }
 
     /// 找到与修改文件相关的验收测试
-    async fn find_relevant_tests(&self, file_path: &str, root_task: &TaskNode) -> Vec<AcceptanceTest> {
+    async fn find_relevant_tests(
+        &self,
+        file_path: &str,
+        root_task: &TaskNode,
+    ) -> Vec<AcceptanceTest> {
         let mut tests = Vec::new();
-        let normalized_path = Path::new(file_path)
-            .to_string_lossy()
-            .to_lowercase();
+        let normalized_path = Path::new(file_path).to_string_lossy().to_lowercase();
 
-        self.traverse_for_tests(root_task, &normalized_path, &mut tests).await;
+        self.traverse_for_tests(root_task, &normalized_path, &mut tests)
+            .await;
         tests
     }
 
@@ -235,7 +250,10 @@ impl AcceptanceTestRunner {
         tests: &mut Vec<AcceptanceTest>,
     ) {
         for test in &task.acceptance_tests {
-            if self.is_test_relevant(test, normalized_file_path, task).await {
+            if self
+                .is_test_relevant(test, normalized_file_path, task)
+                .await
+            {
                 tests.push(test.clone());
             }
         }
@@ -347,7 +365,11 @@ impl AcceptanceTestRunner {
         if output.status.success() {
             Ok(combined)
         } else {
-            Err(format!("测试命令退出码: {:?}\n{}", output.status.code(), combined))
+            Err(format!(
+                "测试命令退出码: {:?}\n{}",
+                output.status.code(),
+                combined
+            ))
         }
     }
 
@@ -423,7 +445,11 @@ impl AcceptanceTestRunner {
             if result.passed {
                 tracing::info!("验收测试通过: {} ({}ms)", result.test_name, result.duration);
             } else {
-                tracing::warn!("验收测试失败: {} - {:?}", result.test_name, result.error_message);
+                tracing::warn!(
+                    "验收测试失败: {} - {:?}",
+                    result.test_name,
+                    result.error_message
+                );
             }
         }
     }
@@ -456,7 +482,10 @@ impl AcceptanceTestRunner {
         let total_duration: u64 = results.iter().map(|r| r.duration).sum();
 
         println!("\n📊 验收测试汇总:");
-        println!("   通过: {}, 失败: {}, 总耗时: {}ms", passed, failed, total_duration);
+        println!(
+            "   通过: {}, 失败: {}, 总耗时: {}ms",
+            passed, failed, total_duration
+        );
 
         if failed > 0 {
             println!("\n⚠️ 失败的测试:");

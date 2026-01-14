@@ -21,7 +21,10 @@ pub struct PluginToolAPI {
 }
 
 impl PluginToolAPI {
-    pub fn new(plugin_name: &str, tools: Arc<RwLock<HashMap<String, Vec<ToolDefinition>>>>) -> Self {
+    pub fn new(
+        plugin_name: &str,
+        tools: Arc<RwLock<HashMap<String, Vec<ToolDefinition>>>>,
+    ) -> Self {
         Self {
             plugin_name: plugin_name.to_string(),
             tools,
@@ -57,7 +60,6 @@ impl PluginToolAPI {
     }
 }
 
-
 /// 插件命令 API
 pub struct PluginCommandAPI {
     plugin_name: String,
@@ -65,7 +67,10 @@ pub struct PluginCommandAPI {
 }
 
 impl PluginCommandAPI {
-    pub fn new(plugin_name: &str, commands: Arc<RwLock<HashMap<String, Vec<CommandDefinition>>>>) -> Self {
+    pub fn new(
+        plugin_name: &str,
+        commands: Arc<RwLock<HashMap<String, Vec<CommandDefinition>>>>,
+    ) -> Self {
         Self {
             plugin_name: plugin_name.to_string(),
             commands,
@@ -108,7 +113,10 @@ pub struct PluginSkillAPI {
 }
 
 impl PluginSkillAPI {
-    pub fn new(plugin_name: &str, skills: Arc<RwLock<HashMap<String, Vec<SkillDefinition>>>>) -> Self {
+    pub fn new(
+        plugin_name: &str,
+        skills: Arc<RwLock<HashMap<String, Vec<SkillDefinition>>>>,
+    ) -> Self {
         Self {
             plugin_name: plugin_name.to_string(),
             skills,
@@ -151,7 +159,10 @@ pub struct PluginHookAPI {
 }
 
 impl PluginHookAPI {
-    pub fn new(plugin_name: &str, hooks: Arc<RwLock<HashMap<String, Vec<HookDefinition>>>>) -> Self {
+    pub fn new(
+        plugin_name: &str,
+        hooks: Arc<RwLock<HashMap<String, Vec<HookDefinition>>>>,
+    ) -> Self {
         Self {
             plugin_name: plugin_name.to_string(),
             hooks,
@@ -266,7 +277,6 @@ impl Default for PluginRegistry {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -291,7 +301,7 @@ mod tests {
         };
 
         tool_api.register(tool);
-        
+
         let tools = tool_api.get_registered();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "test-tool");
@@ -316,7 +326,7 @@ mod tests {
         assert_eq!(tool_api.get_registered().len(), 2);
 
         tool_api.unregister("tool1");
-        
+
         let tools = tool_api.get_registered();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "tool2");
@@ -335,7 +345,7 @@ mod tests {
         };
 
         cmd_api.register(cmd);
-        
+
         let cmds = cmd_api.get_registered();
         assert_eq!(cmds.len(), 1);
         assert_eq!(cmds[0].name, "test-cmd");
@@ -356,7 +366,7 @@ mod tests {
         };
 
         skill_api.register(skill);
-        
+
         let skills = skill_api.get_registered();
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "test-skill");
@@ -373,7 +383,7 @@ mod tests {
         };
 
         hook_api.register(hook);
-        
+
         let hooks = hook_api.get_registered();
         assert_eq!(hooks.len(), 1);
         assert_eq!(hooks[0].hook_type, PluginHookType::BeforeToolCall);
@@ -382,7 +392,7 @@ mod tests {
     #[test]
     fn test_registry_get_all() {
         let registry = PluginRegistry::new();
-        
+
         // 注册多个插件的工具
         let tool_api1 = PluginToolAPI::new("plugin1", Arc::clone(&registry.tools));
         let tool_api2 = PluginToolAPI::new("plugin2", Arc::clone(&registry.tools));
@@ -430,7 +440,7 @@ mod tests {
     #[test]
     fn test_registry_clear_plugin() {
         let registry = PluginRegistry::new();
-        
+
         let tool_api = PluginToolAPI::new("test-plugin", Arc::clone(&registry.tools));
         let cmd_api = PluginCommandAPI::new("test-plugin", Arc::clone(&registry.commands));
 

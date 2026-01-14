@@ -85,10 +85,7 @@ impl SkillRegistry {
 
     /// Get user-invocable skills
     pub fn get_user_invocable(&self) -> Vec<&SkillDefinition> {
-        self.skills
-            .values()
-            .filter(|s| s.user_invocable)
-            .collect()
+        self.skills.values().filter(|s| s.user_invocable).collect()
     }
 
     /// Record an invoked skill
@@ -183,9 +180,8 @@ impl SkillRegistry {
             return String::new();
         }
 
-        let mut instructions = String::from(
-            "You have these skills at your disposal. Use them when relevant:\n\n",
-        );
+        let mut instructions =
+            String::from("You have these skills at your disposal. Use them when relevant:\n\n");
 
         let mut skill_list: Vec<_> = self.skills.values().collect();
         skill_list.sort_by_key(|s| &s.skill_name);
@@ -197,7 +193,6 @@ impl SkillRegistry {
         instructions
     }
 }
-
 
 /// Thread-safe shared skill registry
 pub type SharedSkillRegistry = Arc<RwLock<SkillRegistry>>;
@@ -259,30 +254,29 @@ mod tests {
     fn test_registry_register_and_find() {
         let mut registry = SkillRegistry::new();
         let skill = create_test_skill("my-skill", SkillSource::User);
-        
+
         registry.register(skill);
-        
+
         assert_eq!(registry.len(), 1);
-        
+
         // Exact match
         let found = registry.find("user:my-skill");
         assert!(found.is_some());
         assert_eq!(found.unwrap().display_name, "my-skill");
-        
+
         // Short name match
         let found = registry.find("my-skill");
         assert!(found.is_some());
     }
 
-
     #[test]
     fn test_registry_unregister() {
         let mut registry = SkillRegistry::new();
         let skill = create_test_skill("to-remove", SkillSource::User);
-        
+
         registry.register(skill);
         assert_eq!(registry.len(), 1);
-        
+
         let removed = registry.unregister("user:to-remove");
         assert!(removed.is_some());
         assert_eq!(registry.len(), 0);
@@ -291,14 +285,14 @@ mod tests {
     #[test]
     fn test_registry_get_by_source() {
         let mut registry = SkillRegistry::new();
-        
+
         registry.register(create_test_skill("user-skill", SkillSource::User));
         registry.register(create_test_skill("project-skill", SkillSource::Project));
         registry.register(create_test_skill("plugin-skill", SkillSource::Plugin));
-        
+
         let user_skills = registry.get_by_source(SkillSource::User);
         assert_eq!(user_skills.len(), 1);
-        
+
         let project_skills = registry.get_by_source(SkillSource::Project);
         assert_eq!(project_skills.len(), 1);
     }
@@ -306,13 +300,13 @@ mod tests {
     #[test]
     fn test_registry_record_invoked() {
         let mut registry = SkillRegistry::new();
-        
+
         registry.record_invoked(
             "test-skill",
             &PathBuf::from("/test/SKILL.md"),
             "skill content",
         );
-        
+
         let invoked = registry.get_invoked();
         assert_eq!(invoked.len(), 1);
         assert!(invoked.contains_key("test-skill"));
@@ -321,15 +315,15 @@ mod tests {
     #[test]
     fn test_registry_generate_instructions() {
         let mut registry = SkillRegistry::new();
-        
+
         // Empty registry
         let instructions = registry.generate_instructions();
         assert!(instructions.is_empty());
-        
+
         // With skills
         registry.register(create_test_skill("alpha", SkillSource::User));
         registry.register(create_test_skill("beta", SkillSource::Project));
-        
+
         let instructions = registry.generate_instructions();
         assert!(instructions.contains("alpha"));
         assert!(instructions.contains("beta"));
@@ -340,9 +334,9 @@ mod tests {
         let mut registry = SkillRegistry::new();
         registry.register(create_test_skill("skill", SkillSource::User));
         registry.record_invoked("skill", &PathBuf::from("/test"), "content");
-        
+
         registry.clear();
-        
+
         assert!(registry.is_empty());
         assert!(registry.get_invoked().is_empty());
         assert!(!registry.is_loaded());
@@ -351,12 +345,12 @@ mod tests {
     #[test]
     fn test_shared_registry() {
         let registry = new_shared_registry();
-        
+
         {
             let mut r = registry.write().unwrap();
             r.register(create_test_skill("shared-skill", SkillSource::User));
         }
-        
+
         {
             let r = registry.read().unwrap();
             assert_eq!(r.len(), 1);

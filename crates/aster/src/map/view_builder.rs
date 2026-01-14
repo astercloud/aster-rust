@@ -4,9 +4,9 @@
 
 use std::collections::HashMap;
 
+use super::layer_classifier::LayerClassifier;
 use super::types::ModuleNode;
 use super::types_enhanced::*;
-use super::layer_classifier::LayerClassifier;
 
 /// 视图构建器
 pub struct ViewBuilder {
@@ -15,7 +15,9 @@ pub struct ViewBuilder {
 
 impl ViewBuilder {
     pub fn new() -> Self {
-        Self { classifier: LayerClassifier::new() }
+        Self {
+            classifier: LayerClassifier::new(),
+        }
     }
 
     /// 构建所有视图
@@ -57,7 +59,6 @@ impl ViewBuilder {
         root
     }
 
-
     fn insert_module_node(
         &self,
         parent: &mut DirectoryNode,
@@ -87,7 +88,9 @@ impl ViewBuilder {
                 children: None,
             });
         } else {
-            let dir_idx = children.iter().position(|c| c.name == part && c.node_type == DirectoryNodeType::Directory);
+            let dir_idx = children
+                .iter()
+                .position(|c| c.name == part && c.node_type == DirectoryNodeType::Directory);
 
             if let Some(idx) = dir_idx {
                 self.insert_module_node(&mut children[idx], parts, index + 1, module, _dir_cache);
@@ -109,12 +112,12 @@ impl ViewBuilder {
 
     fn sort_directory_children(&self, node: &mut DirectoryNode) {
         if let Some(ref mut children) = node.children {
-            children.sort_by(|a, b| {
-                match (&a.node_type, &b.node_type) {
-                    (DirectoryNodeType::Directory, DirectoryNodeType::File) => std::cmp::Ordering::Less,
-                    (DirectoryNodeType::File, DirectoryNodeType::Directory) => std::cmp::Ordering::Greater,
-                    _ => a.name.cmp(&b.name),
+            children.sort_by(|a, b| match (&a.node_type, &b.node_type) {
+                (DirectoryNodeType::Directory, DirectoryNodeType::File) => std::cmp::Ordering::Less,
+                (DirectoryNodeType::File, DirectoryNodeType::Directory) => {
+                    std::cmp::Ordering::Greater
                 }
+                _ => a.name.cmp(&b.name),
             });
 
             for child in children.iter_mut() {
@@ -124,7 +127,6 @@ impl ViewBuilder {
             }
         }
     }
-
 
     /// 构建架构分层视图
     pub fn build_architecture_layers(&self, modules: &[ModuleNode]) -> ArchitectureLayers {
@@ -161,7 +163,9 @@ impl ViewBuilder {
 }
 
 impl Default for ViewBuilder {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// 统计目录树节点数量
@@ -189,7 +193,11 @@ pub fn count_tree_nodes(node: &DirectoryNode) -> (usize, usize) {
 pub fn get_tree_depth(node: &DirectoryNode) -> usize {
     fn depth(n: &DirectoryNode, current: usize) -> usize {
         if let Some(ref children) = n.children {
-            children.iter().map(|c| depth(c, current + 1)).max().unwrap_or(current)
+            children
+                .iter()
+                .map(|c| depth(c, current + 1))
+                .max()
+                .unwrap_or(current)
         } else {
             current
         }

@@ -52,7 +52,6 @@ impl OntologyGenerator {
         }
     }
 
-
     fn collect_languages(&self, modules: &[ModuleNode]) -> Vec<String> {
         let mut langs: std::collections::HashSet<String> = std::collections::HashSet::new();
         for m in modules {
@@ -68,7 +67,8 @@ impl OntologyGenerator {
         dep_graph: &DependencyGraph,
     ) -> OntologyStatistics {
         let mut stats = OntologyStatistics::default();
-        let mut lang_breakdown: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut lang_breakdown: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
 
         for module in modules {
             stats.total_modules += 1;
@@ -90,33 +90,49 @@ impl OntologyGenerator {
         stats.language_breakdown = lang_breakdown;
 
         // 最大文件
-        let mut files: Vec<_> = modules.iter()
-            .map(|m| FileStat { path: m.id.clone(), lines: m.lines, size: m.size })
+        let mut files: Vec<_> = modules
+            .iter()
+            .map(|m| FileStat {
+                path: m.id.clone(),
+                lines: m.lines,
+                size: m.size,
+            })
             .collect();
         files.sort_by(|a, b| b.lines.cmp(&a.lines));
         stats.largest_files = files.into_iter().take(10).collect();
 
         // 被调用最多的函数
-        let mut call_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut call_counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
         for edge in &call_graph.edges {
             *call_counts.entry(edge.target.clone()).or_insert(0) += edge.count;
         }
-        let mut most_called: Vec<_> = call_counts.into_iter()
+        let mut most_called: Vec<_> = call_counts
+            .into_iter()
             .map(|(id, count)| {
                 let name = id.split("::").last().unwrap_or(&id).to_string();
-                FunctionStat { id, name, call_count: count }
+                FunctionStat {
+                    id,
+                    name,
+                    call_count: count,
+                }
             })
             .collect();
         most_called.sort_by(|a, b| b.call_count.cmp(&a.call_count));
         stats.most_called_functions = most_called.into_iter().take(10).collect();
 
         // 被导入最多的模块
-        let mut import_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut import_counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
         for edge in &dep_graph.edges {
             *import_counts.entry(edge.target.clone()).or_insert(0) += 1;
         }
-        let mut most_imported: Vec<_> = import_counts.into_iter()
-            .map(|(id, count)| ModuleStat { id, import_count: count })
+        let mut most_imported: Vec<_> = import_counts
+            .into_iter()
+            .map(|(id, count)| ModuleStat {
+                id,
+                import_count: count,
+            })
             .collect();
         most_imported.sort_by(|a, b| b.import_count.cmp(&a.import_count));
         stats.most_imported_modules = most_imported.into_iter().take(10).collect();
@@ -126,7 +142,10 @@ impl OntologyGenerator {
 }
 
 /// 便捷函数：生成本体
-pub fn generate_ontology(root_path: impl AsRef<Path>, options: Option<GenerateOptions>) -> CodeOntology {
+pub fn generate_ontology(
+    root_path: impl AsRef<Path>,
+    options: Option<GenerateOptions>,
+) -> CodeOntology {
     OntologyGenerator::new(root_path, options).generate()
 }
 

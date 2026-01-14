@@ -24,8 +24,8 @@ pub use export::{
 };
 pub use extension_data::{EnabledExtensionsState, ExtensionData, ExtensionState, TodoState};
 pub use fork::{
-    fork_session, get_session_branch_tree, merge_sessions, ForkMetadata, ForkOptions,
-    MergeOptions, MergeStrategy, MetadataStrategy, SessionBranchTree,
+    fork_session, get_session_branch_tree, merge_sessions, ForkMetadata, ForkOptions, MergeOptions,
+    MergeStrategy, MetadataStrategy, SessionBranchTree,
 };
 pub use resume::{
     build_resume_message, delete_summary, has_summary, list_summaries, load_summary,

@@ -131,7 +131,6 @@ impl ToolPermissionManager {
         self.inheritance = inheritance;
     }
 
-
     /// Check if a tool is allowed to execute
     ///
     /// # Arguments
@@ -258,7 +257,6 @@ impl ToolPermissionManager {
             violations: Vec::new(),
         }
     }
-
 
     /// Generate suggestions for resolving permission denials
     ///
@@ -659,12 +657,18 @@ impl ToolPermissionManager {
     /// Requirements: 9.1
     pub fn get_stats(&self) -> super::types::PermissionStats {
         let all_permissions = self.get_permissions(None);
-        
+
         let total_permissions = all_permissions.len();
         let allowed_tools = all_permissions.iter().filter(|p| p.allowed).count();
         let denied_tools = all_permissions.iter().filter(|p| !p.allowed).count();
-        let conditional_tools = all_permissions.iter().filter(|p| !p.conditions.is_empty()).count();
-        let restricted_parameters = all_permissions.iter().filter(|p| !p.parameter_restrictions.is_empty()).count();
+        let conditional_tools = all_permissions
+            .iter()
+            .filter(|p| !p.conditions.is_empty())
+            .count();
+        let restricted_parameters = all_permissions
+            .iter()
+            .filter(|p| !p.parameter_restrictions.is_empty())
+            .count();
 
         super::types::PermissionStats {
             total_permissions,
@@ -696,7 +700,7 @@ impl ToolPermissionManager {
     /// Requirements: 9.2, 9.3
     pub fn query_permissions(&self, filter: super::types::PermissionFilter) -> Vec<ToolPermission> {
         let all_permissions = self.get_permissions(filter.scope);
-        
+
         all_permissions
             .into_iter()
             .filter(|perm| {
@@ -768,7 +772,11 @@ impl ToolPermissionManager {
                     }
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to load global permissions from {:?}: {}", global_path, e);
+                    tracing::warn!(
+                        "Failed to load global permissions from {:?}: {}",
+                        global_path,
+                        e
+                    );
                 }
             }
         }
@@ -784,7 +792,11 @@ impl ToolPermissionManager {
                     }
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to load project permissions from {:?}: {}", project_path, e);
+                    tracing::warn!(
+                        "Failed to load project permissions from {:?}: {}",
+                        project_path,
+                        e
+                    );
                 }
             }
         }
@@ -835,14 +847,8 @@ impl ToolPermissionManager {
             .with_context(|| format!("Failed to create config directory: {:?}", config_dir))?;
 
         let (file_name, permissions) = match scope {
-            PermissionScope::Global => (
-                GLOBAL_PERMISSIONS_FILE,
-                &self.global_permissions,
-            ),
-            PermissionScope::Project => (
-                PROJECT_PERMISSIONS_FILE,
-                &self.project_permissions,
-            ),
+            PermissionScope::Global => (GLOBAL_PERMISSIONS_FILE, &self.global_permissions),
+            PermissionScope::Project => (PROJECT_PERMISSIONS_FILE, &self.project_permissions),
             PermissionScope::Session => unreachable!(), // Already handled above
         };
 
@@ -924,8 +930,7 @@ impl ToolPermissionManager {
             permissions,
         };
 
-        serde_json::to_string_pretty(&config)
-            .context("Failed to serialize permissions to JSON")
+        serde_json::to_string_pretty(&config).context("Failed to serialize permissions to JSON")
     }
 
     /// Import permissions from JSON format
@@ -1063,7 +1068,6 @@ impl Default for ToolPermissionManager {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1083,7 +1087,11 @@ mod tests {
         }
     }
 
-    fn create_simple_permission(tool: &str, allowed: bool, scope: PermissionScope) -> ToolPermission {
+    fn create_simple_permission(
+        tool: &str,
+        allowed: bool,
+        scope: PermissionScope,
+    ) -> ToolPermission {
         ToolPermission {
             tool: tool.to_string(),
             allowed,
@@ -1426,9 +1434,7 @@ mod tests {
     #[test]
     fn test_generate_suggestions_with_violations() {
         let perm = create_simple_permission("bash", true, PermissionScope::Global);
-        let violations = vec![
-            "Parameter 'command' value \"rm\" is not in whitelist".to_string(),
-        ];
+        let violations = vec!["Parameter 'command' value \"rm\" is not in whitelist".to_string()];
 
         let suggestions = ToolPermissionManager::generate_suggestions(&perm, &violations);
 
@@ -1738,7 +1744,10 @@ mod tests {
         let result = manager.import(config_json, PermissionScope::Global);
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unsupported configuration version"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Unsupported configuration version"));
     }
 
     #[test]
@@ -1770,7 +1779,10 @@ mod tests {
         let result = manager.import(config_json, PermissionScope::Global);
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("tool name cannot be empty"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("tool name cannot be empty"));
     }
 
     #[test]
@@ -1910,7 +1922,10 @@ mod tests {
         let result = manager.import(config_json, PermissionScope::Global);
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("must have at least min or max"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must have at least min or max"));
     }
 
     #[test]
@@ -1953,7 +1968,10 @@ mod tests {
         let result = manager.import(config_json, PermissionScope::Global);
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("must have a pattern"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must have a pattern"));
     }
 
     #[test]
@@ -2006,9 +2024,11 @@ mod tests {
     #[test]
     fn test_register_template() {
         let mut manager = ToolPermissionManager::new(None);
-        let template = vec![
-            create_simple_permission("custom_tool", true, PermissionScope::Global),
-        ];
+        let template = vec![create_simple_permission(
+            "custom_tool",
+            true,
+            PermissionScope::Global,
+        )];
 
         manager.register_template("my_template", template);
 
@@ -2019,12 +2039,16 @@ mod tests {
     #[test]
     fn test_register_template_replaces_existing() {
         let mut manager = ToolPermissionManager::new(None);
-        let template1 = vec![
-            create_simple_permission("tool1", true, PermissionScope::Global),
-        ];
-        let template2 = vec![
-            create_simple_permission("tool2", false, PermissionScope::Global),
-        ];
+        let template1 = vec![create_simple_permission(
+            "tool1",
+            true,
+            PermissionScope::Global,
+        )];
+        let template2 = vec![create_simple_permission(
+            "tool2",
+            false,
+            PermissionScope::Global,
+        )];
 
         manager.register_template("my_template", template1);
         manager.register_template("my_template", template2);
@@ -2047,7 +2071,7 @@ mod tests {
 
         assert!(result);
         assert_eq!(manager.permission_counts(), (0, 2, 0));
-        
+
         // Check that scope was updated
         let perm = manager.get_tool_permission("tool1").unwrap();
         assert_eq!(perm.scope, PermissionScope::Project);
@@ -2066,9 +2090,11 @@ mod tests {
     #[test]
     fn test_remove_template() {
         let mut manager = ToolPermissionManager::new(None);
-        let template = vec![
-            create_simple_permission("tool1", true, PermissionScope::Global),
-        ];
+        let template = vec![create_simple_permission(
+            "tool1",
+            true,
+            PermissionScope::Global,
+        )];
 
         manager.register_template("my_template", template);
         let removed = manager.remove_template("my_template");
@@ -2113,24 +2139,26 @@ mod tests {
     #[test]
     fn test_apply_template_to_different_scopes() {
         let mut manager = ToolPermissionManager::new(None);
-        let template = vec![
-            create_simple_permission("tool", true, PermissionScope::Global),
-        ];
+        let template = vec![create_simple_permission(
+            "tool",
+            true,
+            PermissionScope::Global,
+        )];
 
         manager.register_template("my_template", template);
-        
+
         // Apply to Global
         manager.apply_template("my_template", PermissionScope::Global);
         assert_eq!(manager.permission_counts(), (1, 0, 0));
-        
+
         // Apply to Session
         manager.apply_template("my_template", PermissionScope::Session);
         assert_eq!(manager.permission_counts(), (1, 0, 1));
-        
+
         // Check scopes are correct
         let global_perms = manager.get_permissions(Some(PermissionScope::Global));
         let session_perms = manager.get_permissions(Some(PermissionScope::Session));
-        
+
         assert_eq!(global_perms[0].scope, PermissionScope::Global);
         assert_eq!(session_perms[0].scope, PermissionScope::Session);
     }

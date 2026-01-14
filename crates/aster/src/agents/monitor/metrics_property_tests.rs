@@ -48,10 +48,13 @@ fn cost_strategy() -> impl Strategy<Value = f64> {
 
 /// Strategy for generating API call results
 fn api_call_strategy() -> impl Strategy<Value = (bool, Option<Duration>)> {
-    (any::<bool>(), prop_oneof![
-        Just(None),
-        (1u64..1000).prop_map(|ms| Some(Duration::from_millis(ms))),
-    ])
+    (
+        any::<bool>(),
+        prop_oneof![
+            Just(None),
+            (1u64..1000).prop_map(|ms| Some(Duration::from_millis(ms))),
+        ],
+    )
 }
 
 proptest! {
@@ -320,7 +323,7 @@ mod additional_tests {
         monitor.start_tracking("agent-1", "test", None);
 
         let tool_call_id = monitor.start_tool_call("agent-1", "test_tool", Some(100));
-        
+
         // Should return empty string when tracking is disabled
         assert!(tool_call_id.is_empty());
         assert_eq!(monitor.active_tool_call_count(), 0);
@@ -339,7 +342,7 @@ mod additional_tests {
         monitor.stop_tracking("agent-1", AgentExecutionStatus::Completed);
 
         let metrics = monitor.get_metrics("agent-1").unwrap();
-        
+
         // API call should be recorded but latency should not affect performance metrics
         assert_eq!(metrics.api_calls, 1);
     }
@@ -375,7 +378,7 @@ mod additional_tests {
         monitor.start_tracking("agent-2", "test", None);
 
         let tool_call_id = monitor.start_tool_call("agent-1", "test_tool", None);
-        
+
         // Try to end with wrong agent ID
         monitor.end_tool_call("agent-2", &tool_call_id, true, None, None);
 
@@ -401,7 +404,6 @@ mod additional_tests {
         assert_eq!(monitor.agent_count(), 0);
     }
 }
-
 
 // Property 27 tests for metric persistence round-trip
 #[cfg(test)]
@@ -547,7 +549,7 @@ mod persistence_tests {
             agent_id in agent_id_strategy(),
             agent_type in agent_type_strategy(),
             errors in prop::collection::vec(
-                ("[a-zA-Z0-9 ]{1,30}".prop_map(|s| s.to_string()), 
+                ("[a-zA-Z0-9 ]{1,30}".prop_map(|s| s.to_string()),
                  prop_oneof![Just(None), Just(Some("api")), Just(Some("tool"))]),
                 1..5
             ),

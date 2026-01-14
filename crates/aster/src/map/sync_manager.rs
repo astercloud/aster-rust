@@ -6,8 +6,8 @@
 //! 3. 冲突检测和解决机制
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 use super::incremental_updater::{IncrementalBlueprintUpdater, UpdateOptions};
 use super::types_chunked::*;
@@ -50,7 +50,6 @@ pub struct Conflict {
     /// 描述
     pub description: String,
 }
-
 
 /// 冲突类型
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,7 +95,6 @@ pub struct BlueprintCodeSyncManager {
     updater: IncrementalBlueprintUpdater,
 }
 
-
 impl BlueprintCodeSyncManager {
     /// 创建新的同步管理器
     pub fn new(root_path: impl AsRef<Path>) -> Self {
@@ -127,7 +125,10 @@ impl BlueprintCodeSyncManager {
         let mut conflicts = Vec::new();
         let mut synced_files = Vec::new();
 
-        self.log(options, &format!("开始同步 {} 个文件到蓝图...", changed_files.len()));
+        self.log(
+            options,
+            &format!("开始同步 {} 个文件到蓝图...", changed_files.len()),
+        );
 
         for file in changed_files {
             // 1. 检查蓝图中该模块的设计状态
@@ -165,12 +166,15 @@ impl BlueprintCodeSyncManager {
 
         SyncResult {
             success: true,
-            message: format!("已同步 {} 个文件，{} 个冲突", synced_files.len(), conflicts.len()),
+            message: format!(
+                "已同步 {} 个文件，{} 个冲突",
+                synced_files.len(),
+                conflicts.len()
+            ),
             synced_files,
             conflicts,
         }
     }
-
 
     // ========================================================================
     // 蓝图 → 代码同步
@@ -217,7 +221,10 @@ impl BlueprintCodeSyncManager {
                 success: false,
                 file_path: None,
                 code: None,
-                error: Some(format!("文件已存在: {}。请先删除现有文件或更新蓝图状态。", module_id)),
+                error: Some(format!(
+                    "文件已存在: {}。请先删除现有文件或更新蓝图状态。",
+                    module_id
+                )),
             };
         }
 
@@ -250,7 +257,10 @@ impl BlueprintCodeSyncManager {
         let mut synced_files = Vec::new();
         let mut conflicts = Vec::new();
 
-        self.log(options, &format!("找到 {} 个计划模块", planned_modules.len()));
+        self.log(
+            options,
+            &format!("找到 {} 个计划模块", planned_modules.len()),
+        );
 
         for module in planned_modules {
             let result = self.sync_blueprint_to_code(&module.id, options);
@@ -273,12 +283,15 @@ impl BlueprintCodeSyncManager {
 
         SyncResult {
             success: conflicts.is_empty(),
-            message: format!("已生成 {} 个文件，{} 个冲突", synced_files.len(), conflicts.len()),
+            message: format!(
+                "已生成 {} 个文件，{} 个冲突",
+                synced_files.len(),
+                conflicts.len()
+            ),
             synced_files,
             conflicts,
         }
     }
-
 
     // ========================================================================
     // 冲突检测
@@ -369,7 +382,6 @@ impl BlueprintCodeSyncManager {
         exports
     }
 
-
     // ========================================================================
     // 辅助方法
     // ========================================================================
@@ -380,7 +392,11 @@ impl BlueprintCodeSyncManager {
             .parent()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
-        let dir_path = if dir_path == "." { String::new() } else { dir_path };
+        let dir_path = if dir_path == "." {
+            String::new()
+        } else {
+            dir_path
+        };
 
         let chunk_file_name = self.get_chunk_file_name(&dir_path);
         let chunk_path = self.chunks_dir.join(&chunk_file_name);
@@ -408,7 +424,11 @@ impl BlueprintCodeSyncManager {
             .parent()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
-        let dir_path = if dir_path == "." { String::new() } else { dir_path };
+        let dir_path = if dir_path == "." {
+            String::new()
+        } else {
+            dir_path
+        };
 
         let chunk_file_name = self.get_chunk_file_name(&dir_path);
         let chunk_path = self.chunks_dir.join(&chunk_file_name);
@@ -435,11 +455,14 @@ impl BlueprintCodeSyncManager {
 
                     // 添加到 module_design_meta
                     let meta = chunk.module_design_meta.get_or_insert_with(HashMap::new);
-                    meta.insert(module_id.to_string(), ModuleDesignMeta {
-                        status: Some(ModuleStatus::Implemented),
-                        design_notes: Some(planned.design_notes),
-                        marked_at: Some(chrono::Utc::now().to_rfc3339()),
-                    });
+                    meta.insert(
+                        module_id.to_string(),
+                        ModuleDesignMeta {
+                            status: Some(ModuleStatus::Implemented),
+                            design_notes: Some(planned.design_notes),
+                            marked_at: Some(chrono::Utc::now().to_rfc3339()),
+                        },
+                    );
                 }
             }
         } else {
@@ -449,11 +472,14 @@ impl BlueprintCodeSyncManager {
                 existing.status = Some(status);
                 existing.marked_at = Some(chrono::Utc::now().to_rfc3339());
             } else {
-                meta.insert(module_id.to_string(), ModuleDesignMeta {
-                    status: Some(status),
-                    design_notes: None,
-                    marked_at: Some(chrono::Utc::now().to_rfc3339()),
-                });
+                meta.insert(
+                    module_id.to_string(),
+                    ModuleDesignMeta {
+                        status: Some(status),
+                        design_notes: None,
+                        marked_at: Some(chrono::Utc::now().to_rfc3339()),
+                    },
+                );
             }
         }
 
@@ -462,7 +488,6 @@ impl BlueprintCodeSyncManager {
             let _ = fs::write(&chunk_path, json);
         }
     }
-
 
     /// 获取所有计划模块
     fn get_all_planned_modules(&self) -> Vec<PlannedModule> {
@@ -521,18 +546,39 @@ impl BlueprintCodeSyncManager {
         }
 
         // 生成预期导出
-        let expected_exports = design.expected_exports.clone().unwrap_or_else(|| vec![struct_name.clone()]);
+        let expected_exports = design
+            .expected_exports
+            .clone()
+            .unwrap_or_else(|| vec![struct_name.clone()]);
 
         // 检测语言类型
         let is_rust = module_id.ends_with(".rs");
         let is_typescript = module_id.ends_with(".ts") || module_id.ends_with(".tsx");
 
         if is_rust {
-            self.generate_rust_code(&name, &struct_name, design_notes, &imports, &expected_exports)
+            self.generate_rust_code(
+                &name,
+                &struct_name,
+                design_notes,
+                &imports,
+                &expected_exports,
+            )
         } else if is_typescript {
-            self.generate_typescript_code(&name, &struct_name, design_notes, &imports, &expected_exports)
+            self.generate_typescript_code(
+                &name,
+                &struct_name,
+                design_notes,
+                &imports,
+                &expected_exports,
+            )
         } else {
-            self.generate_rust_code(&name, &struct_name, design_notes, &imports, &expected_exports)
+            self.generate_rust_code(
+                &name,
+                &struct_name,
+                design_notes,
+                &imports,
+                &expected_exports,
+            )
         }
     }
 
@@ -548,7 +594,13 @@ impl BlueprintCodeSyncManager {
         let other_exports: String = expected_exports
             .iter()
             .filter(|e| *e != struct_name)
-            .map(|e| format!("\n/// {}\n/// TODO: 实现\npub const {}: () = ();\n", e, e.to_uppercase()))
+            .map(|e| {
+                format!(
+                    "\n/// {}\n/// TODO: 实现\npub const {}: () = ();\n",
+                    e,
+                    e.to_uppercase()
+                )
+            })
             .collect();
 
         format!(
@@ -601,7 +653,6 @@ impl Default for {} {{
         )
     }
 
-
     /// 生成 TypeScript 代码
     fn generate_typescript_code(
         &self,
@@ -614,7 +665,12 @@ impl Default for {} {{
         let other_exports: String = expected_exports
             .iter()
             .filter(|e| *e != class_name)
-            .map(|e| format!("\n/**\n * {}\n * TODO: 实现\n */\nexport const {} = undefined;\n", e, e))
+            .map(|e| {
+                format!(
+                    "\n/**\n * {}\n * TODO: 实现\n */\nexport const {} = undefined;\n",
+                    e, e
+                )
+            })
             .collect();
 
         format!(

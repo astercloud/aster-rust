@@ -59,9 +59,10 @@ impl TelemetryTracker {
         };
 
         *self.current_session.write() = Some(session);
-        self.track_event("session_start", HashMap::from([
-            ("model".to_string(), serde_json::json!(model)),
-        ]));
+        self.track_event(
+            "session_start",
+            HashMap::from([("model".to_string(), serde_json::json!(model))]),
+        );
     }
 
     /// 结束会话
@@ -75,12 +76,24 @@ impl TelemetryTracker {
             session.end_time = Some(current_timestamp());
 
             let duration = session.end_time.unwrap() - session.start_time;
-            self.track_event("session_end", HashMap::from([
-                ("duration".to_string(), serde_json::json!(duration)),
-                ("message_count".to_string(), serde_json::json!(session.message_count)),
-                ("token_usage".to_string(), serde_json::to_value(&session.token_usage).unwrap()),
-                ("estimated_cost".to_string(), serde_json::json!(session.estimated_cost)),
-            ]));
+            self.track_event(
+                "session_end",
+                HashMap::from([
+                    ("duration".to_string(), serde_json::json!(duration)),
+                    (
+                        "message_count".to_string(),
+                        serde_json::json!(session.message_count),
+                    ),
+                    (
+                        "token_usage".to_string(),
+                        serde_json::to_value(&session.token_usage).unwrap(),
+                    ),
+                    (
+                        "estimated_cost".to_string(),
+                        serde_json::json!(session.estimated_cost),
+                    ),
+                ]),
+            );
 
             self.update_aggregate_metrics(session);
         }
@@ -95,7 +108,9 @@ impl TelemetryTracker {
         }
 
         let sanitized_data = sanitize_map(&data);
-        let session_id = self.current_session.read()
+        let session_id = self
+            .current_session
+            .read()
             .as_ref()
             .map(|s| s.session_id.clone())
             .unwrap_or_else(|| "unknown".to_string());
@@ -136,9 +151,10 @@ impl TelemetryTracker {
             session.message_count += 1;
         }
 
-        self.track_event("message", HashMap::from([
-            ("role".to_string(), serde_json::json!(role)),
-        ]));
+        self.track_event(
+            "message",
+            HashMap::from([("role".to_string(), serde_json::json!(role))]),
+        );
     }
 
     /// 跟踪工具调用
@@ -154,11 +170,14 @@ impl TelemetryTracker {
             }
         }
 
-        self.track_event("tool_call", HashMap::from([
-            ("tool_name".to_string(), serde_json::json!(tool_name)),
-            ("success".to_string(), serde_json::json!(success)),
-            ("duration".to_string(), serde_json::json!(duration)),
-        ]));
+        self.track_event(
+            "tool_call",
+            HashMap::from([
+                ("tool_name".to_string(), serde_json::json!(tool_name)),
+                ("success".to_string(), serde_json::json!(success)),
+                ("duration".to_string(), serde_json::json!(duration)),
+            ]),
+        );
 
         if self.config.read().performance_tracking {
             self.track_performance(tool_name, duration, success, None);
@@ -171,11 +190,14 @@ impl TelemetryTracker {
             return;
         }
 
-        self.track_event("command_use", HashMap::from([
-            ("command_name".to_string(), serde_json::json!(command_name)),
-            ("success".to_string(), serde_json::json!(success)),
-            ("duration".to_string(), serde_json::json!(duration)),
-        ]));
+        self.track_event(
+            "command_use",
+            HashMap::from([
+                ("command_name".to_string(), serde_json::json!(command_name)),
+                ("success".to_string(), serde_json::json!(success)),
+                ("duration".to_string(), serde_json::json!(duration)),
+            ]),
+        );
 
         if self.config.read().performance_tracking {
             self.track_performance(
@@ -200,11 +222,14 @@ impl TelemetryTracker {
             session.estimated_cost += cost;
         }
 
-        self.track_event("token_usage", HashMap::from([
-            ("input".to_string(), serde_json::json!(input)),
-            ("output".to_string(), serde_json::json!(output)),
-            ("cost".to_string(), serde_json::json!(cost)),
-        ]));
+        self.track_event(
+            "token_usage",
+            HashMap::from([
+                ("input".to_string(), serde_json::json!(input)),
+                ("output".to_string(), serde_json::json!(output)),
+                ("cost".to_string(), serde_json::json!(cost)),
+            ]),
+        );
     }
 
     /// 跟踪错误
@@ -217,9 +242,7 @@ impl TelemetryTracker {
             session.errors += 1;
         }
 
-        let mut data = HashMap::from([
-            ("error".to_string(), serde_json::json!(error)),
-        ]);
+        let mut data = HashMap::from([("error".to_string(), serde_json::json!(error))]);
         if let Some(ctx) = context {
             data.extend(ctx);
         }
@@ -267,7 +290,9 @@ impl TelemetryTracker {
         }
 
         let sanitized_context = sanitize_map(&context);
-        let session_id = self.current_session.read()
+        let session_id = self
+            .current_session
+            .read()
             .as_ref()
             .map(|s| s.session_id.clone())
             .unwrap_or_else(|| "unknown".to_string());
@@ -303,7 +328,10 @@ impl TelemetryTracker {
             *metrics.tool_usage.entry(tool.clone()).or_insert(0) += count;
         }
 
-        *metrics.model_usage.entry(session.model.clone()).or_insert(0) += 1;
+        *metrics
+            .model_usage
+            .entry(session.model.clone())
+            .or_insert(0) += 1;
 
         let duration = session.end_time.unwrap_or(current_timestamp()) - session.start_time;
         metrics.average_session_duration = (metrics.average_session_duration
@@ -428,10 +456,14 @@ fn get_or_create_anonymous_id() -> String {
     // 生成新的匿名 ID
     let machine_info = format!(
         "{}|{}|{}|{}",
-        hostname::get().map(|h| h.to_string_lossy().to_string()).unwrap_or_default(),
+        hostname::get()
+            .map(|h| h.to_string_lossy().to_string())
+            .unwrap_or_default(),
         std::env::consts::OS,
         std::env::consts::ARCH,
-        dirs::home_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
+        dirs::home_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default(),
     );
 
     let mut hasher = Sha256::new();
@@ -507,7 +539,11 @@ fn trim_jsonl_file(path: &std::path::Path, max_lines: usize) {
     let lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
 
     if lines.len() > max_lines {
-        let trimmed: Vec<&str> = lines.iter().skip(lines.len() - max_lines).map(|s| s.as_str()).collect();
+        let trimmed: Vec<&str> = lines
+            .iter()
+            .skip(lines.len() - max_lines)
+            .map(|s| s.as_str())
+            .collect();
         let _ = fs::write(path, trimmed.join("\n") + "\n");
     }
 }

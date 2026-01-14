@@ -11,22 +11,48 @@
 //! - Error handling
 
 use aster::agents::{
-    // Context
-    AgentContext, AgentContextManager, ContextInheritanceConfig, ContextInheritanceType,
-    ContextIsolation, SandboxRestrictions, SandboxState,
     // Communication
-    AgentCapabilities, AgentCoordinator, AgentMessageBus,
-    AssignmentCriteria, LoadBalanceStrategy, SharedStateManager, Task,
-    // Parallel
-    AgentPool, AgentTask, DependencyGraph, ParallelAgentConfig, ParallelAgentExecutor,
+    AgentCapabilities,
+    // Context
+    AgentContext,
+    AgentContextManager,
+    AgentCoordinator,
+    AgentErrorKind,
+    AgentMessageBus,
     // Monitor
-    AgentMonitor, PerformanceAnalyzer,
+    AgentMonitor,
+    // Parallel
+    AgentPool,
+    AgentResumer,
     // Resume
-    AgentState, AgentStateManager, AgentStateStatus, AgentResumer,
-    // Specialized
-    ExploreAgent, ExploreOptions, PlanAgent, PlanOptions, ThoroughnessLevel,
+    AgentState,
+    AgentStateManager,
+    AgentStateStatus,
+    AgentTask,
+    AssignmentCriteria,
+    ContextInheritanceConfig,
+    ContextInheritanceType,
+    ContextIsolation,
+    DependencyGraph,
+    ErrorContext,
     // Error handling
-    ErrorHandler, TimeoutHandler, RetryHandler, AgentErrorKind, ErrorContext,
+    ErrorHandler,
+    // Specialized
+    ExploreAgent,
+    ExploreOptions,
+    LoadBalanceStrategy,
+    ParallelAgentConfig,
+    ParallelAgentExecutor,
+    PerformanceAnalyzer,
+    PlanAgent,
+    PlanOptions,
+    RetryHandler,
+    SandboxRestrictions,
+    SandboxState,
+    SharedStateManager,
+    Task,
+    ThoroughnessLevel,
+    TimeoutHandler,
 };
 use serde_json::json;
 use std::collections::HashSet;
@@ -77,11 +103,17 @@ fn test_context_isolation_with_restrictions() {
         max_tokens: 1000,
         max_files: 10,
         max_tool_results: 5,
-        allowed_tools: Some(["read_file", "write_file"].iter().map(|s| s.to_string()).collect()),
+        allowed_tools: Some(
+            ["read_file", "write_file"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        ),
         denied_tools: None,
     };
 
-    let sandbox = isolation.create_sandbox(context, Some("agent-1".to_string()), Some(restrictions));
+    let sandbox =
+        isolation.create_sandbox(context, Some("agent-1".to_string()), Some(restrictions));
     assert_eq!(sandbox.state, SandboxState::Active);
     assert_eq!(sandbox.restrictions.max_tokens, 1000);
 
@@ -102,10 +134,10 @@ fn test_message_bus_and_coordinator_integration() {
     let mut coordinator = AgentCoordinator::new();
 
     // Register agents
-    let agent1 = AgentCapabilities::new("agent-1", "worker")
-        .with_capabilities(vec!["compute".to_string()]);
-    let agent2 = AgentCapabilities::new("agent-2", "worker")
-        .with_capabilities(vec!["io".to_string()]);
+    let agent1 =
+        AgentCapabilities::new("agent-1", "worker").with_capabilities(vec!["compute".to_string()]);
+    let agent2 =
+        AgentCapabilities::new("agent-2", "worker").with_capabilities(vec!["io".to_string()]);
 
     coordinator.register_agent(agent1).unwrap();
     coordinator.register_agent(agent2).unwrap();
@@ -115,7 +147,8 @@ fn test_message_bus_and_coordinator_integration() {
     bus.subscribe("agent-2", vec!["task".to_string()]);
 
     // Broadcast a message
-    bus.broadcast("task", json!({"action": "process"}), "coordinator").unwrap();
+    bus.broadcast("task", json!({"action": "process"}), "coordinator")
+        .unwrap();
 
     // Both agents should receive the message
     assert_eq!(bus.queue_size("agent-1"), 1);
@@ -157,7 +190,9 @@ fn test_distributed_locking() {
     let mut state = SharedStateManager::new();
 
     // Acquire lock
-    let lock = state.lock("resource-1", "agent-1", Some(chrono::Duration::seconds(30))).unwrap();
+    let lock = state
+        .lock("resource-1", "agent-1", Some(chrono::Duration::seconds(30)))
+        .unwrap();
     assert!(state.is_locked("resource-1"));
 
     // Try to acquire same lock should fail
@@ -169,7 +204,9 @@ fn test_distributed_locking() {
     assert!(!state.is_locked("resource-1"));
 
     // Now agent-2 can acquire
-    let lock2 = state.lock("resource-1", "agent-2", Some(chrono::Duration::seconds(30))).unwrap();
+    let lock2 = state
+        .lock("resource-1", "agent-2", Some(chrono::Duration::seconds(30)))
+        .unwrap();
     assert_eq!(lock2.holder, "agent-2");
 }
 
@@ -356,11 +393,7 @@ fn test_error_and_timeout_handler_integration() {
     let context = ErrorContext::new()
         .with_agent_id("agent-1")
         .with_phase("execution");
-    error_handler.record_with_context(
-        AgentErrorKind::Internal,
-        "Test error",
-        context,
-    );
+    error_handler.record_with_context(AgentErrorKind::Internal, "Test error", context);
 
     // Get errors for the agent
     let errors = error_handler.get_by_agent("agent-1");
@@ -410,8 +443,7 @@ fn test_full_agent_workflow() {
 
     // 4. Assign task
     let task = Task::new("process", json!({"data": "test"}));
-    let criteria = AssignmentCriteria::new()
-        .with_capabilities(vec!["process".to_string()]);
+    let criteria = AssignmentCriteria::new().with_capabilities(vec!["process".to_string()]);
     let assigned = coordinator.assign_task(task, &criteria).unwrap();
     assert_eq!(assigned, "worker-1");
 
@@ -440,7 +472,11 @@ fn test_isolation_with_shared_state() {
         denied_tools: Some(["dangerous_tool".to_string()].iter().cloned().collect()),
     };
 
-    let sandbox = isolation.create_sandbox(context, Some("isolated-agent".to_string()), Some(restrictions));
+    let sandbox = isolation.create_sandbox(
+        context,
+        Some("isolated-agent".to_string()),
+        Some(restrictions),
+    );
 
     // Store sandbox info in shared state
     state.set(
@@ -453,7 +489,9 @@ fn test_isolation_with_shared_state() {
     );
 
     // Verify shared state
-    let sandbox_info = state.get(&format!("sandbox:{}", sandbox.sandbox_id)).unwrap();
+    let sandbox_info = state
+        .get(&format!("sandbox:{}", sandbox.sandbox_id))
+        .unwrap();
     assert_eq!(sandbox_info["state"], "active");
 }
 

@@ -9,42 +9,44 @@ use super::types::*;
 pub fn get_platform() -> Platform {
     #[cfg(target_os = "macos")]
     return Platform::MacOS;
-    
+
     #[cfg(target_os = "windows")]
     return Platform::Windows;
-    
+
     #[cfg(target_os = "linux")]
     {
         // 检查是否在 WSL 中
         if let Ok(release) = std::fs::read_to_string("/proc/version") {
-            if release.to_lowercase().contains("microsoft") 
-                || release.to_lowercase().contains("wsl") {
+            if release.to_lowercase().contains("microsoft")
+                || release.to_lowercase().contains("wsl")
+            {
                 return Platform::Wsl;
             }
         }
         return Platform::Linux;
     }
-    
+
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     return Platform::Unknown;
 }
 
-
 /// 获取 Chrome Native Messaging Hosts 目录路径
 pub fn get_native_hosts_directory() -> Option<PathBuf> {
     let home = dirs::home_dir()?;
-    
+
     match get_platform() {
-        Platform::MacOS => Some(home
-            .join("Library")
-            .join("Application Support")
-            .join("Google")
-            .join("Chrome")
-            .join("NativeMessagingHosts")),
-        Platform::Linux => Some(home
-            .join(".config")
-            .join("google-chrome")
-            .join("NativeMessagingHosts")),
+        Platform::MacOS => Some(
+            home.join("Library")
+                .join("Application Support")
+                .join("Google")
+                .join("Chrome")
+                .join("NativeMessagingHosts"),
+        ),
+        Platform::Linux => Some(
+            home.join(".config")
+                .join("google-chrome")
+                .join("NativeMessagingHosts"),
+        ),
         Platform::Windows => {
             let app_data = std::env::var("APPDATA")
                 .map(PathBuf::from)
@@ -68,17 +70,16 @@ pub fn get_socket_path() -> String {
         .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "unknown".to_string());
     let socket_name = format!("aster-mcp-browser-bridge-{}", username);
-    
+
     #[cfg(windows)]
     return format!("\\\\.\\pipe\\{}", socket_name);
-    
+
     #[cfg(not(windows))]
     return std::env::temp_dir()
         .join(socket_name)
         .to_string_lossy()
         .to_string();
 }
-
 
 /// 生成 Native Host Manifest
 pub fn generate_native_host_manifest(wrapper_script_path: &str) -> serde_json::Value {
@@ -109,7 +110,10 @@ pub fn generate_wrapper_script(command: &str) -> String {
 
 /// 检查 Chrome 集成是否支持
 pub fn is_chrome_integration_supported() -> bool {
-    matches!(get_platform(), Platform::MacOS | Platform::Linux | Platform::Windows)
+    matches!(
+        get_platform(),
+        Platform::MacOS | Platform::Linux | Platform::Windows
+    )
 }
 
 /// 检查 Chrome 集成是否已配置
@@ -118,11 +122,10 @@ pub async fn is_chrome_integration_configured() -> bool {
         Some(d) => d,
         None => return false,
     };
-    
+
     let manifest_path = hosts_dir.join(format!("{}.json", NATIVE_HOST_NAME));
     fs::metadata(&manifest_path).await.is_ok()
 }
-
 
 /// 获取所有 MCP 工具名称
 pub fn get_mcp_tool_names() -> Vec<String> {
@@ -203,7 +206,11 @@ pub async fn setup_chrome_native_host(command: &str) -> Result<SetupResult, Stri
         .map_err(|e| format!("Failed to create native hosts directory: {}", e))?;
 
     // 生成 wrapper script 路径
-    let wrapper_ext = if get_platform() == Platform::Windows { "bat" } else { "sh" };
+    let wrapper_ext = if get_platform() == Platform::Windows {
+        "bat"
+    } else {
+        "sh"
+    };
     let wrapper_path = hosts_dir.join(format!("{}.{}", NATIVE_HOST_NAME, wrapper_ext));
 
     // 写入 wrapper script
@@ -226,7 +233,7 @@ pub async fn setup_chrome_native_host(command: &str) -> Result<SetupResult, Stri
     let manifest = generate_native_host_manifest(&wrapper_path.to_string_lossy());
     let manifest_json = serde_json::to_string_pretty(&manifest)
         .map_err(|e| format!("Failed to serialize manifest: {}", e))?;
-    
+
     fs::write(&manifest_path, &manifest_json)
         .await
         .map_err(|e| format!("Failed to write manifest: {}", e))?;
@@ -281,7 +288,11 @@ pub async fn uninstall_chrome_native_host() -> Result<(), String> {
     }
 
     // 删除 wrapper script
-    let wrapper_ext = if get_platform() == Platform::Windows { "bat" } else { "sh" };
+    let wrapper_ext = if get_platform() == Platform::Windows {
+        "bat"
+    } else {
+        "sh"
+    };
     let wrapper_path = hosts_dir.join(format!("{}.{}", NATIVE_HOST_NAME, wrapper_ext));
     if fs::metadata(&wrapper_path).await.is_ok() {
         fs::remove_file(&wrapper_path)

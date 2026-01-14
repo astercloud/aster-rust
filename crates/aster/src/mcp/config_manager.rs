@@ -40,7 +40,6 @@ pub struct McpConfigFile {
     pub mcp_servers: HashMap<String, McpServerConfig>,
 }
 
-
 /// Configuration manager trait
 ///
 /// Defines the interface for managing MCP server configurations.
@@ -101,7 +100,6 @@ pub trait ConfigManager: Send + Sync {
     fn on_change(&self, callback: ConfigChangeCallback) -> Box<dyn FnOnce() + Send>;
 }
 
-
 /// Configuration change event
 #[derive(Debug, Clone)]
 pub enum ConfigEvent {
@@ -146,7 +144,6 @@ impl ConfigState {
     }
 }
 
-
 /// Default implementation of the configuration manager
 pub struct McpConfigManager {
     /// Configuration state
@@ -178,15 +175,12 @@ impl McpConfigManager {
 
     /// Get the global config path
     pub fn global_config_path(&self) -> PathBuf {
-        self.options
-            .global_config_path
-            .clone()
-            .unwrap_or_else(|| {
-                dirs::home_dir()
-                    .unwrap_or_else(|| PathBuf::from("~"))
-                    .join(".aster")
-                    .join("settings.yaml")
-            })
+        self.options.global_config_path.clone().unwrap_or_else(|| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("~"))
+                .join(".aster")
+                .join("settings.yaml")
+        })
     }
 
     /// Get the project config path
@@ -243,7 +237,8 @@ impl McpConfigManager {
                 if changed {
                     // Reload configuration
                     if let Ok(global_config) = Self::load_config_from_file(&global_path).await {
-                        if let Ok(project_config) = Self::load_config_from_file(&project_path).await {
+                        if let Ok(project_config) = Self::load_config_from_file(&project_path).await
+                        {
                             let mut s = state.write().await;
                             s.global_config = global_config;
                             s.project_config = project_config;
@@ -329,9 +324,8 @@ impl McpConfigManager {
         config_file.mcp_servers = servers.clone();
 
         // Write back
-        let content = serde_yaml::to_string(&config_file).map_err(|e| {
-            McpError::config_with_source("Failed to serialize config", e)
-        })?;
+        let content = serde_yaml::to_string(&config_file)
+            .map_err(|e| McpError::config_with_source("Failed to serialize config", e))?;
 
         tokio::fs::write(path, content).await.map_err(|e| {
             McpError::config_with_source(format!("Failed to write config file: {:?}", path), e)
@@ -339,7 +333,6 @@ impl McpConfigManager {
 
         Ok(())
     }
-
 
     /// Notify all registered callbacks of a configuration change
     async fn notify_change(&self, changed_server: Option<&str>) {
@@ -385,7 +378,6 @@ impl Default for McpConfigManager {
     }
 }
 
-
 #[async_trait]
 impl ConfigManager for McpConfigManager {
     async fn load(&self) -> McpResult<()> {
@@ -423,7 +415,6 @@ impl ConfigManager for McpConfigManager {
             .ok()
             .and_then(|s| s.merged_config.get(name).cloned())
     }
-
 
     async fn add_server(&self, name: &str, config: McpServerConfig) -> McpResult<()> {
         // Validate configuration
@@ -485,7 +476,6 @@ impl ConfigManager for McpConfigManager {
         Ok(())
     }
 
-
     async fn remove_server(&self, name: &str) -> McpResult<bool> {
         let existed = {
             let mut state = self.state.write().await;
@@ -509,9 +499,9 @@ impl ConfigManager for McpConfigManager {
     }
 
     async fn enable_server(&self, name: &str) -> McpResult<()> {
-        let config = self.get_server(name).ok_or_else(|| {
-            McpError::config(format!("Server not found: {}", name))
-        })?;
+        let config = self
+            .get_server(name)
+            .ok_or_else(|| McpError::config(format!("Server not found: {}", name)))?;
 
         let mut updated = config;
         updated.enabled = true;
@@ -519,9 +509,9 @@ impl ConfigManager for McpConfigManager {
     }
 
     async fn disable_server(&self, name: &str) -> McpResult<()> {
-        let config = self.get_server(name).ok_or_else(|| {
-            McpError::config(format!("Server not found: {}", name))
-        })?;
+        let config = self
+            .get_server(name)
+            .ok_or_else(|| McpError::config(format!("Server not found: {}", name)))?;
 
         let mut updated = config;
         updated.enabled = false;
@@ -540,7 +530,6 @@ impl ConfigManager for McpConfigManager {
             })
             .unwrap_or_default()
     }
-
 
     fn validate(&self, config: &McpServerConfig) -> ValidationResult {
         let mut result = ValidationResult::valid();
@@ -592,7 +581,10 @@ impl ConfigManager for McpConfigManager {
         for (name, config) in servers {
             let validation = self.validate(&config);
             let command_exists = if config.transport_type == TransportType::Stdio {
-                config.command.as_ref().map(|cmd| Self::check_command_exists(cmd))
+                config
+                    .command
+                    .as_ref()
+                    .map(|cmd| Self::check_command_exists(cmd))
             } else {
                 None
             };
@@ -608,7 +600,6 @@ impl ConfigManager for McpConfigManager {
 
         results
     }
-
 
     async fn save(&self, scope: ConfigScope) -> McpResult<()> {
         let (path, config) = {
@@ -628,9 +619,9 @@ impl ConfigManager for McpConfigManager {
         let backup_path = project_path.with_extension(format!("yaml.backup.{}", timestamp));
 
         if project_path.exists() {
-            tokio::fs::copy(&project_path, &backup_path).await.map_err(|e| {
-                McpError::config_with_source("Failed to create backup", e)
-            })?;
+            tokio::fs::copy(&project_path, &backup_path)
+                .await
+                .map_err(|e| McpError::config_with_source("Failed to create backup", e))?;
         }
 
         Ok(backup_path)
@@ -645,13 +636,12 @@ impl ConfigManager for McpConfigManager {
         }
 
         let project_path = self.project_config_path();
-        tokio::fs::copy(backup_path, &project_path).await.map_err(|e| {
-            McpError::config_with_source("Failed to restore backup", e)
-        })?;
+        tokio::fs::copy(backup_path, &project_path)
+            .await
+            .map_err(|e| McpError::config_with_source("Failed to restore backup", e))?;
 
         self.reload().await
     }
-
 
     fn export(&self, mask_secrets: bool) -> String {
         let servers = self.get_servers();
@@ -690,10 +680,8 @@ impl ConfigManager for McpConfigManager {
     }
 
     async fn import(&self, config_json: &str, scope: ConfigScope) -> McpResult<()> {
-        let servers: HashMap<String, McpServerConfig> =
-            serde_json::from_str(config_json).map_err(|e| {
-                McpError::config_with_source("Failed to parse import JSON", e)
-            })?;
+        let servers: HashMap<String, McpServerConfig> = serde_json::from_str(config_json)
+            .map_err(|e| McpError::config_with_source("Failed to parse import JSON", e))?;
 
         // Validate all servers
         for (name, config) in &servers {
@@ -724,7 +712,6 @@ impl ConfigManager for McpConfigManager {
         self.notify_change(None).await;
         Ok(())
     }
-
 
     fn on_change(&self, callback: ConfigChangeCallback) -> Box<dyn FnOnce() + Send> {
         let callbacks = self.callbacks.clone();
@@ -767,10 +754,7 @@ pub fn merge_configs(
 }
 
 /// Merge two server configurations (right takes precedence)
-fn merge_server_config(
-    global: &McpServerConfig,
-    project: &McpServerConfig,
-) -> McpServerConfig {
+fn merge_server_config(global: &McpServerConfig, project: &McpServerConfig) -> McpServerConfig {
     McpServerConfig {
         transport_type: project.transport_type,
         command: project.command.clone().or_else(|| global.command.clone()),
@@ -806,7 +790,6 @@ fn merge_optional_maps(
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1039,7 +1022,9 @@ mcpServers:
     timeout: 30000
     retries: 3
 "#;
-        tokio::fs::write(&config_path, config_content).await.unwrap();
+        tokio::fs::write(&config_path, config_content)
+            .await
+            .unwrap();
 
         let manager = McpConfigManager::with_options(ConfigManagerOptions {
             project_config_path: Some(config_path),
@@ -1079,7 +1064,10 @@ mcpServers:
             ..Default::default()
         };
 
-        manager.add_server("roundtrip-test", config.clone()).await.unwrap();
+        manager
+            .add_server("roundtrip-test", config.clone())
+            .await
+            .unwrap();
         manager.save(ConfigScope::Project).await.unwrap();
 
         // Create a new manager and load
@@ -1131,21 +1119,31 @@ mcpServers:
         let results = manager.validate_all();
         assert_eq!(results.len(), 2);
 
-        let valid_result = results.iter().find(|r| r.server_name == "valid-server").unwrap();
+        let valid_result = results
+            .iter()
+            .find(|r| r.server_name == "valid-server")
+            .unwrap();
         assert!(valid_result.valid);
 
-        let invalid_result = results.iter().find(|r| r.server_name == "invalid-server").unwrap();
+        let invalid_result = results
+            .iter()
+            .find(|r| r.server_name == "invalid-server")
+            .unwrap();
         assert!(!invalid_result.valid);
     }
 
     #[test]
     fn test_command_exists_check() {
         // Test with a command that should exist on most systems
-        assert!(McpConfigManager::check_command_exists("ls") || 
-                McpConfigManager::check_command_exists("dir"));
-        
+        assert!(
+            McpConfigManager::check_command_exists("ls")
+                || McpConfigManager::check_command_exists("dir")
+        );
+
         // Test with a command that shouldn't exist
-        assert!(!McpConfigManager::check_command_exists("nonexistent_command_xyz123"));
+        assert!(!McpConfigManager::check_command_exists(
+            "nonexistent_command_xyz123"
+        ));
     }
 
     #[tokio::test]
@@ -1262,7 +1260,10 @@ mcpServers:
             enabled: true,
             ..Default::default()
         };
-        manager.update_server("backup-test", new_config).await.unwrap();
+        manager
+            .update_server("backup-test", new_config)
+            .await
+            .unwrap();
         manager.save(ConfigScope::Project).await.unwrap();
 
         // Verify modification
@@ -1318,7 +1319,10 @@ mcpServers:
             ..Default::default()
         });
 
-        manager2.import(&exported, ConfigScope::Project).await.unwrap();
+        manager2
+            .import(&exported, ConfigScope::Project)
+            .await
+            .unwrap();
 
         // Verify import
         assert!(manager2.get_server("export-test").is_some());

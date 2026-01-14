@@ -51,18 +51,12 @@ fn arb_priority() -> impl Strategy<Value = i32> {
 
 /// Generate arbitrary optional expiry timestamp
 fn arb_expires_at() -> impl Strategy<Value = Option<i64>> {
-    prop_oneof![
-        Just(None),
-        (1700000000i64..1900000000i64).prop_map(Some),
-    ]
+    prop_oneof![Just(None), (1700000000i64..1900000000i64).prop_map(Some),]
 }
 
 /// Generate arbitrary optional reason
 fn arb_reason() -> impl Strategy<Value = Option<String>> {
-    prop_oneof![
-        Just(None),
-        "[a-zA-Z0-9 ]{5,30}".prop_map(Some),
-    ]
+    prop_oneof![Just(None), "[a-zA-Z0-9 ]{5,30}".prop_map(Some),]
 }
 
 /// Generate arbitrary ConditionType
@@ -128,19 +122,20 @@ fn arb_valid_parameter_restriction() -> impl Strategy<Value = ParameterRestricti
             ),
             prop::bool::ANY,
             prop::option::of("[a-zA-Z0-9 ]{5,20}"),
-        ).prop_map(|(parameter, values, required, description)| {
-            ParameterRestriction {
-                parameter,
-                restriction_type: RestrictionType::Whitelist,
-                values: Some(values),
-                pattern: None,
-                validator: None,
-                min: None,
-                max: None,
-                required,
-                description,
-            }
-        }),
+        )
+            .prop_map(|(parameter, values, required, description)| {
+                ParameterRestriction {
+                    parameter,
+                    restriction_type: RestrictionType::Whitelist,
+                    values: Some(values),
+                    pattern: None,
+                    validator: None,
+                    min: None,
+                    max: None,
+                    required,
+                    description,
+                }
+            }),
         // Blacklist with values
         (
             "[a-z_]{3,10}",
@@ -153,38 +148,40 @@ fn arb_valid_parameter_restriction() -> impl Strategy<Value = ParameterRestricti
             ),
             prop::bool::ANY,
             prop::option::of("[a-zA-Z0-9 ]{5,20}"),
-        ).prop_map(|(parameter, values, required, description)| {
-            ParameterRestriction {
-                parameter,
-                restriction_type: RestrictionType::Blacklist,
-                values: Some(values),
-                pattern: None,
-                validator: None,
-                min: None,
-                max: None,
-                required,
-                description,
-            }
-        }),
+        )
+            .prop_map(|(parameter, values, required, description)| {
+                ParameterRestriction {
+                    parameter,
+                    restriction_type: RestrictionType::Blacklist,
+                    values: Some(values),
+                    pattern: None,
+                    validator: None,
+                    min: None,
+                    max: None,
+                    required,
+                    description,
+                }
+            }),
         // Pattern with pattern
         (
             "[a-z_]{3,10}",
             "[a-z]+",
             prop::bool::ANY,
             prop::option::of("[a-zA-Z0-9 ]{5,20}"),
-        ).prop_map(|(parameter, pattern, required, description)| {
-            ParameterRestriction {
-                parameter,
-                restriction_type: RestrictionType::Pattern,
-                values: None,
-                pattern: Some(pattern),
-                validator: None,
-                min: None,
-                max: None,
-                required,
-                description,
-            }
-        }),
+        )
+            .prop_map(|(parameter, pattern, required, description)| {
+                ParameterRestriction {
+                    parameter,
+                    restriction_type: RestrictionType::Pattern,
+                    values: None,
+                    pattern: Some(pattern),
+                    validator: None,
+                    min: None,
+                    max: None,
+                    required,
+                    description,
+                }
+            }),
         // Range with min and/or max
         (
             "[a-z_]{3,10}",
@@ -192,23 +189,27 @@ fn arb_valid_parameter_restriction() -> impl Strategy<Value = ParameterRestricti
             prop::option::of(0.0f64..100.0f64),
             prop::bool::ANY,
             prop::option::of("[a-zA-Z0-9 ]{5,20}"),
-        ).prop_filter_map("Range must have min or max", |(parameter, min, max, required, description)| {
-            if min.is_none() && max.is_none() {
-                None
-            } else {
-                Some(ParameterRestriction {
-                    parameter,
-                    restriction_type: RestrictionType::Range,
-                    values: None,
-                    pattern: None,
-                    validator: None,
-                    min,
-                    max,
-                    required,
-                    description,
-                })
-            }
-        }),
+        )
+            .prop_filter_map(
+                "Range must have min or max",
+                |(parameter, min, max, required, description)| {
+                    if min.is_none() && max.is_none() {
+                        None
+                    } else {
+                        Some(ParameterRestriction {
+                            parameter,
+                            restriction_type: RestrictionType::Range,
+                            values: None,
+                            pattern: None,
+                            validator: None,
+                            min,
+                            max,
+                            required,
+                            description,
+                        })
+                    }
+                }
+            ),
     ]
 }
 
@@ -850,7 +851,9 @@ mod unit_tests {
             ]
         }"#;
 
-        manager.import(import_json, PermissionScope::Global).unwrap();
+        manager
+            .import(import_json, PermissionScope::Global)
+            .unwrap();
 
         // Verify old permissions are gone and new one is present
         let perms = manager.get_permissions(Some(PermissionScope::Global));
@@ -902,7 +905,9 @@ mod unit_tests {
             ]
         }"#;
 
-        manager.import(import_json, PermissionScope::Global).unwrap();
+        manager
+            .import(import_json, PermissionScope::Global)
+            .unwrap();
 
         // Verify session scope is unchanged
         let session_perms = manager.get_permissions(Some(PermissionScope::Session));

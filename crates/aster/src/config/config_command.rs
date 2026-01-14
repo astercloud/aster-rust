@@ -20,7 +20,6 @@ pub struct ConfigDisplayOptions {
     pub format: ConfigFormat,
 }
 
-
 /// 输出格式
 #[derive(Debug, Clone, Copy, Default)]
 pub enum ConfigFormat {
@@ -83,7 +82,6 @@ impl<'a> ConfigCommand<'a> {
         output
     }
 
-
     /// 展示配置来源
     fn display_sources(&self) -> String {
         let mut output = String::from("**配置来源:**\n\n");
@@ -95,7 +93,9 @@ impl<'a> ConfigCommand<'a> {
 
         for info in sources {
             let status = if info.exists { "OK" } else { "未找到" };
-            let path = info.path.as_ref()
+            let path = info
+                .path
+                .as_ref()
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "N/A".to_string());
 
@@ -112,20 +112,29 @@ impl<'a> ConfigCommand<'a> {
         let config = self.config_manager.get_all();
         let sources = self.config_manager.get_all_config_sources();
 
-        let important_keys = ["api_key", "model", "max_tokens", "api_provider", "theme", "enable_telemetry"];
+        let important_keys = [
+            "api_key",
+            "model",
+            "max_tokens",
+            "api_provider",
+            "theme",
+            "enable_telemetry",
+        ];
 
         for key in important_keys {
             if let Some(value) = config.get(key) {
                 let formatted_value = self.format_value(value);
                 let source = sources.get(key).copied().unwrap_or(ConfigSource::Default);
-                output.push_str(&format!("| {} | {} | {:?} |\n", key, formatted_value, source));
+                output.push_str(&format!(
+                    "| {} | {} | {:?} |\n",
+                    key, formatted_value, source
+                ));
             }
         }
 
         output.push_str("\n");
         output
     }
-
 
     /// 格式化配置值
     fn format_value(&self, value: &Value) -> String {
@@ -178,7 +187,6 @@ impl<'a> ConfigCommand<'a> {
         output
     }
 
-
     /// 展示 AGENTS.md 信息
     fn display_agents_md(&self) -> String {
         let parser = AgentsMdParser::default();
@@ -222,7 +230,6 @@ impl<'a> ConfigCommand<'a> {
         output
     }
 
-
     /// 获取特定配置项
     pub fn get(&self, key: &str) -> String {
         match self.config_manager.get_with_source::<Value>(key) {
@@ -257,7 +264,6 @@ impl<'a> ConfigCommand<'a> {
         }
     }
 
-
     /// 列出备份
     pub fn list_backups(&self, config_type: &str) -> String {
         let backups = self.config_manager.list_backups(config_type);
@@ -274,7 +280,12 @@ impl<'a> ConfigCommand<'a> {
     }
 
     /// 恢复备份
-    pub fn restore(&self, backup_filename: &str, config_type: &str, manager: &mut ConfigManager) -> String {
+    pub fn restore(
+        &self,
+        backup_filename: &str,
+        config_type: &str,
+        manager: &mut ConfigManager,
+    ) -> String {
         match manager.restore_from_backup(backup_filename, config_type) {
             Ok(_) => format!("已从 {} 恢复 {} 配置", backup_filename, config_type),
             Err(e) => format!("恢复失败: {}", e),
@@ -299,7 +310,6 @@ impl<'a> ConfigCommand<'a> {
             Err(e) => format!("导入失败: {}", e),
         }
     }
-
 
     /// 获取帮助信息
     pub fn help(&self) -> String {
@@ -331,7 +341,8 @@ Aster 配置命令
   4. envSettings          - 环境变量 (ASTER_*)
   5. flagSettings         - 命令行标志 (--settings)
   6. policySettings       - 企业策略 (~/.aster/managed_settings.yaml)
-"#.to_string()
+"#
+        .to_string()
     }
 }
 
@@ -339,7 +350,6 @@ Aster 配置命令
 pub fn create_config_command(config_manager: &ConfigManager) -> ConfigCommand {
     ConfigCommand::new(config_manager)
 }
-
 
 #[cfg(test)]
 mod tests {

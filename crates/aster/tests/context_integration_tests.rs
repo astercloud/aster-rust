@@ -15,22 +15,22 @@
 //! - Full context manager workflow
 
 use aster::context::{
-    // Core components
-    EnhancedContextManager,
-    TokenEstimator,
-    ContextWindowManager,
-    MessageCompressor,
-    Summarizer,
-    CacheController,
-    PrioritySorter,
-    FileMentionResolver,
     AgentsMdParser,
+    CacheConfig,
+    CacheController,
+    CompressionConfig,
     // Types
     ContextConfig,
-    TokenUsage,
-    CompressionConfig,
-    CacheConfig,
+    ContextWindowManager,
+    // Core components
+    EnhancedContextManager,
+    FileMentionResolver,
+    MessageCompressor,
     MessagePriority,
+    PrioritySorter,
+    Summarizer,
+    TokenEstimator,
+    TokenUsage,
 };
 use aster::conversation::message::Message;
 use std::fs;
@@ -64,12 +64,19 @@ fn test_full_context_manager_workflow() {
 
     // Step 2: Set system prompt
     manager.set_system_prompt("You are a helpful coding assistant.");
-    assert_eq!(manager.system_prompt(), "You are a helpful coding assistant.");
+    assert_eq!(
+        manager.system_prompt(),
+        "You are a helpful coding assistant."
+    );
 
     // Step 3: Add conversation turns
     for i in 0..3 {
-        let user = Message::user().with_text(format!("Question {}: How do I implement feature {}?", i, i));
-        let assistant = Message::assistant().with_text(format!("Answer {}: Here's how to implement feature {}...", i, i));
+        let user =
+            Message::user().with_text(format!("Question {}: How do I implement feature {}?", i, i));
+        let assistant = Message::assistant().with_text(format!(
+            "Answer {}: Here's how to implement feature {}...",
+            i, i
+        ));
         let usage = TokenUsage::new(50 + i * 10, 100 + i * 20);
         manager.add_turn(user, assistant, Some(usage));
     }
@@ -84,8 +91,14 @@ fn test_full_context_manager_workflow() {
     assert!(available_tokens > 0, "Should have available tokens");
 
     let usage = manager.get_context_usage();
-    assert!(usage.percentage > 0.0, "Usage percentage should be positive");
-    assert!(usage.percentage < 100.0, "Usage percentage should be less than 100%");
+    assert!(
+        usage.percentage > 0.0,
+        "Usage percentage should be positive"
+    );
+    assert!(
+        usage.percentage < 100.0,
+        "Usage percentage should be less than 100%"
+    );
 
     // Step 5: Export state
     let export = manager.export();
@@ -97,7 +110,10 @@ fn test_full_context_manager_workflow() {
     new_manager.import(export);
 
     assert_eq!(new_manager.turn_count(), 3);
-    assert_eq!(new_manager.system_prompt(), "You are a helpful coding assistant.");
+    assert_eq!(
+        new_manager.system_prompt(),
+        "You are a helpful coding assistant."
+    );
 
     // Verify messages are consistent
     let original_messages = manager.get_messages();
@@ -119,7 +135,8 @@ fn test_token_estimation_with_window_manager() {
     // Create messages and estimate tokens
     let messages = vec![
         Message::user().with_text("Hello, I need help with Rust programming."),
-        Message::assistant().with_text("I'd be happy to help! What would you like to know about Rust?"),
+        Message::assistant()
+            .with_text("I'd be happy to help! What would you like to know about Rust?"),
         Message::user().with_text("How do I implement a trait?"),
     ];
 
@@ -148,7 +165,7 @@ fn test_compression_pipeline() {
         .map(|i| format!("    let line_{} = {};", i, i))
         .collect::<Vec<_>>()
         .join("\n");
-    
+
     let code_content = format!("Here's the code:\n```rust\n{}\n```", large_code);
     let message = Message::assistant().with_text(&code_content);
 
@@ -265,11 +282,11 @@ fn test_cache_control_with_token_estimation() {
 #[tokio::test]
 async fn test_file_mention_integration() {
     let temp_dir = TempDir::new().unwrap();
-    
+
     // Create test files
     let main_rs = temp_dir.path().join("main.rs");
     fs::write(&main_rs, "fn main() { println!(\"Hello\"); }").unwrap();
-    
+
     let lib_rs = temp_dir.path().join("lib.rs");
     fs::write(&lib_rs, "pub mod utils;").unwrap();
 
@@ -282,11 +299,11 @@ async fn test_file_mention_integration() {
 
     // Verify files were resolved
     assert_eq!(result.files.len(), 2);
-    
+
     // Verify content was included
     assert!(result.processed_text.contains("fn main()"));
     assert!(result.processed_text.contains("pub mod utils"));
-    
+
     // Original mentions should be replaced
     assert!(!result.processed_text.contains("@main.rs"));
     assert!(!result.processed_text.contains("@lib.rs"));
@@ -300,7 +317,7 @@ async fn test_file_mention_integration() {
 #[tokio::test]
 async fn test_agents_md_integration() {
     let temp_dir = TempDir::new().unwrap();
-    
+
     // Create AGENTS.md
     let agents_content = r#"# Project Instructions
 
@@ -318,7 +335,7 @@ async fn test_agents_md_integration() {
     // Parse AGENTS.md
     let config = AgentsMdParser::parse(temp_dir.path()).await.unwrap();
     assert!(config.is_some());
-    
+
     let config = config.unwrap();
     assert!(config.content.contains("Build Commands"));
     assert!(config.content.contains("cargo build"));
@@ -356,7 +373,8 @@ async fn test_context_manager_compression() {
     // Add turns until we exceed threshold
     for i in 0..10 {
         let user = Message::user().with_text(format!("Question {}: {}", i, "x".repeat(50)));
-        let assistant = Message::assistant().with_text(format!("Answer {}: {}", i, "y".repeat(100)));
+        let assistant =
+            Message::assistant().with_text(format!("Answer {}: {}", i, "y".repeat(100)));
         manager.add_turn(user, assistant, None);
     }
 
@@ -365,7 +383,10 @@ async fn test_context_manager_compression() {
 
     // Verify some turns were summarized
     let details = manager.get_compression_details();
-    assert!(details.summarized_turns > 0, "Some turns should be summarized");
+    assert!(
+        details.summarized_turns > 0,
+        "Some turns should be summarized"
+    );
     assert!(details.recent_turns > 0, "Recent turns should be preserved");
 
     // Verify statistics
@@ -383,11 +404,11 @@ fn test_multi_language_token_estimation() {
     // English text
     let english = "Hello, this is a test of the token estimation system.";
     let english_tokens = TokenEstimator::estimate_tokens(english);
-    
+
     // Chinese text (should use ~2 chars/token)
     let chinese = "你好，这是一个测试。这个系统可以估算中文文本的令牌数量。";
     let chinese_tokens = TokenEstimator::estimate_tokens(chinese);
-    
+
     // Code (should use ~3 chars/token)
     let code = r#"
 fn main() {
@@ -401,7 +422,7 @@ fn main() {
     // Chinese should have more tokens per character
     let chinese_ratio = chinese.chars().count() as f64 / chinese_tokens as f64;
     let english_ratio = english.chars().count() as f64 / english_tokens as f64;
-    
+
     // Chinese ratio should be lower (more tokens per char)
     assert!(
         chinese_ratio < english_ratio,
@@ -413,7 +434,7 @@ fn main() {
     // Verify code detection
     assert!(TokenEstimator::is_code(code));
     assert!(!TokenEstimator::is_code(english));
-    
+
     // Verify Asian char detection
     assert!(TokenEstimator::has_asian_chars(chinese));
     assert!(!TokenEstimator::has_asian_chars(english));
@@ -427,23 +448,23 @@ fn main() {
 #[test]
 fn test_window_manager_model_switching() {
     let mut manager = ContextWindowManager::new("claude-3-5-sonnet-20241022");
-    
+
     // Record some usage
     manager.record_usage(TokenUsage::new(10000, 5000));
-    
+
     // Verify initial state
     assert_eq!(manager.get_context_window_size(), 200_000);
     assert_eq!(manager.get_total_input_tokens(), 10000);
-    
+
     // Switch to smaller model
     manager.update_model("gpt-4");
-    
+
     // Context window should change
     assert_eq!(manager.get_context_window_size(), 8_192);
-    
+
     // Usage should be preserved
     assert_eq!(manager.get_total_input_tokens(), 10000);
-    
+
     // Usage percentage should increase (same usage, smaller window)
     let percentage = manager.get_usage_percentage();
     assert!(percentage > 100.0, "Should exceed 100% with smaller window");
@@ -457,7 +478,7 @@ fn test_window_manager_model_switching() {
 #[test]
 fn test_summarizer_budget_collection() {
     use aster::context::ConversationTurn;
-    
+
     // Create turns with known token estimates
     let mut turns = Vec::new();
     for i in 0..5 {
@@ -471,7 +492,7 @@ fn test_summarizer_budget_collection() {
 
     // Collect with small budget (should only get some turns)
     let (collected, tokens_used) = Summarizer::collect_within_budget(&turns, 250);
-    
+
     assert_eq!(collected.len(), 2); // 2 turns * 100 tokens = 200 < 250
     assert!(tokens_used <= 250);
 
@@ -502,8 +523,9 @@ fn fibonacci(n: u64) -> u64 {
 }
 ```"#;
     let user = Message::user().with_text("How do I implement fibonacci?");
-    let assistant = Message::assistant().with_text(format!("Here's a recursive implementation:\n{}", code));
-    
+    let assistant =
+        Message::assistant().with_text(format!("Here's a recursive implementation:\n{}", code));
+
     manager.add_turn(user, assistant, Some(TokenUsage::new(50, 100)));
 
     // 3. Get messages for API call

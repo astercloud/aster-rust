@@ -196,19 +196,27 @@ impl PluginManager {
     /// 检查依赖是否满足
     fn check_dependencies(&self, name: &str) -> Result<(), String> {
         let states = self.plugin_states.read().map_err(|e| e.to_string())?;
-        
-        let state = states.get(name).ok_or_else(|| format!("Plugin not found: {}", name))?;
-        
+
+        let state = states
+            .get(name)
+            .ok_or_else(|| format!("Plugin not found: {}", name))?;
+
         if let Some(deps) = &state.metadata.dependencies {
             for (dep_name, version_range) in deps {
                 let dep_state = states.get(dep_name);
-                
+
                 match dep_state {
                     None => {
-                        return Err(format!("Dependency not found: {}@{}", dep_name, version_range));
+                        return Err(format!(
+                            "Dependency not found: {}@{}",
+                            dep_name, version_range
+                        ));
                     }
                     Some(dep) if !dep.loaded => {
-                        return Err(format!("Dependency not loaded: {}@{}", dep_name, version_range));
+                        return Err(format!(
+                            "Dependency not loaded: {}@{}",
+                            dep_name, version_range
+                        ));
                     }
                     Some(dep) => {
                         if !VersionChecker::satisfies(&dep.metadata.version, version_range) {
@@ -221,7 +229,7 @@ impl PluginManager {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -230,7 +238,10 @@ impl PluginManager {
         // 获取插件状态
         let state = {
             let states = self.plugin_states.read().map_err(|e| e.to_string())?;
-            states.get(name).cloned().ok_or_else(|| format!("Plugin not found: {}", name))?
+            states
+                .get(name)
+                .cloned()
+                .ok_or_else(|| format!("Plugin not found: {}", name))?
         };
 
         if state.loaded {
@@ -278,7 +289,10 @@ impl PluginManager {
     pub async fn unload(&self, name: &str, force: bool) -> Result<(), String> {
         let state = {
             let states = self.plugin_states.read().map_err(|e| e.to_string())?;
-            states.get(name).cloned().ok_or_else(|| format!("Plugin not found: {}", name))?
+            states
+                .get(name)
+                .cloned()
+                .ok_or_else(|| format!("Plugin not found: {}", name))?
         };
 
         if !state.loaded {
@@ -289,7 +303,9 @@ impl PluginManager {
         if !force && !state.dependents.is_empty() {
             let loaded_dependents: Vec<_> = {
                 let states = self.plugin_states.read().map_err(|e| e.to_string())?;
-                state.dependents.iter()
+                state
+                    .dependents
+                    .iter()
                     .filter(|dep| states.get(*dep).map(|s| s.loaded).unwrap_or(false))
                     .cloned()
                     .collect()
@@ -333,7 +349,8 @@ impl PluginManager {
     pub async fn load_all(&self) -> Result<(), String> {
         let names: Vec<String> = {
             let states = self.plugin_states.read().map_err(|e| e.to_string())?;
-            states.iter()
+            states
+                .iter()
                 .filter(|(_, s)| s.enabled)
                 .map(|(name, _)| name.clone())
                 .collect()
@@ -370,7 +387,8 @@ impl PluginManager {
         // 获取依赖
         let deps = {
             let states = self.plugin_states.read().map_err(|e| e.to_string())?;
-            states.get(name)
+            states
+                .get(name)
                 .map(|s| s.dependencies.clone())
                 .unwrap_or_default()
         };
@@ -392,7 +410,8 @@ impl PluginManager {
     pub async fn unload_all(&self) -> Result<(), String> {
         let names: Vec<String> = {
             let states = self.plugin_states.read().map_err(|e| e.to_string())?;
-            states.iter()
+            states
+                .iter()
                 .filter(|(_, s)| s.loaded)
                 .map(|(name, _)| name.clone())
                 .collect()
@@ -447,7 +466,8 @@ impl PluginManager {
 
     /// 获取插件的工具
     pub fn get_plugin_tools(&self, name: &str) -> Vec<super::registry::ToolDefinition> {
-        self.registry.tools
+        self.registry
+            .tools
             .read()
             .ok()
             .and_then(|t| t.get(name).cloned())
@@ -456,7 +476,8 @@ impl PluginManager {
 
     /// 获取插件的命令
     pub fn get_plugin_commands(&self, name: &str) -> Vec<CommandDefinition> {
-        self.registry.commands
+        self.registry
+            .commands
             .read()
             .ok()
             .and_then(|c| c.get(name).cloned())
@@ -465,7 +486,8 @@ impl PluginManager {
 
     /// 获取插件的技能
     pub fn get_plugin_skills(&self, name: &str) -> Vec<SkillDefinition> {
-        self.registry.skills
+        self.registry
+            .skills
             .read()
             .ok()
             .and_then(|s| s.get(name).cloned())
@@ -474,7 +496,8 @@ impl PluginManager {
 
     /// 获取插件的钩子
     pub fn get_plugin_hooks(&self, name: &str) -> Vec<HookDefinition> {
-        self.registry.hooks
+        self.registry
+            .hooks
             .read()
             .ok()
             .and_then(|h| h.get(name).cloned())
@@ -487,7 +510,6 @@ impl Default for PluginManager {
         Self::new("0.1.0")
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -510,20 +532,27 @@ mod tests {
     fn test_add_plugin_dir() {
         let mut manager = PluginManager::new("1.0.0");
         let custom_dir = PathBuf::from("/custom/plugins");
-        
+
         manager.add_plugin_dir(custom_dir.clone());
         assert!(manager.plugin_dirs.contains(&custom_dir));
-        
+
         // 不应重复添加
         manager.add_plugin_dir(custom_dir.clone());
-        assert_eq!(manager.plugin_dirs.iter().filter(|p| **p == custom_dir).count(), 1);
+        assert_eq!(
+            manager
+                .plugin_dirs
+                .iter()
+                .filter(|p| **p == custom_dir)
+                .count(),
+            1
+        );
     }
 
     #[test]
     fn test_get_registry() {
         let manager = PluginManager::new("1.0.0");
         let registry = manager.registry();
-        
+
         // 应该返回同一个注册表
         let registry2 = manager.registry();
         assert!(Arc::ptr_eq(&registry, &registry2));
@@ -533,10 +562,12 @@ mod tests {
     fn test_subscribe_events() {
         let manager = PluginManager::new("1.0.0");
         let mut rx = manager.subscribe();
-        
+
         // 发送事件
-        let _ = manager.event_tx.send(PluginEvent::Loaded("test".to_string()));
-        
+        let _ = manager
+            .event_tx
+            .send(PluginEvent::Loaded("test".to_string()));
+
         // 应该能接收到
         if let Ok(event) = rx.try_recv() {
             match event {
@@ -561,7 +592,7 @@ mod tests {
     #[test]
     fn test_set_enabled() {
         let manager = PluginManager::new("1.0.0");
-        
+
         // 插件不存在时返回 false
         assert!(!manager.set_enabled("nonexistent", true));
     }

@@ -18,7 +18,6 @@ pub const CHROME_RECONNECT_URL: &str = "https://clau.de/chrome/reconnect";
 /// Chrome 权限 URL
 pub const CHROME_PERMISSIONS_URL: &str = "https://clau.de/chrome/permissions";
 
-
 /// 平台类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {

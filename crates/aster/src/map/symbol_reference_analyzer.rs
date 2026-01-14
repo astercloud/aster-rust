@@ -3,10 +3,10 @@
 //! 分析函数调用、变量读写等符号级引用关系
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
-use super::types::{ModuleNode, FunctionNode, ClassNode, LocationInfo};
+use super::types::{ClassNode, FunctionNode, LocationInfo, ModuleNode};
 use super::types_enhanced::{SymbolCall, SymbolEntry, SymbolKind};
 
 /// 符号信息
@@ -39,7 +39,6 @@ pub enum CallType {
     Method,
     Constructor,
 }
-
 
 /// 符号引用分析结果
 #[derive(Debug, Clone)]
@@ -215,13 +214,18 @@ impl SymbolReferenceAnalyzer {
                     continue;
                 }
 
-                let starts_with_uppercase = exp.name.chars().next().map_or(false, |c| c.is_uppercase());
+                let starts_with_uppercase =
+                    exp.name.chars().next().map_or(false, |c| c.is_uppercase());
                 let looks_like_type = starts_with_uppercase && !exp.name.contains('_');
 
                 let info = SymbolInfo {
                     id: existing_id,
                     name: exp.name.clone(),
-                    kind: if looks_like_type { SymbolKind::Type } else { SymbolKind::Variable },
+                    kind: if looks_like_type {
+                        SymbolKind::Type
+                    } else {
+                        SymbolKind::Variable
+                    },
                     module_id: module.id.clone(),
                     location: exp.location.clone(),
                     signature: None,
@@ -232,7 +236,6 @@ impl SymbolReferenceAnalyzer {
         }
     }
 
-
     /// 添加符号到索引
     fn add_symbol(&mut self, info: SymbolInfo) {
         let name = info.name.clone();
@@ -240,10 +243,7 @@ impl SymbolReferenceAnalyzer {
 
         self.symbol_index.insert(id.clone(), info);
 
-        self.name_to_symbols
-            .entry(name)
-            .or_default()
-            .push(id);
+        self.name_to_symbols.entry(name).or_default().push(id);
     }
 
     /// 分析调用关系
@@ -321,12 +321,45 @@ impl SymbolReferenceAnalyzer {
 
         // 忽略的关键字
         let ignored: std::collections::HashSet<&str> = [
-            "if", "else", "for", "while", "switch", "case", "catch", "try",
-            "return", "throw", "typeof", "instanceof", "delete", "void",
-            "function", "class", "const", "let", "var", "import", "export",
-            "async", "await", "yield", "super", "this", "fn", "pub", "mod",
-            "use", "impl", "struct", "enum", "trait", "match", "loop",
-        ].into_iter().collect();
+            "if",
+            "else",
+            "for",
+            "while",
+            "switch",
+            "case",
+            "catch",
+            "try",
+            "return",
+            "throw",
+            "typeof",
+            "instanceof",
+            "delete",
+            "void",
+            "function",
+            "class",
+            "const",
+            "let",
+            "var",
+            "import",
+            "export",
+            "async",
+            "await",
+            "yield",
+            "super",
+            "this",
+            "fn",
+            "pub",
+            "mod",
+            "use",
+            "impl",
+            "struct",
+            "enum",
+            "trait",
+            "match",
+            "loop",
+        ]
+        .into_iter()
+        .collect();
 
         for i in start_line..end_line {
             let line = lines[i];
@@ -368,7 +401,9 @@ impl SymbolReferenceAnalyzer {
             }
 
             // 模式 2: 方法调用 obj.methodName( 或 self.methodName(
-            if let Ok(re) = regex::Regex::new(r"(?:([a-zA-Z_][a-zA-Z0-9_]*)|self|this)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(") {
+            if let Ok(re) = regex::Regex::new(
+                r"(?:([a-zA-Z_][a-zA-Z0-9_]*)|self|this)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
+            ) {
                 for cap in re.captures_iter(line) {
                     let obj_name = cap.get(1).map(|m| m.as_str());
                     if let Some(method_name) = cap.get(2) {
@@ -453,7 +488,6 @@ impl SymbolReferenceAnalyzer {
         calls
     }
 
-
     /// 查找目标符号
     fn find_target_symbols(&self, name: &str, current_module: &ModuleNode) -> Vec<String> {
         let candidates = match self.name_to_symbols.get(name) {
@@ -511,16 +545,19 @@ impl SymbolReferenceAnalyzer {
             if let Some(existing) = map.get_mut(&key) {
                 existing.locations.push(call.location);
             } else {
-                map.insert(key, SymbolCall {
-                    caller: call.caller_symbol,
-                    callee: call.callee_symbol,
-                    call_type: match call.call_type {
-                        CallType::Direct => "direct".to_string(),
-                        CallType::Method => "method".to_string(),
-                        CallType::Constructor => "constructor".to_string(),
+                map.insert(
+                    key,
+                    SymbolCall {
+                        caller: call.caller_symbol,
+                        callee: call.callee_symbol,
+                        call_type: match call.call_type {
+                            CallType::Direct => "direct".to_string(),
+                            CallType::Method => "method".to_string(),
+                            CallType::Constructor => "constructor".to_string(),
+                        },
+                        locations: vec![call.location],
                     },
-                    locations: vec![call.location],
-                });
+                );
             }
         }
     }
@@ -544,7 +581,8 @@ impl SymbolReferenceAnalyzer {
 
             // 收集子符号
             if info.kind == SymbolKind::Class {
-                let children: Vec<String> = self.symbol_index
+                let children: Vec<String> = self
+                    .symbol_index
                     .iter()
                     .filter(|(_, child)| child.parent.as_ref() == Some(id))
                     .map(|(child_id, _)| child_id.clone())

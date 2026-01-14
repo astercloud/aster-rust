@@ -35,21 +35,21 @@
 //! let task_tree = tree_manager.generate_from_blueprint(&blueprint).await?;
 //! ```
 
-pub mod types;
+pub mod acceptance_test_generator;
+pub mod acceptance_test_runner;
+pub mod agent_coordinator;
+pub mod blueprint_context;
 pub mod blueprint_manager;
+pub mod boundary_checker;
+pub mod codebase_analyzer;
+pub mod requirement_dialog;
+pub mod task_granularity;
 pub mod task_tree_manager;
 pub mod tdd_executor;
 pub mod time_travel;
-pub mod boundary_checker;
-pub mod agent_coordinator;
+pub mod types;
 pub mod worker_executor;
 pub mod worker_sandbox;
-pub mod acceptance_test_generator;
-pub mod task_granularity;
-pub mod acceptance_test_runner;
-pub mod blueprint_context;
-pub mod codebase_analyzer;
-pub mod requirement_dialog;
 
 #[cfg(test)]
 mod tests;
@@ -58,89 +58,78 @@ mod tests;
 pub use types::*;
 
 // 蓝图管理
-pub use blueprint_manager::{BlueprintManager, generate_blueprint_summary};
+pub use blueprint_manager::{generate_blueprint_summary, BlueprintManager};
 
 // 任务树管理
 pub use task_tree_manager::TaskTreeManager;
 
 // TDD 执行器
-pub use tdd_executor::{TddExecutor, TddLoopState, TddConfig, TddPrompts};
+pub use tdd_executor::{TddConfig, TddExecutor, TddLoopState, TddPrompts};
 
 // 时光倒流
 pub use time_travel::{
-    TimeTravelManager, CheckpointInfo, CheckpointType,
-    TimelineView, BranchInfo, BranchStatus, CompareResult,
+    BranchInfo, BranchStatus, CheckpointInfo, CheckpointType, CompareResult, TimeTravelManager,
+    TimelineView,
 };
 
 // 边界检查器
 pub use boundary_checker::{
-    BoundaryChecker, BoundaryCheckResult, BoundaryCheckerConfig,
-    ViolationType, create_boundary_checker,
+    create_boundary_checker, BoundaryCheckResult, BoundaryChecker, BoundaryCheckerConfig,
+    ViolationType,
 };
 
 // Agent 协调器
-pub use agent_coordinator::{
-    AgentCoordinator, CoordinatorConfig, ModelStrategy,
-};
+pub use agent_coordinator::{AgentCoordinator, CoordinatorConfig, ModelStrategy};
 
 // Worker 执行器
 pub use worker_executor::{
-    WorkerExecutor, WorkerExecutorConfig, TestFramework,
-    ExecutionContext, PhaseResult, CodeArtifactOutput,
-    create_worker_executor,
+    create_worker_executor, CodeArtifactOutput, ExecutionContext, PhaseResult, TestFramework,
+    WorkerExecutor, WorkerExecutorConfig,
 };
 
 // Worker 沙箱
 pub use worker_sandbox::{
-    WorkerSandbox, SandboxConfig, FileLockManager, LockInfo,
-    SyncResult, SandboxStats,
-    create_worker_sandbox, create_lock_manager,
+    create_lock_manager, create_worker_sandbox, FileLockManager, LockInfo, SandboxConfig,
+    SandboxStats, SyncResult, WorkerSandbox,
 };
 
 // 验收测试生成器
 pub use acceptance_test_generator::{
-    AcceptanceTestGenerator, AcceptanceTestGeneratorConfig,
-    AcceptanceTestContext, AcceptanceTestResult,
-    create_acceptance_test_generator,
+    create_acceptance_test_generator, AcceptanceTestContext, AcceptanceTestGenerator,
+    AcceptanceTestGeneratorConfig, AcceptanceTestResult,
 };
 
 // 任务粒度控制器
 pub use task_granularity::{
-    TaskGranularityController, GranularityConfig,
-    ComplexityScore, ComplexityFactors, ComplexityWeights,
-    SplitSuggestion, MergeSuggestion, AdjustmentResult,
-    SplitStrategy, MergeStrategy, SplitCheck, MergeCheck,
-    create_task_granularity_controller,
+    create_task_granularity_controller, AdjustmentResult, ComplexityFactors, ComplexityScore,
+    ComplexityWeights, GranularityConfig, MergeCheck, MergeStrategy, MergeSuggestion, SplitCheck,
+    SplitStrategy, SplitSuggestion, TaskGranularityController,
 };
 
 // 验收测试运行器
 pub use acceptance_test_runner::{
-    AcceptanceTestRunner, AcceptanceTestRunnerConfig,
-    AcceptanceTestRunResult, create_acceptance_test_runner,
+    create_acceptance_test_runner, AcceptanceTestRunResult, AcceptanceTestRunner,
+    AcceptanceTestRunnerConfig,
 };
 
 // 蓝图上下文（工具层面的边界检查桥梁）
 pub use blueprint_context::{
-    BlueprintContextManager, ActiveTaskContext, FileOperation,
-    BlueprintContextStatus, get_blueprint_context,
-    set_blueprint, clear_blueprint, set_active_task, clear_active_task,
-    check_file_operation, enforce_file_operation,
+    check_file_operation, clear_active_task, clear_blueprint, enforce_file_operation,
+    get_blueprint_context, set_active_task, set_blueprint, ActiveTaskContext,
+    BlueprintContextManager, BlueprintContextStatus, FileOperation,
 };
 
 // 代码库分析器
 pub use codebase_analyzer::{
-    CodebaseAnalyzer, AnalyzerConfig, AnalysisGranularity,
-    CodebaseInfo, DetectedModule, DetectedModuleType,
-    DirectoryNode, NodeType, CodebaseStats,
-    AIAnalysisResult, AIModuleAnalysis, BusinessFlowInfo,
-    AnalyzerEvent, AnalyzeResult,
-    create_codebase_analyzer, quick_analyze,
+    create_codebase_analyzer, quick_analyze, AIAnalysisResult, AIModuleAnalysis,
+    AnalysisGranularity, AnalyzeResult, AnalyzerConfig, AnalyzerEvent, BusinessFlowInfo,
+    CodebaseAnalyzer, CodebaseInfo, CodebaseStats, DetectedModule, DetectedModuleType,
+    DirectoryNode, NodeType,
 };
 
 // 需求对话流程
 pub use requirement_dialog::{
-    RequirementDialogManager, DialogPhase, DialogState, DialogMessage,
-    MessageRole, BusinessProcessDraft, SystemModuleDraft, NFRDraft,
-    ProcessDraftType, ModuleDraftType, NFRDraftCategory, NFRDraftPriority,
-    DialogEvent, create_requirement_dialog_manager,
+    create_requirement_dialog_manager, BusinessProcessDraft, DialogEvent, DialogMessage,
+    DialogPhase, DialogState, MessageRole, ModuleDraftType, NFRDraft, NFRDraftCategory,
+    NFRDraftPriority, ProcessDraftType, RequirementDialogManager, SystemModuleDraft,
 };

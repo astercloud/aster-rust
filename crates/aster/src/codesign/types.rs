@@ -85,14 +85,26 @@ pub struct VerifyResult {
 
 impl VerifyResult {
     pub fn ok(signature: CodeSignature) -> Self {
-        Self { valid: true, reason: None, signature: Some(signature) }
+        Self {
+            valid: true,
+            reason: None,
+            signature: Some(signature),
+        }
     }
 
     pub fn err(reason: impl Into<String>) -> Self {
-        Self { valid: false, reason: Some(reason.into()), signature: None }
+        Self {
+            valid: false,
+            reason: Some(reason.into()),
+            signature: None,
+        }
     }
 
     pub fn err_with_sig(reason: impl Into<String>, sig: CodeSignature) -> Self {
-        Self { valid: false, reason: Some(reason.into()), signature: Some(sig) }
+        Self {
+            valid: false,
+            reason: Some(reason.into()),
+            signature: Some(sig),
+        }
     }
 }

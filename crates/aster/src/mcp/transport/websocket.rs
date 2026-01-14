@@ -274,9 +274,9 @@ impl Transport for WebSocketTransport {
             request = request.header(key, value);
         }
 
-        let request = request
-            .body(())
-            .map_err(|e| McpError::transport(format!("Failed to build WebSocket request: {}", e)))?;
+        let request = request.body(()).map_err(|e| {
+            McpError::transport(format!("Failed to build WebSocket request: {}", e))
+        })?;
 
         // Connect to WebSocket server
         let (ws_stream, _response) = connect_async(request).await.map_err(|e| {
@@ -302,10 +302,7 @@ impl Transport for WebSocketTransport {
 
         // Start reader and writer tasks
         self.start_reader_task(reader, shutdown_rx);
-        self.start_writer_task(
-            self.writer.lock().await.take().unwrap(),
-            message_rx,
-        );
+        self.start_writer_task(self.writer.lock().await.take().unwrap(), message_rx);
 
         self.set_state(TransportState::Connected).await;
         self.emit_event(TransportEvent::Connected).await;

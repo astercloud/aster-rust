@@ -159,8 +159,8 @@ pub async fn quick_health_check() -> (bool, Vec<String>) {
     }
 
     // 检查环境变量
-    let has_api_key = std::env::var("ANTHROPIC_API_KEY").is_ok()
-        || std::env::var("OPENAI_API_KEY").is_ok();
+    let has_api_key =
+        std::env::var("ANTHROPIC_API_KEY").is_ok() || std::env::var("OPENAI_API_KEY").is_ok();
 
     if !has_api_key {
         issues.push("未配置 API 密钥".to_string());
@@ -179,7 +179,6 @@ pub async fn get_system_health_summary() -> HealthSummary {
     HealthSummary::from_report(&report)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,7 +186,7 @@ mod tests {
 
     fn create_test_report(passed: usize, warnings: usize, failed: usize) -> DiagnosticReport {
         let mut checks = Vec::new();
-        
+
         for i in 0..passed {
             checks.push(DiagnosticCheck::pass(format!("Pass{}", i), "通过"));
         }
@@ -216,18 +215,17 @@ mod tests {
     fn test_health_summary_healthy() {
         let report = create_test_report(10, 0, 0);
         let summary = HealthSummary::from_report(&report);
-        
+
         assert_eq!(summary.status, HealthStatus::Healthy);
         assert_eq!(summary.score, 100);
         assert!(summary.critical_issues.is_empty());
     }
 
-
     #[test]
     fn test_health_summary_degraded() {
         let report = create_test_report(7, 3, 0);
         let summary = HealthSummary::from_report(&report);
-        
+
         assert_eq!(summary.status, HealthStatus::Degraded);
         assert!(summary.score >= 70 && summary.score < 90);
     }
@@ -236,7 +234,7 @@ mod tests {
     fn test_health_summary_unhealthy() {
         let report = create_test_report(3, 2, 5);
         let summary = HealthSummary::from_report(&report);
-        
+
         assert_eq!(summary.status, HealthStatus::Unhealthy);
         assert!(summary.score < 70);
         assert_eq!(summary.critical_issues.len(), 5);
@@ -246,7 +244,7 @@ mod tests {
     fn test_health_summary_empty_report() {
         let report = create_test_report(0, 0, 0);
         let summary = HealthSummary::from_report(&report);
-        
+
         assert_eq!(summary.status, HealthStatus::Healthy);
         assert_eq!(summary.score, 100);
     }
@@ -255,11 +253,10 @@ mod tests {
     fn test_auto_fixer_no_issues() {
         let report = create_test_report(5, 0, 0);
         let result = AutoFixer::auto_fix(&report);
-        
+
         assert!(result.fixed.is_empty());
         assert!(result.failed.is_empty());
     }
-
 
     #[test]
     fn test_auto_fixer_with_directory_issue() {
@@ -274,15 +271,19 @@ mod tests {
             version: "test".to_string(),
             platform: "test".to_string(),
             checks: vec![check],
-            summary: ReportSummary { passed: 0, warnings: 0, failed: 1 },
+            summary: ReportSummary {
+                passed: 0,
+                warnings: 0,
+                failed: 1,
+            },
             system_info: None,
         };
 
         let result = AutoFixer::auto_fix(&report);
-        
+
         // 应该能修复目录问题
         assert!(!result.fixed.is_empty() || !result.failed.is_empty());
-        
+
         let _ = std::fs::remove_dir_all(&temp_path);
     }
 

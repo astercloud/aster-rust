@@ -89,25 +89,25 @@ pub use context::{
     // Core context types
     AgentContext,
     AgentContextError,
-    AgentContextResult,
-    ContextMetadata,
-    FileContext,
-    ToolExecutionResult,
     // Context manager
     AgentContextManager,
-    // Context inheritance
-    ContextInheritanceConfig,
-    ContextInheritanceType,
+    AgentContextResult,
     // Context operations
     CompressionResult,
     ContextFilter,
-    ContextUpdate,
+    // Context inheritance
+    ContextInheritanceConfig,
+    ContextInheritanceType,
     // Context isolation
     ContextIsolation,
-    SandboxedContext,
+    ContextMetadata,
+    ContextUpdate,
+    FileContext,
+    ResourceUsage,
     SandboxRestrictions,
     SandboxState,
-    ResourceUsage,
+    SandboxedContext,
+    ToolExecutionResult,
 };
 
 // ============================================================================
@@ -115,26 +115,12 @@ pub use context::{
 // ============================================================================
 
 pub use communication::{
-    // Message bus
-    AgentMessage,
-    AgentMessageBus,
-    MessageBusError,
-    MessageBusResult,
-    MessageBusStats,
-    MessagePriority,
-    MessageSubscription,
-    MessageTarget,
-    // Shared state
-    Lock,
-    SharedStateError,
-    SharedStateManager,
-    SharedStateResult,
-    SharedStateStats,
-    StateEvent,
-    WatchHandle,
     // Coordinator
     AgentCapabilities,
     AgentCoordinator,
+    // Message bus
+    AgentMessage,
+    AgentMessageBus,
     AgentStatus,
     AssignmentCriteria,
     CoordinatorError,
@@ -144,9 +130,23 @@ pub use communication::{
     DeadlockInfo,
     DependencyLink,
     LoadBalanceStrategy,
+    // Shared state
+    Lock,
+    MessageBusError,
+    MessageBusResult,
+    MessageBusStats,
+    MessagePriority,
+    MessageSubscription,
+    MessageTarget,
+    SharedStateError,
+    SharedStateManager,
+    SharedStateResult,
+    SharedStateStats,
+    StateEvent,
     Task,
     TaskResult,
     TaskStatus as CoordinatorTaskStatus,
+    WatchHandle,
 };
 
 // ============================================================================
@@ -154,9 +154,12 @@ pub use communication::{
 // ============================================================================
 
 pub use parallel::{
+    // Pool
+    AgentPool,
     // Executor
     AgentResult,
     AgentTask,
+    AgentWorker,
     DependencyGraph,
     ExecutionProgress,
     ExecutorError,
@@ -165,14 +168,11 @@ pub use parallel::{
     ParallelAgentConfig,
     ParallelAgentExecutor,
     ParallelExecutionResult,
-    TaskExecutionInfo,
-    TaskStatus as ExecutorTaskStatus,
-    // Pool
-    AgentPool,
-    AgentWorker,
     PoolError,
     PoolResult,
     PoolStatus,
+    TaskExecutionInfo,
+    TaskStatus as ExecutorTaskStatus,
 };
 
 // ============================================================================
@@ -180,31 +180,31 @@ pub use parallel::{
 // ============================================================================
 
 pub use monitor::{
+    AgentExecutionStatus,
     // Metrics
     AgentMonitor,
     AggregatedStats,
-    FullAgentMetrics,
-    MonitorConfig,
-    PerformanceMetrics,
-    ToolCallMetric,
     // Alerts
     Alert,
     AlertManager,
     AlertSeverity,
     AlertType,
-    AgentExecutionStatus,
-    ErrorRecord,
-    TokenUsage,
     // Analyzer
     AnalysisThresholds,
     Bottleneck,
     BottleneckCategory,
+    ErrorRecord,
+    FullAgentMetrics,
+    MonitorConfig,
     PerformanceAnalyzer,
+    PerformanceMetrics,
     PerformanceRating,
     PerformanceReport,
     PerformanceScores,
     Suggestion,
     SuggestionPriority,
+    TokenUsage,
+    ToolCallMetric,
 };
 
 // ============================================================================
@@ -212,21 +212,21 @@ pub use monitor::{
 // ============================================================================
 
 pub use resume::{
+    // Resumer
+    AgentResumer,
     // State manager
     AgentState,
     AgentStateManager,
     AgentStateStatus,
     Checkpoint,
-    StateManagerError,
-    StateManagerResult,
-    ToolCallRecord,
-    // Resumer
-    AgentResumer,
     ResumeOptions,
     ResumePoint,
     ResumePointInfo,
     ResumerError,
     ResumerResult,
+    StateManagerError,
+    StateManagerResult,
+    ToolCallRecord,
 };
 
 // ============================================================================
@@ -234,21 +234,19 @@ pub use resume::{
 // ============================================================================
 
 pub use specialized::{
+    // Plan agent
+    Alternative,
+    ArchitecturalDecision,
     // Explore agent
     CodeSnippet,
+    Complexity,
+    CriticalFile,
     ExploreAgent,
     ExploreError,
     ExploreOptions,
     ExploreResult,
     ExploreResultData,
     ExploreStats,
-    StructureAnalysis,
-    ThoroughnessLevel,
-    // Plan agent
-    Alternative,
-    ArchitecturalDecision,
-    Complexity,
-    CriticalFile,
     ModificationType,
     PlanAgent,
     PlanError,
@@ -261,6 +259,8 @@ pub use specialized::{
     RiskCategory,
     RiskSeverity,
     ScopeDefinition,
+    StructureAnalysis,
+    ThoroughnessLevel,
 };
 
 // ============================================================================
@@ -273,15 +273,15 @@ pub use error_handling::{
     AgentErrorKind,
     ErrorContext,
     ErrorHandler,
-    UnifiedErrorRecord,
+    // Retry handler
+    RetryHandler,
+    RetryResult,
+    RetryStrategy,
     // Timeout handler
     TimeoutConfig,
     TimeoutEvent,
     TimeoutHandler,
     TimeoutStatus,
-    // Retry handler
-    RetryHandler,
-    RetryResult,
-    RetryStrategy,
+    UnifiedErrorRecord,
     UnifiedRetryConfig,
 };

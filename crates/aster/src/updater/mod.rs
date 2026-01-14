@@ -7,12 +7,10 @@ mod installer;
 mod manager;
 
 pub use checker::{
-    VersionInfo, UpdateCheckResult, check_for_updates as check_version, compare_versions,
+    check_for_updates as check_version, compare_versions, UpdateCheckResult, VersionInfo,
 };
-pub use installer::{
-    Installer, InstallOptions, InstallResult, DownloadProgress, DownloadPhase,
-};
+pub use installer::{DownloadPhase, DownloadProgress, InstallOptions, InstallResult, Installer};
 pub use manager::{
-    UpdateManager, UpdateConfig, UpdateChannel, UpdateStatus, UpdateOptions, UpdateEvent,
-    check_for_updates, perform_update, rollback_version, list_versions,
+    check_for_updates, list_versions, perform_update, rollback_version, UpdateChannel,
+    UpdateConfig, UpdateEvent, UpdateManager, UpdateOptions, UpdateStatus,
 };

@@ -2,14 +2,14 @@
 //!
 //! Language Server Protocol 客户端实现
 
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex, RwLock};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use super::types::*;
 
@@ -75,7 +75,8 @@ pub struct LspClient {
     state: Arc<RwLock<LspServerState>>,
     process: Arc<Mutex<Option<Child>>>,
     message_id: AtomicU64,
-    pending_requests: Arc<Mutex<HashMap<u64, tokio::sync::oneshot::Sender<Result<Value, LspError>>>>>,
+    pending_requests:
+        Arc<Mutex<HashMap<u64, tokio::sync::oneshot::Sender<Result<Value, LspError>>>>>,
     capabilities: Arc<RwLock<Option<Value>>>,
     event_sender: broadcast::Sender<LspClientEvent>,
 }
@@ -119,7 +120,9 @@ impl LspClient {
         }
 
         *self.state.write().await = LspServerState::Starting;
-        let _ = self.event_sender.send(LspClientEvent::StateChange(LspServerState::Starting));
+        let _ = self
+            .event_sender
+            .send(LspClientEvent::StateChange(LspServerState::Starting));
 
         // 启动进程
         let child = Command::new(&self.config.command)
@@ -159,15 +162,20 @@ impl LspClient {
                 }
 
                 // 发送 initialized 通知
-                self.send_notification("initialized", serde_json::json!({})).await;
+                self.send_notification("initialized", serde_json::json!({}))
+                    .await;
 
                 *self.state.write().await = LspServerState::Running;
-                let _ = self.event_sender.send(LspClientEvent::StateChange(LspServerState::Running));
+                let _ = self
+                    .event_sender
+                    .send(LspClientEvent::StateChange(LspServerState::Running));
                 Ok(true)
             }
             Err(e) => {
                 *self.state.write().await = LspServerState::Error;
-                let _ = self.event_sender.send(LspClientEvent::StateChange(LspServerState::Error));
+                let _ = self
+                    .event_sender
+                    .send(LspClientEvent::StateChange(LspServerState::Error));
                 Err(format!("Initialize failed: {}", e))
             }
         }
@@ -189,7 +197,9 @@ impl LspClient {
         }
 
         *self.state.write().await = LspServerState::Stopped;
-        let _ = self.event_sender.send(LspClientEvent::StateChange(LspServerState::Stopped));
+        let _ = self
+            .event_sender
+            .send(LspClientEvent::StateChange(LspServerState::Stopped));
     }
 
     /// 发送请求
@@ -238,11 +248,14 @@ impl LspClient {
         let mut process = self.process.lock().await;
         if let Some(ref mut child) = *process {
             if let Some(ref mut stdin) = child.stdin {
-                stdin.write_all(header.as_bytes())
+                stdin
+                    .write_all(header.as_bytes())
                     .map_err(|e| format!("Failed to write header: {}", e))?;
-                stdin.write_all(content.as_bytes())
+                stdin
+                    .write_all(content.as_bytes())
                     .map_err(|e| format!("Failed to write content: {}", e))?;
-                stdin.flush()
+                stdin
+                    .flush()
                     .map_err(|e| format!("Failed to flush: {}", e))?;
             }
         }
@@ -260,8 +273,10 @@ impl LspClient {
             "textDocument": { "uri": uri }
         });
 
-        let result = self.send_request("textDocument/documentSymbol", params).await?;
-        
+        let result = self
+            .send_request("textDocument/documentSymbol", params)
+            .await?;
+
         match result {
             Value::Array(symbols) => Ok(symbols),
             Value::Null => Ok(Vec::new()),
@@ -289,11 +304,16 @@ impl LspClient {
             "textDocument": { "uri": uri }
         });
 
-        self.send_notification("textDocument/didClose", params).await;
+        self.send_notification("textDocument/didClose", params)
+            .await;
     }
 
     /// 查找引用
-    pub async fn find_references(&self, uri: &str, position: LspPosition) -> Result<Vec<LspLocation>, String> {
+    pub async fn find_references(
+        &self,
+        uri: &str,
+        position: LspPosition,
+    ) -> Result<Vec<LspLocation>, String> {
         if *self.state.read().await != LspServerState::Running {
             return Err("LSP server is not running".to_string());
         }
@@ -305,10 +325,11 @@ impl LspClient {
         });
 
         let result = self.send_request("textDocument/references", params).await?;
-        
+
         match result {
             Value::Array(locations) => {
-                let parsed: Vec<LspLocation> = locations.iter()
+                let parsed: Vec<LspLocation> = locations
+                    .iter()
                     .filter_map(|v| serde_json::from_value(v.clone()).ok())
                     .collect();
                 Ok(parsed)
@@ -318,7 +339,11 @@ impl LspClient {
     }
 
     /// 跳转到定义
-    pub async fn get_definition(&self, uri: &str, position: LspPosition) -> Result<Option<LspLocation>, String> {
+    pub async fn get_definition(
+        &self,
+        uri: &str,
+        position: LspPosition,
+    ) -> Result<Option<LspLocation>, String> {
         if *self.state.read().await != LspServerState::Running {
             return Err("LSP server is not running".to_string());
         }
@@ -329,18 +354,16 @@ impl LspClient {
         });
 
         let result = self.send_request("textDocument/definition", params).await?;
-        
+
         match result {
             Value::Array(locations) if !locations.is_empty() => {
                 serde_json::from_value(locations[0].clone())
                     .map(Some)
                     .map_err(|e| format!("Failed to parse location: {}", e))
             }
-            Value::Object(_) => {
-                serde_json::from_value(result)
-                    .map(Some)
-                    .map_err(|e| format!("Failed to parse location: {}", e))
-            }
+            Value::Object(_) => serde_json::from_value(result)
+                .map(Some)
+                .map_err(|e| format!("Failed to parse location: {}", e)),
             _ => Ok(None),
         }
     }

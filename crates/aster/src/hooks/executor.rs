@@ -18,19 +18,13 @@ fn replace_command_variables(command: &str, input: &HookInput) -> String {
         .replace("$TOOL_NAME", input.tool_name.as_deref().unwrap_or(""))
         .replace(
             "$EVENT",
-            &input
-                .event
-                .map(|e| e.to_string())
-                .unwrap_or_default(),
+            &input.event.map(|e| e.to_string()).unwrap_or_default(),
         )
         .replace("$SESSION_ID", input.session_id.as_deref().unwrap_or(""))
 }
 
 /// 执行 Command Hook
-async fn execute_command_hook(
-    hook: &CommandHookConfig,
-    input: &HookInput,
-) -> HookResult {
+async fn execute_command_hook(hook: &CommandHookConfig, input: &HookInput) -> HookResult {
     let timeout_duration = Duration::from_millis(hook.timeout);
     let command = replace_command_variables(&hook.command, input);
 
@@ -91,13 +85,11 @@ async fn execute_command_hook(
                             return HookResult::blocked(message);
                         }
                     }
-                    return HookResult::failure(
-                        if stderr.is_empty() {
-                            format!("Hook exited with code {:?}", output.status.code())
-                        } else {
-                            stderr
-                        }
-                    );
+                    return HookResult::failure(if stderr.is_empty() {
+                        format!("Hook exited with code {:?}", output.status.code())
+                    } else {
+                        stderr
+                    });
                 }
 
                 HookResult::success(Some(stdout))
@@ -373,10 +365,7 @@ pub async fn run_post_tool_use_failure_hooks(
 }
 
 /// SessionStart hook
-pub async fn run_session_start_hooks(
-    session_id: String,
-    source: Option<SessionSource>,
-) {
+pub async fn run_session_start_hooks(session_id: String, source: Option<SessionSource>) {
     let _ = run_hooks(HookInput {
         event: Some(HookEvent::SessionStart),
         source,
@@ -387,10 +376,7 @@ pub async fn run_session_start_hooks(
 }
 
 /// SessionEnd hook
-pub async fn run_session_end_hooks(
-    session_id: String,
-    reason: Option<SessionEndReason>,
-) {
+pub async fn run_session_end_hooks(session_id: String, reason: Option<SessionEndReason>) {
     let _ = run_hooks(HookInput {
         event: Some(HookEvent::SessionEnd),
         reason,

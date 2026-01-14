@@ -18,7 +18,14 @@ fn get_classification_rules() -> Vec<ClassificationRule> {
     vec![
         // 表现层 - UI 组件
         ClassificationRule {
-            patterns: vec!["/ui/", "/components/", "/pages/", "/views/", "/screens/", ".tsx"],
+            patterns: vec![
+                "/ui/",
+                "/components/",
+                "/pages/",
+                "/views/",
+                "/screens/",
+                ".tsx",
+            ],
             layer: ArchitectureLayer::Presentation,
             sub_layer: Some("components"),
             priority: 10,
@@ -32,7 +39,13 @@ fn get_classification_rules() -> Vec<ClassificationRule> {
         },
         // 业务层 - 核心逻辑
         ClassificationRule {
-            patterns: vec!["/core/", "/domain/", "/business/", "/services/", "/usecases/"],
+            patterns: vec![
+                "/core/",
+                "/domain/",
+                "/business/",
+                "/services/",
+                "/usecases/",
+            ],
             layer: ArchitectureLayer::Business,
             sub_layer: Some("core"),
             priority: 20,
@@ -53,7 +66,13 @@ fn get_classification_rules() -> Vec<ClassificationRule> {
         },
         // 数据层 - 存储
         ClassificationRule {
-            patterns: vec!["/db/", "/database/", "/repositories/", "/storage/", "/cache/"],
+            patterns: vec![
+                "/db/",
+                "/database/",
+                "/repositories/",
+                "/storage/",
+                "/cache/",
+            ],
             layer: ArchitectureLayer::Data,
             sub_layer: Some("storage"),
             priority: 20,
@@ -110,7 +129,6 @@ fn get_classification_rules() -> Vec<ClassificationRule> {
     ]
 }
 
-
 /// 分类结果
 #[derive(Debug, Clone)]
 pub struct ClassificationResult {
@@ -127,7 +145,9 @@ pub struct LayerClassifier {
 
 impl LayerClassifier {
     pub fn new() -> Self {
-        Self { rules: get_classification_rules() }
+        Self {
+            rules: get_classification_rules(),
+        }
     }
 
     /// 对单个模块进行架构层分类
@@ -137,7 +157,9 @@ impl LayerClassifier {
         let mut matched: Vec<(&ClassificationRule, Vec<&str>)> = Vec::new();
 
         for rule in &self.rules {
-            let matches: Vec<&str> = rule.patterns.iter()
+            let matches: Vec<&str> = rule
+                .patterns
+                .iter()
                 .filter(|p| path_lower.contains(&p.to_lowercase()))
                 .copied()
                 .collect();
@@ -148,7 +170,8 @@ impl LayerClassifier {
 
         if !matched.is_empty() {
             matched.sort_by(|a, b| {
-                b.0.priority.cmp(&a.0.priority)
+                b.0.priority
+                    .cmp(&a.0.priority)
                     .then_with(|| b.1.len().cmp(&a.1.len()))
             });
 
@@ -174,7 +197,6 @@ impl LayerClassifier {
             matched_rules: vec!["default".to_string()],
         }
     }
-
 
     fn classify_by_content(&self, module: &ModuleNode) -> Option<ClassificationResult> {
         let mut has_react = false;
@@ -225,8 +247,12 @@ impl LayerClassifier {
     }
 
     /// 批量分类
-    pub fn classify_all(&self, modules: &[ModuleNode]) -> std::collections::HashMap<String, ClassificationResult> {
-        modules.iter()
+    pub fn classify_all(
+        &self,
+        modules: &[ModuleNode],
+    ) -> std::collections::HashMap<String, ClassificationResult> {
+        modules
+            .iter()
             .map(|m| (m.id.clone(), self.classify(m)))
             .collect()
     }
@@ -244,7 +270,9 @@ impl LayerClassifier {
 }
 
 impl Default for LayerClassifier {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// 快速分类单个模块
@@ -253,6 +281,8 @@ pub fn classify_module(module: &ModuleNode) -> ClassificationResult {
 }
 
 /// 批量分类模块
-pub fn classify_modules(modules: &[ModuleNode]) -> std::collections::HashMap<String, ClassificationResult> {
+pub fn classify_modules(
+    modules: &[ModuleNode],
+) -> std::collections::HashMap<String, ClassificationResult> {
     LayerClassifier::new().classify_all(modules)
 }

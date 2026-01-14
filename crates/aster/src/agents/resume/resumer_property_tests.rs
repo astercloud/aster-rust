@@ -71,28 +71,38 @@ fn agent_state_strategy() -> impl Strategy<Value = AgentState> {
         agent_type_strategy(),
         prompt_strategy(),
         status_strategy(),
-        0usize..100usize,  // current_step
-        prop::option::of(1usize..200usize),  // total_steps
-        0usize..10usize,   // error_count
-        0usize..5usize,    // retry_count
-        prop::bool::ANY,   // has_checkpoint
+        0usize..100usize,                   // current_step
+        prop::option::of(1usize..200usize), // total_steps
+        0usize..10usize,                    // error_count
+        0usize..5usize,                     // retry_count
+        prop::bool::ANY,                    // has_checkpoint
     )
-        .prop_map(|(id, agent_type, prompt, status, step, total_steps, errors, retries, has_checkpoint)| {
-            let mut state = AgentState::new(id, agent_type, prompt)
-                .with_status(status);
-            state.current_step = step;
-            if let Some(total) = total_steps {
-                state.total_steps = Some(total);
-            }
-            state.error_count = errors;
-            state.retry_count = retries;
-            if has_checkpoint {
-                state.create_checkpoint(Some("auto-checkpoint"));
-            }
-            state
-        })
+        .prop_map(
+            |(
+                id,
+                agent_type,
+                prompt,
+                status,
+                step,
+                total_steps,
+                errors,
+                retries,
+                has_checkpoint,
+            )| {
+                let mut state = AgentState::new(id, agent_type, prompt).with_status(status);
+                state.current_step = step;
+                if let Some(total) = total_steps {
+                    state.total_steps = Some(total);
+                }
+                state.error_count = errors;
+                state.retry_count = retries;
+                if has_checkpoint {
+                    state.create_checkpoint(Some("auto-checkpoint"));
+                }
+                state
+            },
+        )
 }
-
 
 /// **Property 33: Resume Capability Check**
 ///
@@ -400,13 +410,12 @@ proptest! {
     }
 }
 
-
 // Additional unit tests for edge cases
 #[tokio::test]
 async fn property_33_resume_point_info_from_state_consistency() {
     // Test that ResumePointInfo::from_state produces consistent results
-    let state = AgentState::new("test-agent", "test", "Test prompt")
-        .with_status(AgentStateStatus::Running);
+    let state =
+        AgentState::new("test-agent", "test", "Test prompt").with_status(AgentStateStatus::Running);
 
     let info = ResumePointInfo::from_state(&state);
 
@@ -426,16 +435,20 @@ async fn property_33_resume_options_builder_consistency() {
         .with_additional_context("Extra context");
 
     assert_eq!(options.agent_id, "agent-1");
-    assert_eq!(options.continue_from, ResumePoint::Checkpoint("cp-1".to_string()));
+    assert_eq!(
+        options.continue_from,
+        ResumePoint::Checkpoint("cp-1".to_string())
+    );
     assert!(options.reset_errors);
-    assert_eq!(options.additional_context, Some("Extra context".to_string()));
+    assert_eq!(
+        options.additional_context,
+        Some("Extra context".to_string())
+    );
 
     // Test from_point
-    let options2 = ResumeOptions::new("agent-2")
-        .from_point(ResumePoint::Beginning);
+    let options2 = ResumeOptions::new("agent-2").from_point(ResumePoint::Beginning);
     assert_eq!(options2.continue_from, ResumePoint::Beginning);
 }
-
 
 /// **Property 34: Agent Resume Behavior**
 ///

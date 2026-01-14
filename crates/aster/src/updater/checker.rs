@@ -24,7 +24,6 @@ pub struct UpdateCheckResult {
     pub changelog: Option<Vec<String>>,
 }
 
-
 /// 比较版本号
 /// 返回: 1 表示 v1 > v2, -1 表示 v1 < v2, 0 表示相等
 pub fn compare_versions(v1: &str, v2: &str) -> i32 {
@@ -46,8 +45,12 @@ pub fn compare_versions(v1: &str, v2: &str) -> i32 {
         let p1 = parts1.get(i).copied().unwrap_or(0);
         let p2 = parts2.get(i).copied().unwrap_or(0);
 
-        if p1 > p2 { return 1; }
-        if p1 < p2 { return -1; }
+        if p1 > p2 {
+            return 1;
+        }
+        if p1 < p2 {
+            return -1;
+        }
     }
 
     0
@@ -66,7 +69,6 @@ pub async fn check_for_updates(current_version: &str) -> Result<UpdateCheckResul
     })
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,51 +84,50 @@ mod tests {
     }
 }
 
+#[test]
+fn test_compare_versions_with_prerelease() {
+    // 简化实现忽略预发布标签，只比较数字部分
+    assert_eq!(compare_versions("1.0.0-beta", "1.0.0"), 0);
+    assert_eq!(compare_versions("1.0.0", "1.0.0-alpha"), 0);
+}
 
-    #[test]
-    fn test_compare_versions_with_prerelease() {
-        // 简化实现忽略预发布标签，只比较数字部分
-        assert_eq!(compare_versions("1.0.0-beta", "1.0.0"), 0);
-        assert_eq!(compare_versions("1.0.0", "1.0.0-alpha"), 0);
-    }
+#[test]
+fn test_compare_versions_different_lengths() {
+    assert_eq!(compare_versions("1.0", "1.0.0"), 0);
+    assert_eq!(compare_versions("1.0.0.1", "1.0.0"), 1);
+}
 
-    #[test]
-    fn test_compare_versions_different_lengths() {
-        assert_eq!(compare_versions("1.0", "1.0.0"), 0);
-        assert_eq!(compare_versions("1.0.0.1", "1.0.0"), 1);
-    }
+#[test]
+fn test_version_info_struct() {
+    let info = VersionInfo {
+        version: "1.0.0".to_string(),
+        release_date: "2026-01-14".to_string(),
+        changelog: Some("Initial release".to_string()),
+        download_url: Some("https://example.com/v1.0.0".to_string()),
+        description: Some("Test version".to_string()),
+    };
+    assert_eq!(info.version, "1.0.0");
+    assert!(info.changelog.is_some());
+}
 
-    #[test]
-    fn test_version_info_struct() {
-        let info = VersionInfo {
-            version: "1.0.0".to_string(),
-            release_date: "2026-01-14".to_string(),
-            changelog: Some("Initial release".to_string()),
-            download_url: Some("https://example.com/v1.0.0".to_string()),
-            description: Some("Test version".to_string()),
-        };
-        assert_eq!(info.version, "1.0.0");
-        assert!(info.changelog.is_some());
-    }
+#[test]
+fn test_update_check_result_struct() {
+    let result = UpdateCheckResult {
+        has_update: true,
+        current_version: "1.0.0".to_string(),
+        latest_version: "1.1.0".to_string(),
+        version_info: None,
+        changelog: Some(vec!["Fix bug".to_string()]),
+    };
+    assert!(result.has_update);
+    assert_eq!(result.current_version, "1.0.0");
+    assert_eq!(result.latest_version, "1.1.0");
+}
 
-    #[test]
-    fn test_update_check_result_struct() {
-        let result = UpdateCheckResult {
-            has_update: true,
-            current_version: "1.0.0".to_string(),
-            latest_version: "1.1.0".to_string(),
-            version_info: None,
-            changelog: Some(vec!["Fix bug".to_string()]),
-        };
-        assert!(result.has_update);
-        assert_eq!(result.current_version, "1.0.0");
-        assert_eq!(result.latest_version, "1.1.0");
-    }
-
-    #[tokio::test]
-    async fn test_check_for_updates_async() {
-        let result = check_for_updates("1.0.0").await;
-        assert!(result.is_ok());
-        let check = result.unwrap();
-        assert_eq!(check.current_version, "1.0.0");
-    }
+#[tokio::test]
+async fn test_check_for_updates_async() {
+    let result = check_for_updates("1.0.0").await;
+    assert!(result.is_ok());
+    let check = result.unwrap();
+    assert_eq!(check.current_version, "1.0.0");
+}

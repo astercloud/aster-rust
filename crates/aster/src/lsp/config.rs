@@ -46,10 +46,15 @@ pub struct LSPServerConfig {
     pub source: Option<String>,
 }
 
-fn default_startup_timeout() -> u64 { 30000 }
-fn default_restart_on_crash() -> bool { true }
-fn default_max_restarts() -> u32 { 3 }
-
+fn default_startup_timeout() -> u64 {
+    30000
+}
+fn default_restart_on_crash() -> bool {
+    true
+}
+fn default_max_restarts() -> u32 {
+    3
+}
 
 impl Default for LSPServerConfig {
     fn default() -> Self {
@@ -74,7 +79,6 @@ impl Default for LSPServerConfig {
 /// .lsp.json 配置文件格式
 pub type LSPConfigFile = HashMap<String, LSPServerConfig>;
 
-
 /// 加载 .lsp.json 配置文件
 pub fn load_lsp_config_file(workspace_root: &Path) -> Vec<LSPServerConfig> {
     let search_paths = [
@@ -93,20 +97,18 @@ pub fn load_lsp_config_file(workspace_root: &Path) -> Vec<LSPServerConfig> {
         }
 
         match std::fs::read_to_string(config_path) {
-            Ok(content) => {
-                match serde_json::from_str::<LSPConfigFile>(&content) {
-                    Ok(config_file) => {
-                        for (name, mut config) in config_file {
-                            config.name = name;
-                            config.source = Some(config_path.display().to_string());
-                            configs.push(config);
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!("解析 LSP 配置文件失败 {}: {}", config_path.display(), e);
+            Ok(content) => match serde_json::from_str::<LSPConfigFile>(&content) {
+                Ok(config_file) => {
+                    for (name, mut config) in config_file {
+                        config.name = name;
+                        config.source = Some(config_path.display().to_string());
+                        configs.push(config);
                     }
                 }
-            }
+                Err(e) => {
+                    tracing::warn!("解析 LSP 配置文件失败 {}: {}", config_path.display(), e);
+                }
+            },
             Err(e) => {
                 tracing::warn!("读取 LSP 配置文件失败 {}: {}", config_path.display(), e);
             }
@@ -116,7 +118,6 @@ pub fn load_lsp_config_file(workspace_root: &Path) -> Vec<LSPServerConfig> {
     configs
 }
 
-
 /// 默认 LSP 服务器配置
 pub fn default_lsp_configs() -> Vec<LSPServerConfig> {
     vec![
@@ -124,13 +125,20 @@ pub fn default_lsp_configs() -> Vec<LSPServerConfig> {
             name: "typescript-language-server".to_string(),
             command: "typescript-language-server".to_string(),
             args: vec!["--stdio".to_string()],
-            file_extensions: vec![".ts".to_string(), ".tsx".to_string(), ".js".to_string(), ".jsx".to_string()],
+            file_extensions: vec![
+                ".ts".to_string(),
+                ".tsx".to_string(),
+                ".js".to_string(),
+                ".jsx".to_string(),
+            ],
             extension_to_language: [
                 (".ts".to_string(), "typescript".to_string()),
                 (".tsx".to_string(), "typescriptreact".to_string()),
                 (".js".to_string(), "javascript".to_string()),
                 (".jsx".to_string(), "javascriptreact".to_string()),
-            ].into_iter().collect(),
+            ]
+            .into_iter()
+            .collect(),
             restart_on_crash: true,
             max_restarts: 3,
             ..Default::default()
@@ -140,9 +148,9 @@ pub fn default_lsp_configs() -> Vec<LSPServerConfig> {
             command: "pyright-langserver".to_string(),
             args: vec!["--stdio".to_string()],
             file_extensions: vec![".py".to_string()],
-            extension_to_language: [
-                (".py".to_string(), "python".to_string()),
-            ].into_iter().collect(),
+            extension_to_language: [(".py".to_string(), "python".to_string())]
+                .into_iter()
+                .collect(),
             restart_on_crash: true,
             max_restarts: 3,
             ..Default::default()
@@ -152,9 +160,9 @@ pub fn default_lsp_configs() -> Vec<LSPServerConfig> {
             command: "rust-analyzer".to_string(),
             args: vec![],
             file_extensions: vec![".rs".to_string()],
-            extension_to_language: [
-                (".rs".to_string(), "rust".to_string()),
-            ].into_iter().collect(),
+            extension_to_language: [(".rs".to_string(), "rust".to_string())]
+                .into_iter()
+                .collect(),
             restart_on_crash: true,
             max_restarts: 3,
             ..Default::default()

@@ -6,15 +6,13 @@
 //! 3. 运行测试并解析结果
 //!
 
+use chrono::Utc;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use chrono::Utc;
 use uuid::Uuid;
 
-use super::types::{
-    TaskNode, TestResult, AcceptanceTest, Blueprint, ArtifactType, TddPhase,
-};
-use super::boundary_checker::{BoundaryChecker, create_boundary_checker};
+use super::boundary_checker::{create_boundary_checker, BoundaryChecker};
+use super::types::{AcceptanceTest, ArtifactType, Blueprint, TaskNode, TddPhase, TestResult};
 
 // ============================================================================
 // 配置类型
@@ -53,7 +51,6 @@ impl TestFramework {
         }
     }
 }
-
 
 /// Worker 执行器配置
 #[derive(Debug, Clone)]
@@ -130,7 +127,6 @@ impl ExecutionContext {
     }
 }
 
-
 // ============================================================================
 // 阶段执行结果
 // ============================================================================
@@ -188,7 +184,8 @@ impl PhaseResult {
 
     /// 添加产出物
     pub fn with_artifact(mut self, file_path: String, content: String) -> Self {
-        self.artifacts.push(CodeArtifactOutput { file_path, content });
+        self.artifacts
+            .push(CodeArtifactOutput { file_path, content });
         self
     }
 
@@ -198,7 +195,6 @@ impl PhaseResult {
         self
     }
 }
-
 
 // ============================================================================
 // Worker 执行器
@@ -238,11 +234,7 @@ impl WorkerExecutor {
     // --------------------------------------------------------------------------
 
     /// 执行单个 TDD 阶段
-    pub async fn execute_phase(
-        &self,
-        phase: TddPhase,
-        context: &ExecutionContext,
-    ) -> PhaseResult {
+    pub async fn execute_phase(&self, phase: TddPhase, context: &ExecutionContext) -> PhaseResult {
         self.log(&format!("[Worker] 执行阶段: {:?}", phase));
 
         match phase {
@@ -256,7 +248,6 @@ impl WorkerExecutor {
         }
     }
 
-
     // --------------------------------------------------------------------------
     // write_test 阶段：生成测试代码
     // --------------------------------------------------------------------------
@@ -268,10 +259,14 @@ impl WorkerExecutor {
         if !task.acceptance_tests.is_empty() {
             self.log("[Worker] 任务已有验收测试，跳过测试编写阶段");
             return PhaseResult::success()
-                .with_data("message".to_string(), 
-                    serde_json::json!("任务已有验收测试，无需编写额外测试"))
-                .with_data("acceptance_test_count".to_string(), 
-                    serde_json::json!(task.acceptance_tests.len()));
+                .with_data(
+                    "message".to_string(),
+                    serde_json::json!("任务已有验收测试，无需编写额外测试"),
+                )
+                .with_data(
+                    "acceptance_test_count".to_string(),
+                    serde_json::json!(task.acceptance_tests.len()),
+                );
         }
 
         // 生成测试代码（这里需要调用 LLM）
@@ -289,7 +284,10 @@ impl WorkerExecutor {
 
         PhaseResult::success()
             .with_data("test_code".to_string(), serde_json::json!(test_code))
-            .with_data("test_file_path".to_string(), serde_json::json!(test_file_path))
+            .with_data(
+                "test_file_path".to_string(),
+                serde_json::json!(test_file_path),
+            )
             .with_data("test_command".to_string(), serde_json::json!(test_command))
             .with_artifact(test_file_path, test_code)
     }
@@ -297,7 +295,7 @@ impl WorkerExecutor {
     /// 生成测试代码
     async fn generate_test(&self, task: &TaskNode) -> String {
         let _prompt = self.build_test_prompt(task);
-        
+
         // TODO: 调用 LLM API 生成测试代码
         // 这里返回占位符
         format!(
@@ -319,7 +317,6 @@ mod tests {{
             task.name, task.description
         )
     }
-
 
     // --------------------------------------------------------------------------
     // run_test_red 阶段：运行测试（期望失败）
@@ -343,17 +340,15 @@ mod tests {{
             return PhaseResult::success()
                 .with_data("expected_to_fail".to_string(), serde_json::json!(true))
                 .with_data("actually_failed".to_string(), serde_json::json!(all_failed))
-                .with_test_result(results.into_iter().next().unwrap_or_else(|| {
-                    TestResult {
-                        id: Uuid::new_v4().to_string(),
-                        timestamp: Utc::now(),
-                        passed: false,
-                        duration: 0,
-                        output: String::new(),
-                        error_message: None,
-                        coverage: None,
-                        details: None,
-                    }
+                .with_test_result(results.into_iter().next().unwrap_or_else(|| TestResult {
+                    id: Uuid::new_v4().to_string(),
+                    timestamp: Utc::now(),
+                    passed: false,
+                    duration: 0,
+                    output: String::new(),
+                    error_message: None,
+                    coverage: None,
+                    details: None,
                 }));
         }
 
@@ -364,14 +359,16 @@ mod tests {{
 
                 return PhaseResult::success()
                     .with_data("expected_to_fail".to_string(), serde_json::json!(true))
-                    .with_data("actually_failed".to_string(), serde_json::json!(!result.passed))
+                    .with_data(
+                        "actually_failed".to_string(),
+                        serde_json::json!(!result.passed),
+                    )
                     .with_test_result(result);
             }
         }
 
         PhaseResult::failure("没有找到可运行的测试")
     }
-
 
     // --------------------------------------------------------------------------
     // write_code 阶段：生成实现代码
@@ -386,8 +383,10 @@ mod tests {{
         let code_artifacts = self.generate_code(task, test_code, last_error).await;
 
         // 保存代码文件
-        let mut result = PhaseResult::success()
-            .with_data("file_count".to_string(), serde_json::json!(code_artifacts.len()));
+        let mut result = PhaseResult::success().with_data(
+            "file_count".to_string(),
+            serde_json::json!(code_artifacts.len()),
+        );
 
         for artifact in code_artifacts {
             if let Err(e) = self.save_file(&artifact.file_path, &artifact.content).await {
@@ -426,7 +425,6 @@ pub fn placeholder() {{
         }]
     }
 
-
     // --------------------------------------------------------------------------
     // run_test_green 阶段：运行测试（期望通过）
     // --------------------------------------------------------------------------
@@ -452,11 +450,14 @@ pub fn placeholder() {{
             let error_message = if all_passed {
                 None
             } else {
-                Some(results.iter()
-                    .filter(|r| !r.passed)
-                    .filter_map(|r| r.error_message.clone())
-                    .collect::<Vec<_>>()
-                    .join("\n"))
+                Some(
+                    results
+                        .iter()
+                        .filter(|r| !r.passed)
+                        .filter_map(|r| r.error_message.clone())
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )
             };
 
             return PhaseResult::success()
@@ -481,14 +482,16 @@ pub fn placeholder() {{
 
                 return PhaseResult::success()
                     .with_data("expected_to_pass".to_string(), serde_json::json!(true))
-                    .with_data("actually_passed".to_string(), serde_json::json!(result.passed))
+                    .with_data(
+                        "actually_passed".to_string(),
+                        serde_json::json!(result.passed),
+                    )
                     .with_test_result(result);
             }
         }
 
         PhaseResult::failure("没有找到可运行的测试")
     }
-
 
     // --------------------------------------------------------------------------
     // refactor 阶段：重构代码
@@ -501,16 +504,20 @@ pub fn placeholder() {{
         let current_code = self.read_task_code(task);
 
         if current_code.is_empty() {
-            return PhaseResult::success()
-                .with_data("message".to_string(), serde_json::json!("没有需要重构的代码"));
+            return PhaseResult::success().with_data(
+                "message".to_string(),
+                serde_json::json!("没有需要重构的代码"),
+            );
         }
 
         // 生成重构后的代码
         let refactored_artifacts = self.refactor_code(task, &current_code).await;
 
         // 保存重构后的代码
-        let mut result = PhaseResult::success()
-            .with_data("file_count".to_string(), serde_json::json!(refactored_artifacts.len()));
+        let mut result = PhaseResult::success().with_data(
+            "file_count".to_string(),
+            serde_json::json!(refactored_artifacts.len()),
+        );
 
         for artifact in refactored_artifacts {
             if let Err(e) = self.save_file(&artifact.file_path, &artifact.content).await {
@@ -534,7 +541,6 @@ pub fn placeholder() {{
         // 这里返回原代码（不做修改）
         current_code.to_vec()
     }
-
 
     // --------------------------------------------------------------------------
     // 运行测试
@@ -587,7 +593,6 @@ pub fn placeholder() {{
             task.name, task.description, self.config.test_framework
         )
     }
-
 
     /// 构建代码生成 Prompt
     fn build_code_prompt(
@@ -695,7 +700,6 @@ pub fn placeholder() {{
         prompt
     }
 
-
     // --------------------------------------------------------------------------
     // 辅助方法
     // --------------------------------------------------------------------------
@@ -752,19 +756,20 @@ pub fn placeholder() {{
                 full_path.to_str().unwrap_or(""),
             );
             if !result.allowed {
-                return Err(format!("[边界检查失败] {}", result.reason.unwrap_or_default()));
+                return Err(format!(
+                    "[边界检查失败] {}",
+                    result.reason.unwrap_or_default()
+                ));
             }
         }
 
         // 确保目录存在
         if let Some(parent) = full_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("创建目录失败: {}", e))?;
+            std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
         }
 
         // 写入文件
-        std::fs::write(&full_path, content)
-            .map_err(|e| format!("写入文件失败: {}", e))?;
+        std::fs::write(&full_path, content).map_err(|e| format!("写入文件失败: {}", e))?;
 
         self.log(&format!("[Worker] 保存文件: {}", file_path));
         Ok(())
@@ -776,7 +781,6 @@ pub fn placeholder() {{
             println!("{}", message);
         }
     }
-
 
     // --------------------------------------------------------------------------
     // 配置管理
@@ -832,9 +836,11 @@ mod tests {
 
     #[test]
     fn test_test_framework_command() {
-        assert!(TestFramework::Cargo.get_test_command("test_file")
+        assert!(TestFramework::Cargo
+            .get_test_command("test_file")
             .contains("cargo test"));
-        assert!(TestFramework::Vitest.get_test_command("test_file")
+        assert!(TestFramework::Vitest
+            .get_test_command("test_file")
             .contains("vitest"));
     }
 

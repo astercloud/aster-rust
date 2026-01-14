@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Utc};
 
 use super::types::{
-    ChatMemoryStats, ChatMemoryStore, ConversationSummary, MemoryHierarchyConfig,
-    MemoryImportance, Timestamp,
+    ChatMemoryStats, ChatMemoryStore, ConversationSummary, MemoryHierarchyConfig, MemoryImportance,
+    Timestamp,
 };
 
 const CHAT_MEMORY_VERSION: &str = "1.0.0";
@@ -49,7 +49,6 @@ pub struct ChatMemory {
     store: ChatMemoryStore,
     config: MemoryHierarchyConfig,
 }
-
 
 impl ChatMemory {
     /// 创建新的对话记忆管理器
@@ -152,7 +151,6 @@ impl ChatMemory {
         results.into_iter().take(limit).map(|(s, _)| s).collect()
     }
 
-
     /// 按话题搜索
     pub fn search_by_topic(&self, topic: &str, limit: Option<usize>) -> Vec<&ConversationSummary> {
         let limit = limit.unwrap_or(10);
@@ -162,7 +160,11 @@ impl ChatMemory {
             .store
             .summaries
             .iter()
-            .filter(|s| s.topics.iter().any(|t| t.to_lowercase().contains(&topic_lower)))
+            .filter(|s| {
+                s.topics
+                    .iter()
+                    .any(|t| t.to_lowercase().contains(&topic_lower))
+            })
             .collect();
 
         results.sort_by(|a, b| b.end_time.cmp(&a.end_time));
@@ -247,7 +249,6 @@ impl ChatMemory {
         }
     }
 
-
     /// 获取最近 N 条摘要
     pub fn get_recent(&self, count: usize) -> Vec<&ConversationSummary> {
         let mut sorted: Vec<_> = self.store.summaries.iter().collect();
@@ -316,7 +317,6 @@ impl ChatMemory {
         self.store = Self::create_empty_store(&self.store.project_path);
         self.save();
     }
-
 
     // === 私有方法 ===
 

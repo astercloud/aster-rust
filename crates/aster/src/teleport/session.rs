@@ -37,11 +37,14 @@ impl RemoteSession {
         }
     }
 
-
     /// 连接到远程会话
     pub async fn connect(&mut self) -> anyhow::Result<()> {
         // 验证仓库
-        let session_repo = self.config.metadata.as_ref().and_then(|m| m.repo.as_deref());
+        let session_repo = self
+            .config
+            .metadata
+            .as_ref()
+            .and_then(|m| m.repo.as_deref());
         let validation = validate_session_repository(session_repo).await;
 
         if validation.status == RepoValidationStatus::Mismatch {
@@ -54,7 +57,9 @@ impl RemoteSession {
         }
 
         if validation.status == RepoValidationStatus::Error {
-            let error = validation.error_message.unwrap_or_else(|| "仓库验证失败".to_string());
+            let error = validation
+                .error_message
+                .unwrap_or_else(|| "仓库验证失败".to_string());
             self.set_error(&error);
             anyhow::bail!(error);
         }
@@ -97,17 +102,17 @@ impl RemoteSession {
         Ok(())
     }
 
-
     /// 获取当前状态
     pub fn get_state(&self) -> RemoteSessionState {
-        self.state.read().map(|s| s.clone()).unwrap_or_else(|_| {
-            RemoteSessionState {
+        self.state
+            .read()
+            .map(|s| s.clone())
+            .unwrap_or_else(|_| RemoteSessionState {
                 connection_state: ConnectionState::Error,
                 sync_state: SyncState::default(),
                 config: self.config.clone(),
                 error: Some("状态读取失败".to_string()),
-            }
-        })
+            })
     }
 
     /// 检查是否已连接

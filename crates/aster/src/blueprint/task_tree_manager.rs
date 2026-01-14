@@ -8,13 +8,13 @@
 //! 4. 检查点（时光倒流）管理
 //! 5. 任务树统计
 
+use anyhow::{anyhow, Result};
+use chrono::Utc;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::Utc;
 use uuid::Uuid;
-use anyhow::{Result, anyhow};
 
 use super::types::*;
 
@@ -54,7 +54,6 @@ impl TaskTreeManager {
         Self::new(storage_dir)
     }
 
-
     /// 设置当前蓝图
     pub async fn set_current_blueprint(&self, blueprint: Blueprint) {
         *self.current_blueprint.write().await = Some(blueprint);
@@ -92,7 +91,10 @@ impl TaskTreeManager {
 
         // 保存
         let tree_id = task_tree.id.clone();
-        self.task_trees.write().await.insert(tree_id.clone(), task_tree.clone());
+        self.task_trees
+            .write()
+            .await
+            .insert(tree_id.clone(), task_tree.clone());
         *self.current_tree_id.write().await = Some(tree_id);
 
         Ok(task_tree)
@@ -109,14 +111,8 @@ impl TaskTreeManager {
         task
     }
 
-
     /// 为系统模块创建任务分支
-    fn create_module_task(
-        &self,
-        module: &SystemModule,
-        parent_id: &str,
-        depth: u32,
-    ) -> TaskNode {
+    fn create_module_task(&self, module: &SystemModule, parent_id: &str, depth: u32) -> TaskNode {
         let mut module_task = TaskNode::new(
             format!("模块：{}", module.name),
             module.description.clone(),
@@ -132,12 +128,8 @@ impl TaskTreeManager {
 
         // 为每个职责创建子任务
         for (i, responsibility) in module.responsibilities.iter().enumerate() {
-            let resp_task = self.create_responsibility_task(
-                responsibility,
-                &module_task.id,
-                depth + 1,
-                i,
-            );
+            let resp_task =
+                self.create_responsibility_task(responsibility, &module_task.id, depth + 1, i);
             module_task.children.push(resp_task);
         }
 
@@ -196,19 +188,15 @@ impl TaskTreeManager {
                 } else {
                     responsibility.to_string()
                 };
-                
-                let mut task = TaskNode::new(
-                    format!("{}：{}", name, short_resp),
-                    desc.clone(),
-                    depth,
-                );
+
+                let mut task =
+                    TaskNode::new(format!("{}：{}", name, short_resp), desc.clone(), depth);
                 task.parent_id = Some(parent_id.to_string());
                 task.priority = 40 - (i as i32 * 10);
                 task
             })
             .collect()
     }
-
 
     /// 为接口创建任务
     fn create_interface_task(
@@ -253,7 +241,10 @@ impl TaskTreeManager {
             .children
             .iter()
             .filter_map(|child| {
-                child.blueprint_module_id.as_ref().map(|mid| (mid.clone(), child.id.clone()))
+                child
+                    .blueprint_module_id
+                    .as_ref()
+                    .map(|mid| (mid.clone(), child.id.clone()))
             })
             .collect();
 
@@ -270,7 +261,6 @@ impl TaskTreeManager {
             }
         }
     }
-
 
     // ------------------------------------------------------------------------
     // 任务状态管理
@@ -360,14 +350,19 @@ impl TaskTreeManager {
         }
 
         // 统计子任务状态
-        let all_passed = node.children.iter().all(|c| {
-            c.status == TaskStatus::Passed || c.status == TaskStatus::Approved
-        });
-        let any_failed = node.children.iter().any(|c| {
-            c.status == TaskStatus::TestFailed || c.status == TaskStatus::Rejected
-        });
+        let all_passed = node
+            .children
+            .iter()
+            .all(|c| c.status == TaskStatus::Passed || c.status == TaskStatus::Approved);
+        let any_failed = node
+            .children
+            .iter()
+            .any(|c| c.status == TaskStatus::TestFailed || c.status == TaskStatus::Rejected);
         let any_running = node.children.iter().any(|c| {
-            matches!(c.status, TaskStatus::Coding | TaskStatus::Testing | TaskStatus::TestWriting)
+            matches!(
+                c.status,
+                TaskStatus::Coding | TaskStatus::Testing | TaskStatus::TestWriting
+            )
         });
 
         // 更新父节点状态
@@ -384,7 +379,6 @@ impl TaskTreeManager {
         }
     }
 
-
     /// 检查任务是否可以开始
     pub async fn can_start_task(&self, tree_id: &str, task_id: &str) -> (bool, Vec<String>) {
         let trees = self.task_trees.read().await;
@@ -399,7 +393,10 @@ impl TaskTreeManager {
         };
 
         if task.status != TaskStatus::Pending && task.status != TaskStatus::Blocked {
-            return (false, vec![format!("任务状态为 {:?}，不能开始", task.status)]);
+            return (
+                false,
+                vec![format!("任务状态为 {:?}，不能开始", task.status)],
+            );
         }
 
         let mut blockers = Vec::new();
@@ -407,7 +404,8 @@ impl TaskTreeManager {
         // 检查依赖
         for dep_id in &task.dependencies {
             if let Some(dep_task) = Self::find_task(&tree.root, dep_id) {
-                if dep_task.status != TaskStatus::Passed && dep_task.status != TaskStatus::Approved {
+                if dep_task.status != TaskStatus::Passed && dep_task.status != TaskStatus::Approved
+                {
                     blockers.push(format!(
                         "依赖任务 \"{}\" 尚未完成 ({:?})",
                         dep_task.name, dep_task.status
@@ -447,7 +445,7 @@ impl TaskTreeManager {
             let can_start = node.dependencies.iter().all(|dep_id| {
                 if let Some(tree) = trees.get(tree_id) {
                     if let Some(dep_task) = Self::find_task(&tree.root, dep_id) {
-                        return dep_task.status == TaskStatus::Passed 
+                        return dep_task.status == TaskStatus::Passed
                             || dep_task.status == TaskStatus::Approved;
                     }
                 }
@@ -463,7 +461,6 @@ impl TaskTreeManager {
             self.collect_executable_tasks(child, result, tree_id, trees);
         }
     }
-
 
     // ------------------------------------------------------------------------
     // 检查点管理
@@ -575,14 +572,13 @@ impl TaskTreeManager {
     }
 
     fn hash_content(content: &str) -> String {
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
-        
+        use std::hash::{Hash, Hasher};
+
         let mut hasher = DefaultHasher::new();
         content.hash(&mut hasher);
         format!("{:x}", hasher.finish())
     }
-
 
     /// 回滚到任务检查点
     pub async fn rollback_to_checkpoint(
@@ -669,7 +665,10 @@ impl TaskTreeManager {
             .clone();
 
         if !checkpoint.can_restore {
-            return Err(anyhow!("Global checkpoint {} cannot be restored", checkpoint_id));
+            return Err(anyhow!(
+                "Global checkpoint {} cannot be restored",
+                checkpoint_id
+            ));
         }
 
         // 恢复整棵树
@@ -689,7 +688,6 @@ impl TaskTreeManager {
 
         Ok(tree.clone())
     }
-
 
     // ------------------------------------------------------------------------
     // 动态任务细化
@@ -788,7 +786,6 @@ impl TaskTreeManager {
         stats
     }
 
-
     // ------------------------------------------------------------------------
     // 查询
     // ------------------------------------------------------------------------
@@ -869,12 +866,9 @@ mod tests {
     #[tokio::test]
     async fn test_generate_from_blueprint() {
         let manager = TaskTreeManager::default();
-        
-        let mut blueprint = Blueprint::new(
-            "测试项目".to_string(),
-            "测试描述".to_string(),
-        );
-        
+
+        let mut blueprint = Blueprint::new("测试项目".to_string(), "测试描述".to_string());
+
         blueprint.modules.push(SystemModule {
             id: Uuid::new_v4().to_string(),
             name: "后端模块".to_string(),
@@ -888,7 +882,7 @@ mod tests {
         });
 
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         assert_eq!(tree.blueprint_id, blueprint.id);
         assert!(!tree.root.children.is_empty());
         assert!(tree.stats.total_tasks > 0);
@@ -897,10 +891,10 @@ mod tests {
     #[tokio::test]
     async fn test_task_status_update() {
         let manager = TaskTreeManager::default();
-        
+
         let blueprint = Blueprint::new("测试".to_string(), "描述".to_string());
         let tree = manager.generate_from_blueprint(&blueprint).await.unwrap();
-        
+
         // 获取第一个叶子任务
         let leaves = manager.get_leaf_tasks(&tree.id).await;
         if let Some(leaf) = leaves.first() {
@@ -908,7 +902,7 @@ mod tests {
                 .update_task_status(&tree.id, &leaf.id, TaskStatus::Coding)
                 .await
                 .unwrap();
-            
+
             assert_eq!(updated.status, TaskStatus::Coding);
             assert!(updated.started_at.is_some());
         }

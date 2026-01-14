@@ -66,7 +66,10 @@ fn create_nested_structure(dir: &std::path::Path, depth: usize, files_per_level:
     for level in 0..depth {
         for i in 0..files_per_level {
             let filename = format!("level{}_file{}.rs", level, i);
-            let content = format!("// Level {} File {}\npub fn func_{}_{} () {{}}\n", level, i, level, i);
+            let content = format!(
+                "// Level {} File {}\npub fn func_{}_{} () {{}}\n",
+                level, i, level, i
+            );
             fs::write(current.join(&filename), content).unwrap();
         }
         if level < depth - 1 {
@@ -76,7 +79,6 @@ fn create_nested_structure(dir: &std::path::Path, depth: usize, files_per_level:
         }
     }
 }
-
 
 /// **Property 35: Explore Thoroughness Scaling**
 ///
@@ -157,7 +159,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create more files than max_results
             create_test_structure(temp_dir.path(), num_files, "rs");
 
@@ -188,7 +190,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create a deep nested structure (8 levels deep)
             create_nested_structure(temp_dir.path(), 8, files_per_level);
 
@@ -225,7 +227,6 @@ proptest! {
     }
 }
 
-
 /// **Property 36: File Pattern Search Accuracy**
 ///
 /// *For any* file pattern search, results SHALL match the specified pattern
@@ -246,10 +247,10 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create files with the target extension
             create_test_structure(temp_dir.path(), num_matching, &extension);
-            
+
             // Create files with a different extension
             let other_ext = if extension == "rs" { "py" } else { "rs" };
             create_test_structure(temp_dir.path(), num_other, other_ext);
@@ -297,7 +298,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create files with different extensions
             create_test_structure(temp_dir.path(), num_rs, "rs");
             create_test_structure(temp_dir.path(), num_py, "py");
@@ -342,7 +343,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create files with different extensions
             create_test_structure(temp_dir.path(), num_rs, "rs");
             create_test_structure(temp_dir.path(), num_py, "py");
@@ -378,7 +379,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create more files than max_results
             create_test_structure(temp_dir.path(), num_files, "rs");
 
@@ -417,10 +418,10 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create files with the target extension
             create_test_structure(temp_dir.path(), num_files, &extension);
-            
+
             // Create some other files
             create_test_structure(temp_dir.path(), 3, "other");
 
@@ -448,7 +449,6 @@ proptest! {
     }
 }
 
-
 /// **Property 37: Code Content Search**
 ///
 /// *For any* code search query, results SHALL contain the search term
@@ -467,7 +467,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create files with the keyword
             let content = format!(
                 "// Line 1\n// Line 2\nfn {}() {{}}\n// Line 4\n// Line 5\n",
@@ -509,7 +509,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create a file with many lines
             let mut content = String::new();
             for i in 0..20 {
@@ -529,7 +529,7 @@ proptest! {
             let snippets = agent.search_code("target_function").await.unwrap();
 
             let expected_context = thoroughness.context_lines();
-            
+
             for snippet in &snippets {
                 // Context before should be at most expected_context lines
                 prop_assert!(
@@ -560,7 +560,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create file with mixed case
             let upper_keyword = keyword.to_uppercase();
             let content = format!("fn {}() {{}}\n", upper_keyword);
@@ -570,7 +570,7 @@ proptest! {
                 .with_target_path(temp_dir.path());
 
             let agent = ExploreAgent::new(options);
-            
+
             // Search with lowercase
             let lower_keyword = keyword.to_lowercase();
             let snippets = agent.search_code(&lower_keyword).await.unwrap();
@@ -597,7 +597,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create file with multiple matches
             let mut content = String::new();
             for i in 0..num_matches {
@@ -624,7 +624,6 @@ proptest! {
     }
 }
 
-
 /// **Property 38: Structure Analysis Completeness**
 ///
 /// *For any* analyzed file, structure analysis SHALL extract exports,
@@ -641,7 +640,7 @@ proptest! {
         fn_name in "[a-z][a-z0-9_]{2,10}"
     ) {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let content = format!("pub fn {}() {{}}\n", fn_name);
         let file_path = temp_dir.path().join("test.rs");
         fs::write(&file_path, &content).unwrap();
@@ -672,7 +671,7 @@ proptest! {
         struct_name in "[A-Z][a-zA-Z0-9]{2,10}"
     ) {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let content = format!("pub struct {} {{}}\n", struct_name);
         let file_path = temp_dir.path().join("test.rs");
         fs::write(&file_path, &content).unwrap();
@@ -702,7 +701,7 @@ proptest! {
         trait_name in "[A-Z][a-zA-Z0-9]{2,10}"
     ) {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let content = format!("pub trait {} {{}}\n", trait_name);
         let file_path = temp_dir.path().join("test.rs");
         fs::write(&file_path, &content).unwrap();
@@ -727,7 +726,7 @@ proptest! {
         class_name in "[A-Z][a-zA-Z0-9]{2,10}"
     ) {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let content = format!("class {}:\n    pass\n", class_name);
         let file_path = temp_dir.path().join("test.py");
         fs::write(&file_path, &content).unwrap();
@@ -753,7 +752,7 @@ proptest! {
         fn_name in "[a-z][a-z0-9_]{2,10}"
     ) {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let content = format!("def {}():\n    pass\n", fn_name);
         let file_path = temp_dir.path().join("test.py");
         fs::write(&file_path, &content).unwrap();
@@ -778,7 +777,7 @@ proptest! {
         interface_name in "[A-Z][a-zA-Z0-9]{2,10}"
     ) {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let content = format!("export interface {} {{}}\n", interface_name);
         let file_path = temp_dir.path().join("test.ts");
         fs::write(&file_path, &content).unwrap();
@@ -815,7 +814,7 @@ proptest! {
         ]
     ) {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let content = "// test file\n";
         let file_path = temp_dir.path().join(format!("test.{}", extension));
         fs::write(&file_path, content).unwrap();
@@ -851,7 +850,7 @@ proptest! {
         module_name in "[a-z][a-z0-9_]{2,10}"
     ) {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Test Rust imports
         let rust_content = format!("use {}::something;\n", module_name);
         let rust_path = temp_dir.path().join("test.rs");
@@ -871,14 +870,12 @@ proptest! {
     }
 }
 
-
 // Additional unit tests for edge cases
 #[tokio::test]
 async fn property_35_empty_directory_returns_empty_results() {
     let temp_dir = TempDir::new().unwrap();
 
-    let options = ExploreOptions::new("")
-        .with_target_path(temp_dir.path());
+    let options = ExploreOptions::new("").with_target_path(temp_dir.path());
 
     let agent = ExploreAgent::new(options);
     let result = agent.explore().await.unwrap();

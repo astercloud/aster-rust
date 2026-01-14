@@ -33,7 +33,6 @@ fn get_versions_dir() -> PathBuf {
         .join("plan-versions")
 }
 
-
 /// 计划过期天数
 const PLAN_EXPIRY_DAYS: u64 = 90;
 
@@ -70,7 +69,6 @@ impl PlanPersistenceManager {
         get_versions_dir().join(format!("{}-v{}.json", plan_id, version))
     }
 
-
     /// 保存计划
     pub fn save_plan(plan: &mut SavedPlan, create_version: bool) -> Result<(), String> {
         Self::ensure_dirs();
@@ -96,8 +94,7 @@ impl PlanPersistenceManager {
         let data = serde_json::to_string_pretty(plan)
             .map_err(|e| format!("Failed to serialize plan: {}", e))?;
 
-        fs::write(&file_path, data)
-            .map_err(|e| format!("Failed to write plan file: {}", e))?;
+        fs::write(&file_path, data).map_err(|e| format!("Failed to write plan file: {}", e))?;
 
         Ok(())
     }
@@ -113,8 +110,8 @@ impl PlanPersistenceManager {
         let data = fs::read_to_string(&file_path)
             .map_err(|e| format!("Failed to read plan file: {}", e))?;
 
-        let plan: SavedPlan = serde_json::from_str(&data)
-            .map_err(|e| format!("Failed to parse plan: {}", e))?;
+        let plan: SavedPlan =
+            serde_json::from_str(&data).map_err(|e| format!("Failed to parse plan: {}", e))?;
 
         if Self::is_expired(&plan) {
             return Err("Plan has expired".to_string());
@@ -123,14 +120,12 @@ impl PlanPersistenceManager {
         Ok(plan)
     }
 
-
     /// 删除计划
     pub fn delete_plan(id: &str, delete_versions: bool) -> Result<(), String> {
         let file_path = Self::get_plan_file_path(id);
 
         if file_path.exists() {
-            fs::remove_file(&file_path)
-                .map_err(|e| format!("Failed to delete plan: {}", e))?;
+            fs::remove_file(&file_path).map_err(|e| format!("Failed to delete plan: {}", e))?;
         }
 
         if delete_versions {
@@ -175,7 +170,6 @@ impl PlanPersistenceManager {
         plans.into_iter().skip(offset).take(limit).collect()
     }
 
-
     /// 应用过滤器
     fn apply_filters(mut plans: Vec<SavedPlan>, options: &PlanListOptions) -> Vec<SavedPlan> {
         // 搜索过滤
@@ -183,7 +177,10 @@ impl PlanPersistenceManager {
             let search_lower = search.to_lowercase();
             plans.retain(|p| {
                 p.metadata.title.to_lowercase().contains(&search_lower)
-                    || p.metadata.description.to_lowercase().contains(&search_lower)
+                    || p.metadata
+                        .description
+                        .to_lowercase()
+                        .contains(&search_lower)
                     || p.summary.to_lowercase().contains(&search_lower)
             });
         }
@@ -205,7 +202,10 @@ impl PlanPersistenceManager {
         // 优先级过滤
         if let Some(ref priorities) = options.priority {
             plans.retain(|p| {
-                p.metadata.priority.as_ref().map_or(false, |pr| priorities.contains(pr))
+                p.metadata
+                    .priority
+                    .as_ref()
+                    .map_or(false, |pr| priorities.contains(pr))
             });
         }
 
@@ -216,7 +216,6 @@ impl PlanPersistenceManager {
 
         plans
     }
-
 
     /// 应用排序
     fn apply_sorting(mut plans: Vec<SavedPlan>, options: &PlanListOptions) -> Vec<SavedPlan> {
@@ -233,8 +232,9 @@ impl PlanPersistenceManager {
                     let pb = priority_to_num(b.metadata.priority.as_ref());
                     pa.cmp(&pb)
                 }
-                SortField::Status => format!("{:?}", a.metadata.status)
-                    .cmp(&format!("{:?}", b.metadata.status)),
+                SortField::Status => {
+                    format!("{:?}", a.metadata.status).cmp(&format!("{:?}", b.metadata.status))
+                }
             };
 
             match sort_order {
@@ -253,7 +253,6 @@ impl PlanPersistenceManager {
         let expiry_ms = PLAN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
         age_ms > expiry_ms
     }
-
 
     /// 保存版本
     pub fn save_version(plan: &SavedPlan) -> Result<(), String> {
@@ -277,7 +276,10 @@ impl PlanPersistenceManager {
         let mut versions = Vec::new();
 
         let current_plan = Self::load_plan(plan_id).ok();
-        let current_version = current_plan.as_ref().map(|p| p.metadata.version).unwrap_or(1);
+        let current_version = current_plan
+            .as_ref()
+            .map(|p| p.metadata.version)
+            .unwrap_or(1);
 
         if let Ok(entries) = fs::read_dir(&versions_dir) {
             for entry in entries.flatten() {
@@ -312,7 +314,6 @@ impl PlanPersistenceManager {
         Ok(versions)
     }
 
-
     /// 恢复到指定版本
     pub fn restore_version(plan_id: &str, version: u32) -> Result<(), String> {
         let version_path = Self::get_version_file_path(plan_id, version);
@@ -324,8 +325,8 @@ impl PlanPersistenceManager {
         let data = fs::read_to_string(&version_path)
             .map_err(|e| format!("Failed to read version: {}", e))?;
 
-        let mut plan: SavedPlan = serde_json::from_str(&data)
-            .map_err(|e| format!("Failed to parse version: {}", e))?;
+        let mut plan: SavedPlan =
+            serde_json::from_str(&data).map_err(|e| format!("Failed to parse version: {}", e))?;
 
         // 保存当前版本
         if let Ok(current) = Self::load_plan(plan_id) {
@@ -368,7 +369,6 @@ impl PlanPersistenceManager {
         Self::save_plan(&mut plan, true)
     }
 
-
     /// 导出计划
     pub fn export_plan(plan_id: &str, options: &PlanExportOptions) -> Result<String, String> {
         let plan = Self::load_plan(plan_id)?;
@@ -381,8 +381,7 @@ impl PlanPersistenceManager {
     }
 
     fn export_as_json(plan: &SavedPlan, _options: &PlanExportOptions) -> Result<String, String> {
-        serde_json::to_string_pretty(plan)
-            .map_err(|e| format!("Failed to export as JSON: {}", e))
+        serde_json::to_string_pretty(plan).map_err(|e| format!("Failed to export as JSON: {}", e))
     }
 
     fn export_as_markdown(plan: &SavedPlan, options: &PlanExportOptions) -> String {
@@ -431,7 +430,6 @@ impl PlanPersistenceManager {
         )
     }
 }
-
 
 // 辅助函数
 

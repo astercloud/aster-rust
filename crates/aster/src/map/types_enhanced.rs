@@ -34,7 +34,6 @@ pub struct SemanticInfo {
     pub generated_at: String,
 }
 
-
 /// 关键概念
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyConcept {
@@ -76,7 +75,6 @@ pub enum DirectoryNodeType {
     Directory,
     File,
 }
-
 
 /// 层信息
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -131,7 +129,6 @@ pub struct Views {
     pub architecture_layers: ArchitectureLayers,
 }
 
-
 /// 增强版模块
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnhancedModule {
@@ -172,7 +169,6 @@ pub enum SymbolKind {
     Enum,
 }
 
-
 /// 符号条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SymbolEntry {
@@ -210,7 +206,6 @@ pub struct SymbolCall {
     pub call_type: String,
     pub locations: Vec<LocationInfo>,
 }
-
 
 /// 类型引用
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -252,7 +247,6 @@ pub struct ReferenceStats {
     pub total_type_refs: usize,
 }
 
-
 /// 增强版统计信息
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EnhancedStatistics {
@@ -282,7 +276,6 @@ pub struct ImportStat {
     pub id: String,
     pub import_count: usize,
 }
-
 
 /// 蓝图元数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -319,7 +312,6 @@ pub struct EnhancedCodeBlueprint {
     pub statistics: EnhancedStatistics,
 }
 
-
 /// 增强版生成选项
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EnhancedGenerateOptions {
@@ -335,7 +327,9 @@ pub struct EnhancedGenerateOptions {
     pub concurrency: Option<usize>,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 /// 增强版分析阶段
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

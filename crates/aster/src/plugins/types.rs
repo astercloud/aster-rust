@@ -29,7 +29,6 @@ pub struct PluginMetadata {
     pub dependencies: Option<HashMap<String, String>>,
 }
 
-
 /// 引擎要求
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EngineRequirements {
@@ -74,7 +73,6 @@ pub struct PluginConfig {
     /// 配置数据
     pub config: HashMap<String, serde_json::Value>,
 }
-
 
 /// 命令定义
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -148,15 +146,27 @@ pub trait Plugin: Send + Sync {
     /// 获取元数据
     fn metadata(&self) -> &PluginMetadata;
     /// 初始化
-    fn init(&mut self) -> anyhow::Result<()> { Ok(()) }
+    fn init(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
     /// 激活
-    fn activate(&mut self) -> anyhow::Result<()> { Ok(()) }
+    fn activate(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
     /// 停用
-    fn deactivate(&mut self) -> anyhow::Result<()> { Ok(()) }
+    fn deactivate(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
     /// 获取命令
-    fn commands(&self) -> Vec<CommandDefinition> { Vec::new() }
+    fn commands(&self) -> Vec<CommandDefinition> {
+        Vec::new()
+    }
     /// 获取技能
-    fn skills(&self) -> Vec<SkillDefinition> { Vec::new() }
+    fn skills(&self) -> Vec<SkillDefinition> {
+        Vec::new()
+    }
     /// 获取钩子
-    fn hooks(&self) -> Vec<HookDefinition> { Vec::new() }
+    fn hooks(&self) -> Vec<HookDefinition> {
+        Vec::new()
+    }
 }

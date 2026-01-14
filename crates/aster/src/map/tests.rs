@@ -35,7 +35,6 @@ fn test_export_type_serialize() {
     assert!(json.contains("named"));
 }
 
-
 #[test]
 fn test_visibility_default() {
     let vis = Visibility::default();
@@ -78,7 +77,6 @@ fn test_generate_options_default() {
     assert!(opts.include.is_none());
 }
 
-
 #[test]
 fn test_ontology_statistics_default() {
     let stats = OntologyStatistics::default();
@@ -114,7 +112,6 @@ fn test_create_analyzer() {
     assert!(analyzer.discover_files().is_empty() || true);
 }
 
-
 // ============================================================================
 // types_enhanced 测试
 // ============================================================================
@@ -137,7 +134,10 @@ fn test_directory_node_type() {
         module_id: None,
         children: Some(Vec::new()),
     };
-    assert_eq!(node.node_type, super::types_enhanced::DirectoryNodeType::Directory);
+    assert_eq!(
+        node.node_type,
+        super::types_enhanced::DirectoryNodeType::Directory
+    );
 }
 
 #[test]
@@ -168,7 +168,6 @@ fn test_references_default() {
     assert!(refs.symbol_calls.is_empty());
     assert!(refs.type_refs.is_empty());
 }
-
 
 // ============================================================================
 // dependency_analyzer 测试
@@ -222,7 +221,6 @@ fn test_create_cache() {
     assert_eq!(cache.get_stats().entry_count, 0);
 }
 
-
 // ============================================================================
 // layer_classifier 测试
 // ============================================================================
@@ -247,7 +245,10 @@ fn test_layer_classifier_new() {
         variables: Vec::new(),
     };
     let result = classifier.classify(&module);
-    assert_eq!(result.layer, super::types_enhanced::ArchitectureLayer::Presentation);
+    assert_eq!(
+        result.layer,
+        super::types_enhanced::ArchitectureLayer::Presentation
+    );
 }
 
 #[test]
@@ -269,17 +270,19 @@ fn test_classify_module() {
         variables: Vec::new(),
     };
     let result = super::layer_classifier::classify_module(&module);
-    assert_eq!(result.layer, super::types_enhanced::ArchitectureLayer::Business);
+    assert_eq!(
+        result.layer,
+        super::types_enhanced::ArchitectureLayer::Business
+    );
 }
 
 #[test]
 fn test_get_layer_description() {
     let desc = super::layer_classifier::LayerClassifier::get_layer_description(
-        super::types_enhanced::ArchitectureLayer::Data
+        super::types_enhanced::ArchitectureLayer::Data,
     );
     assert!(desc.contains("数据层"));
 }
-
 
 // ============================================================================
 // view_builder 测试
@@ -307,17 +310,15 @@ fn test_count_tree_nodes() {
         description: None,
         purpose: None,
         module_id: None,
-        children: Some(vec![
-            super::types_enhanced::DirectoryNode {
-                name: "file.ts".to_string(),
-                path: "root/file.ts".to_string(),
-                node_type: super::types_enhanced::DirectoryNodeType::File,
-                description: None,
-                purpose: None,
-                module_id: Some("root/file.ts".to_string()),
-                children: None,
-            }
-        ]),
+        children: Some(vec![super::types_enhanced::DirectoryNode {
+            name: "file.ts".to_string(),
+            path: "root/file.ts".to_string(),
+            node_type: super::types_enhanced::DirectoryNodeType::File,
+            description: None,
+            purpose: None,
+            module_id: Some("root/file.ts".to_string()),
+            children: None,
+        }]),
     };
     let (dirs, files) = super::view_builder::count_tree_nodes(&node);
     assert_eq!(dirs, 1);
@@ -356,7 +357,8 @@ fn test_ontology_generator() {
 
 #[test]
 fn test_enhanced_generator() {
-    let blueprint = super::enhanced_generator::generate_enhanced_blueprint("/tmp/nonexistent", None);
+    let blueprint =
+        super::enhanced_generator::generate_enhanced_blueprint("/tmp/nonexistent", None);
     assert_eq!(blueprint.format, "enhanced");
     assert!(blueprint.modules.is_empty());
 }

@@ -2,15 +2,15 @@
 //!
 //! 支持在工具调用前后执行自定义脚本或回调
 
-mod types;
 mod executor;
-mod registry;
 mod loader;
+mod registry;
+mod types;
 
-pub use types::*;
 pub use executor::*;
-pub use registry::*;
 pub use loader::*;
+pub use registry::*;
+pub use types::*;
 
 #[cfg(test)]
 mod tests;

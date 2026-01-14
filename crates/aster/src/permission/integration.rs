@@ -14,9 +14,7 @@
 use super::manager::ToolPermissionManager;
 use super::permission_confirmation::Permission;
 use super::permission_store::ToolPermissionStore;
-use super::types::{
-    PermissionContext, PermissionResult, PermissionScope, ToolPermission,
-};
+use super::types::{PermissionContext, PermissionResult, PermissionScope, ToolPermission};
 use crate::config::permission::PermissionLevel;
 use crate::config::PermissionManager;
 use crate::conversation::message::ToolRequest;
@@ -150,7 +148,8 @@ impl IntegratedPermissionManager {
         }
 
         // Fall back to new permission system
-        self.tool_permission_manager.is_allowed(tool, params, context)
+        self.tool_permission_manager
+            .is_allowed(tool, params, context)
     }
 
     /// Check permission using the legacy PermissionManager
@@ -174,7 +173,11 @@ impl IntegratedPermissionManager {
 
         // Check smart approve permission
         if let Some(level) = manager.get_smart_approve_permission(tool) {
-            return Some(Self::permission_level_to_result(level, tool, "smart_approve"));
+            return Some(Self::permission_level_to_result(
+                level,
+                tool,
+                "smart_approve",
+            ));
         }
 
         None
@@ -227,9 +230,7 @@ impl IntegratedPermissionManager {
                     tool, source
                 )),
                 restricted: false,
-                suggestions: vec![
-                    "This tool requires user approval before execution.".to_string(),
-                ],
+                suggestions: vec!["This tool requires user approval before execution.".to_string()],
                 matched_rule: None,
                 violations: Vec::new(),
             },
@@ -322,7 +323,8 @@ impl IntegratedPermissionManager {
         }
 
         // 3. Fall back to new permission system
-        self.tool_permission_manager.is_allowed(tool, params, context)
+        self.tool_permission_manager
+            .is_allowed(tool, params, context)
     }
 
     /// Sync permissions from legacy store to new system
@@ -554,9 +556,16 @@ pub fn permission_level_to_tool_permission(
     scope: PermissionScope,
 ) -> ToolPermission {
     let (allowed, reason) = match level {
-        PermissionLevel::AlwaysAllow => (true, Some("Migrated from legacy: AlwaysAllow".to_string())),
-        PermissionLevel::AskBefore => (false, Some("Migrated from legacy: AskBefore (requires approval)".to_string())),
-        PermissionLevel::NeverAllow => (false, Some("Migrated from legacy: NeverAllow".to_string())),
+        PermissionLevel::AlwaysAllow => {
+            (true, Some("Migrated from legacy: AlwaysAllow".to_string()))
+        }
+        PermissionLevel::AskBefore => (
+            false,
+            Some("Migrated from legacy: AskBefore (requires approval)".to_string()),
+        ),
+        PermissionLevel::NeverAllow => {
+            (false, Some("Migrated from legacy: NeverAllow".to_string()))
+        }
     };
 
     ToolPermission {

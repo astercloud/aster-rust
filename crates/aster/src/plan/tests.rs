@@ -33,7 +33,6 @@ fn test_priority_serialize() {
     );
 }
 
-
 #[test]
 fn test_plan_list_options_default() {
     let options = PlanListOptions::default();
@@ -86,20 +85,18 @@ fn create_test_plan() -> SavedPlan {
         summary: "Test summary".to_string(),
         requirements_analysis: RequirementsAnalysis::default(),
         architectural_decisions: vec![],
-        steps: vec![
-            PlanStep {
-                step: 1,
-                description: "First step".to_string(),
-                files: vec!["file1.rs".to_string()],
-                complexity: StepComplexity::Low,
-                dependencies: vec![],
-                estimated_minutes: Some(30),
-                risks: None,
-                status: None,
-                actual_minutes: None,
-                completed_at: None,
-            },
-        ],
+        steps: vec![PlanStep {
+            step: 1,
+            description: "First step".to_string(),
+            files: vec!["file1.rs".to_string()],
+            complexity: StepComplexity::Low,
+            dependencies: vec![],
+            estimated_minutes: Some(30),
+            risks: None,
+            status: None,
+            actual_minutes: None,
+            completed_at: None,
+        }],
         critical_files: vec![],
         risks: vec![],
         alternatives: vec![],
@@ -112,7 +109,6 @@ fn create_test_plan() -> SavedPlan {
         completed_at: None,
     }
 }
-
 
 #[test]
 fn test_save_and_load_plan() {
@@ -154,7 +150,6 @@ fn test_list_plans() {
     // 只验证不会崩溃
     assert!(plans.len() >= 0);
 }
-
 
 #[test]
 fn test_export_as_markdown() {
@@ -209,10 +204,7 @@ fn test_comparison_analysis() {
     let _ = PlanPersistenceManager::save_plan(&mut plan1, false);
     let _ = PlanPersistenceManager::save_plan(&mut plan2, false);
 
-    let result = PlanComparisonManager::compare_plans(
-        &[id1.clone(), id2.clone()],
-        None,
-    );
+    let result = PlanComparisonManager::compare_plans(&[id1.clone(), id2.clone()], None);
 
     assert!(result.is_ok());
     let comparison = result.unwrap();
@@ -238,7 +230,8 @@ fn test_generate_comparison_report() {
     let _ = PlanPersistenceManager::save_plan(&mut plan1, false);
     let _ = PlanPersistenceManager::save_plan(&mut plan2, false);
 
-    if let Ok(comparison) = PlanComparisonManager::compare_plans(&[id1.clone(), id2.clone()], None) {
+    if let Ok(comparison) = PlanComparisonManager::compare_plans(&[id1.clone(), id2.clone()], None)
+    {
         let report = PlanComparisonManager::generate_comparison_report(&comparison);
         assert!(report.contains("Plan Comparison Report"));
         assert!(report.contains("Plan X"));

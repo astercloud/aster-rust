@@ -2,9 +2,9 @@
 //!
 //! 包含任务优先级、状态、Shell 状态等核心类型
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
 /// 任务优先级
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -25,7 +25,6 @@ impl TaskPriority {
         }
     }
 }
-
 
 impl Default for TaskPriority {
     fn default() -> Self {
@@ -58,7 +57,6 @@ pub enum TaskType {
     Agent,
     Generic,
 }
-
 
 impl Default for TaskType {
     fn default() -> Self {
@@ -94,7 +92,6 @@ pub struct QueueStatus {
     pub available: usize,
 }
 
-
 /// Shell 统计信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShellStats {
@@ -125,7 +122,6 @@ pub struct PersistenceStats {
     pub storage_dir: String,
     pub expiry_time_ms: u64,
 }
-
 
 /// 任务统计
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,7 +161,6 @@ pub struct PersistedTaskState {
     pub cwd: String,
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 }
-
 
 /// 持久化的 Agent 状态
 #[derive(Debug, Clone, Serialize, Deserialize)]

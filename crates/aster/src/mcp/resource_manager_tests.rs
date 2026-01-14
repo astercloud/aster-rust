@@ -17,7 +17,7 @@ use proptest::prelude::*;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::mcp::resource_manager::{McpResourceTemplate, ResourceContent, ResourceCacheEntry};
+use crate::mcp::resource_manager::{McpResourceTemplate, ResourceCacheEntry, ResourceContent};
 use chrono::Utc;
 
 // Strategy for generating valid parameter names (alphanumeric, starting with letter)
@@ -205,15 +205,12 @@ mod unit_tests {
 
     #[test]
     fn test_template_with_no_params() {
-        let template = McpResourceTemplate::new(
-            "file:///static/resource",
-            "Static Resource",
-            "test-server",
-        );
-        
+        let template =
+            McpResourceTemplate::new("file:///static/resource", "Static Resource", "test-server");
+
         let params = HashMap::new();
         let expanded = template.expand(&params);
-        
+
         assert_eq!(expanded, "file:///static/resource");
         assert!(template.get_parameters().is_empty());
     }
@@ -225,13 +222,13 @@ mod unit_tests {
             "Database Template",
             "test-server",
         );
-        
+
         let mut params = HashMap::new();
         params.insert("database".to_string(), "mydb".to_string());
         // Note: "table" is not provided
-        
+
         let expanded = template.expand(&params);
-        
+
         // Only "database" should be expanded
         assert_eq!(expanded, "db://mydb/{table}");
     }
@@ -243,12 +240,12 @@ mod unit_tests {
             "API Template",
             "test-server",
         );
-        
+
         let mut params = HashMap::new();
         params.insert("version".to_string(), "v2".to_string());
-        
+
         let expanded = template.expand(&params);
-        
+
         // Both occurrences should be replaced
         assert_eq!(expanded, "api://v2/users/v2");
     }

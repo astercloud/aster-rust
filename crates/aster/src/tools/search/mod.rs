@@ -147,7 +147,10 @@ pub fn format_search_results(results: &[SearchResult], truncated: bool) -> Strin
 }
 
 /// Truncate results to fit within size limit
-pub fn truncate_results(results: Vec<SearchResult>, max_results: usize) -> (Vec<SearchResult>, bool) {
+pub fn truncate_results(
+    results: Vec<SearchResult>,
+    max_results: usize,
+) -> (Vec<SearchResult>, bool) {
     if results.len() > max_results {
         (results.into_iter().take(max_results).collect(), true)
     } else {
@@ -189,8 +192,8 @@ mod tests {
     #[test]
     fn test_search_result_with_metadata() {
         let mtime = SystemTime::now();
-        let result = SearchResult::file_match(PathBuf::from("/tmp/test.txt"))
-            .with_metadata(mtime, 1024);
+        let result =
+            SearchResult::file_match(PathBuf::from("/tmp/test.txt")).with_metadata(mtime, 1024);
         assert_eq!(result.mtime, Some(mtime));
         assert_eq!(result.size, Some(1024));
     }
@@ -213,16 +216,8 @@ mod tests {
     #[test]
     fn test_format_search_results_grep() {
         let results = vec![
-            SearchResult::content_match(
-                PathBuf::from("/tmp/test.txt"),
-                10,
-                "Hello".to_string(),
-            ),
-            SearchResult::content_match(
-                PathBuf::from("/tmp/test.txt"),
-                20,
-                "World".to_string(),
-            ),
+            SearchResult::content_match(PathBuf::from("/tmp/test.txt"), 10, "Hello".to_string()),
+            SearchResult::content_match(PathBuf::from("/tmp/test.txt"), 20, "World".to_string()),
         ];
 
         let output = format_search_results(&results, false);

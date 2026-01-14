@@ -10,20 +10,19 @@
 //!
 //! 注意：不自动批准蓝图，让用户预览后确认
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::fs;
 use chrono::Utc;
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
 
-use super::types::{
-    Blueprint, BlueprintStatus, BlueprintSource, SystemModule, ModuleType,
-    BusinessProcess, ProcessStep, ProcessType,
-    NonFunctionalRequirement, NfrCategory, MoscowPriority,
-    TaskTree, TaskNode, TaskStatus,
-};
 use super::blueprint_manager::BlueprintManager;
 use super::task_tree_manager::TaskTreeManager;
+use super::types::{
+    Blueprint, BlueprintSource, BlueprintStatus, BusinessProcess, ModuleType, MoscowPriority,
+    NfrCategory, NonFunctionalRequirement, ProcessStep, ProcessType, SystemModule, TaskNode,
+    TaskStatus, TaskTree,
+};
 
 // ============================================================================
 // 分析配置
@@ -293,7 +292,10 @@ impl CodebaseAnalyzer {
         blueprint_manager: &mut BlueprintManager,
         task_tree_manager: &mut TaskTreeManager,
     ) -> Result<AnalyzeResult, String> {
-        self.emit(AnalyzerEvent::Started { root_dir: self.config.root_dir.clone() }).await;
+        self.emit(AnalyzerEvent::Started {
+            root_dir: self.config.root_dir.clone(),
+        })
+        .await;
 
         // 1. 基础结构分析
         let mut codebase = self.analyze()?;
@@ -311,7 +313,10 @@ impl CodebaseAnalyzer {
             self.emit(AnalyzerEvent::AIStarted).await;
             match self.analyze_with_ai(&codebase).await {
                 Ok(analysis) => {
-                    self.emit(AnalyzerEvent::AICompleted { analysis: analysis.clone() }).await;
+                    self.emit(AnalyzerEvent::AICompleted {
+                        analysis: analysis.clone(),
+                    })
+                    .await;
                     // 用 AI 分析结果增强模块信息
                     self.enhance_modules_with_ai(&mut codebase, &analysis);
                     codebase.ai_analysis = Some(analysis);
@@ -323,18 +328,28 @@ impl CodebaseAnalyzer {
             }
         }
 
-        self.emit(AnalyzerEvent::CodebaseCompleted { stats: codebase.stats.clone() }).await;
+        self.emit(AnalyzerEvent::CodebaseCompleted {
+            stats: codebase.stats.clone(),
+        })
+        .await;
 
         // 3. 生成蓝图
-        let blueprint = self.generate_blueprint(&codebase, blueprint_manager).await?;
-        self.emit(AnalyzerEvent::BlueprintCompleted { blueprint_id: blueprint.id.clone() }).await;
+        let blueprint = self
+            .generate_blueprint(&codebase, blueprint_manager)
+            .await?;
+        self.emit(AnalyzerEvent::BlueprintCompleted {
+            blueprint_id: blueprint.id.clone(),
+        })
+        .await;
 
         // 4. 生成任务树（已有功能标记为 passed）
-        let task_tree = self.generate_task_tree_with_passed_status(
-            &blueprint,
-            task_tree_manager,
-        ).await?;
-        self.emit(AnalyzerEvent::TaskTreeCompleted { task_tree_id: task_tree.id.clone() }).await;
+        let task_tree = self
+            .generate_task_tree_with_passed_status(&blueprint, task_tree_manager)
+            .await?;
+        self.emit(AnalyzerEvent::TaskTreeCompleted {
+            task_tree_id: task_tree.id.clone(),
+        })
+        .await;
 
         self.emit(AnalyzerEvent::Completed).await;
 
@@ -369,14 +384,17 @@ impl CodebaseAnalyzer {
         let stats = self.calculate_stats(&structure);
 
         // 生成项目名称和描述
-        let name = self.config.project_name.clone()
-            .unwrap_or_else(|| root_dir.file_name()
+        let name = self.config.project_name.clone().unwrap_or_else(|| {
+            root_dir
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown")
-                .to_string());
+                .to_string()
+        });
 
-        let description = self.config.project_description.clone()
-            .unwrap_or_else(|| self.generate_project_description(&name, &language, framework.as_deref(), &modules));
+        let description = self.config.project_description.clone().unwrap_or_else(|| {
+            self.generate_project_description(&name, &language, framework.as_deref(), &modules)
+        });
 
         Ok(CodebaseInfo {
             name,
@@ -450,7 +468,10 @@ impl CodebaseAnalyzer {
         }
 
         // Python
-        if entries.iter().any(|f| f == "requirements.txt" || f == "setup.py" || f == "pyproject.toml") {
+        if entries
+            .iter()
+            .any(|f| f == "requirements.txt" || f == "setup.py" || f == "pyproject.toml")
+        {
             let mut framework = None;
             let req_path = root_dir.join("requirements.txt");
             if let Ok(content) = fs::read_to_string(&req_path) {
@@ -471,7 +492,10 @@ impl CodebaseAnalyzer {
         }
 
         // Java
-        if entries.iter().any(|f| f == "pom.xml" || f == "build.gradle") {
+        if entries
+            .iter()
+            .any(|f| f == "pom.xml" || f == "build.gradle")
+        {
             return Ok(("Java".to_string(), Some("Spring".to_string())));
         }
 
@@ -480,7 +504,8 @@ impl CodebaseAnalyzer {
 
     /// 扫描目录结构
     fn scan_directory(&self, dir_path: &Path, depth: usize) -> Result<DirectoryNode, String> {
-        let name = dir_path.file_name()
+        let name = dir_path
+            .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_string();
@@ -509,11 +534,11 @@ impl CodebaseAnalyzer {
             });
         }
 
-        let metadata = fs::metadata(dir_path)
-            .map_err(|e| format!("无法读取元数据: {}", e))?;
+        let metadata = fs::metadata(dir_path).map_err(|e| format!("无法读取元数据: {}", e))?;
 
         if metadata.is_file() {
-            let extension = dir_path.extension()
+            let extension = dir_path
+                .extension()
                 .and_then(|e| e.to_str())
                 .map(|s| s.to_string());
             return Ok(DirectoryNode {
@@ -527,8 +552,7 @@ impl CodebaseAnalyzer {
         }
 
         let mut children = Vec::new();
-        let entries = fs::read_dir(dir_path)
-            .map_err(|e| format!("无法读取目录: {}", e))?;
+        let entries = fs::read_dir(dir_path).map_err(|e| format!("无法读取目录: {}", e))?;
 
         for entry in entries.filter_map(|e| e.ok()) {
             let entry_name = entry.file_name().to_string_lossy().to_string();
@@ -637,7 +661,8 @@ impl CodebaseAnalyzer {
             if let Some(mt) = module_type {
                 if is_leaf {
                     // 叶子模块：直接添加
-                    if let Some(module) = self.analyze_module_deep(child, mt, parent_path, root_dir) {
+                    if let Some(module) = self.analyze_module_deep(child, mt, parent_path, root_dir)
+                    {
                         if !module.files.is_empty() {
                             modules.push(module);
                         }
@@ -654,7 +679,8 @@ impl CodebaseAnalyzer {
             } else if depth > 0 {
                 // 如果没有匹配但有大量代码文件，也识别为模块
                 let files = self.collect_files(child);
-                let code_files: Vec<_> = files.iter()
+                let code_files: Vec<_> = files
+                    .iter()
                     .filter(|f| {
                         let ext = f.extension().and_then(|e| e.to_str()).unwrap_or("");
                         matches!(ext, "ts" | "tsx" | "js" | "jsx" | "py" | "go" | "rs")
@@ -663,7 +689,9 @@ impl CodebaseAnalyzer {
 
                 if code_files.len() >= 5 {
                     let inferred_type = self.infer_module_type(&child.name, &files);
-                    if let Some(module) = self.analyze_module_deep(child, inferred_type, parent_path, root_dir) {
+                    if let Some(module) =
+                        self.analyze_module_deep(child, inferred_type, parent_path, root_dir)
+                    {
                         modules.push(module);
                     }
                 }
@@ -674,9 +702,12 @@ impl CodebaseAnalyzer {
     /// 匹配模块模式
     fn match_module_pattern(&self, name: &str) -> (Option<DetectedModuleType>, bool) {
         let name_lower = name.to_lowercase();
-        
+
         // 前端模块（叶子）
-        if matches!(name_lower.as_str(), "client" | "frontend" | "pages" | "components" | "ui") {
+        if matches!(
+            name_lower.as_str(),
+            "client" | "frontend" | "pages" | "components" | "ui"
+        ) {
             return (Some(DetectedModuleType::Frontend), true);
         }
         // 后端模块（叶子）
@@ -688,7 +719,17 @@ impl CodebaseAnalyzer {
             return (Some(DetectedModuleType::Database), true);
         }
         // 服务模块（叶子）
-        if matches!(name_lower.as_str(), "services" | "utils" | "helpers" | "tools" | "blueprint" | "parser" | "hooks" | "plugins") {
+        if matches!(
+            name_lower.as_str(),
+            "services"
+                | "utils"
+                | "helpers"
+                | "tools"
+                | "blueprint"
+                | "parser"
+                | "hooks"
+                | "plugins"
+        ) {
             return (Some(DetectedModuleType::Service), true);
         }
         // 基础设施模块（叶子）
@@ -756,7 +797,9 @@ impl CodebaseAnalyzer {
         };
 
         // 计算相对于项目根目录的路径
-        let root_path = node.path.strip_prefix(root_dir)
+        let root_path = node
+            .path
+            .strip_prefix(root_dir)
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| node.name.clone());
 
@@ -895,13 +938,19 @@ impl CodebaseAnalyzer {
         // 查找 index 文件
         let index_file = node.children.iter().find(|c| {
             c.node_type == NodeType::File
-                && (c.name == "index.ts" || c.name == "index.js" || c.name == "mod.rs" || c.name == "lib.rs")
+                && (c.name == "index.ts"
+                    || c.name == "index.js"
+                    || c.name == "mod.rs"
+                    || c.name == "lib.rs")
         });
 
         if let Some(index) = index_file {
             if let Ok(content) = fs::read_to_string(&index.path) {
                 // TypeScript/JavaScript: export const/function/class
-                let re = regex::Regex::new(r"export\s+(?:const|function|class|type|interface|enum)\s+(\w+)").ok();
+                let re = regex::Regex::new(
+                    r"export\s+(?:const|function|class|type|interface|enum)\s+(\w+)",
+                )
+                .ok();
                 if let Some(re) = re {
                     for cap in re.captures_iter(&content) {
                         if let Some(name) = cap.get(1) {
@@ -942,7 +991,8 @@ impl CodebaseAnalyzer {
                 if let Some(re) = re {
                     for cap in re.captures_iter(&content) {
                         if let Some(import_path) = cap.get(1) {
-                            let parts: Vec<&str> = import_path.as_str()
+                            let parts: Vec<&str> = import_path
+                                .as_str()
                                 .split('/')
                                 .filter(|p| *p != "." && *p != "..")
                                 .collect();
@@ -969,7 +1019,10 @@ impl CodebaseAnalyzer {
     }
 
     /// 读取包信息
-    fn read_package_info(&self, root_dir: &Path) -> (Vec<String>, Vec<String>, HashMap<String, String>) {
+    fn read_package_info(
+        &self,
+        root_dir: &Path,
+    ) -> (Vec<String>, Vec<String>, HashMap<String, String>) {
         let pkg_path = root_dir.join("package.json");
 
         if !pkg_path.exists() {
@@ -1004,17 +1057,20 @@ impl CodebaseAnalyzer {
 
         if let Ok(content) = fs::read_to_string(&pkg_path) {
             if let Ok(pkg) = serde_json::from_str::<serde_json::Value>(&content) {
-                let deps = pkg.get("dependencies")
+                let deps = pkg
+                    .get("dependencies")
                     .and_then(|d| d.as_object())
                     .map(|d| d.keys().cloned().collect())
                     .unwrap_or_default();
 
-                let dev_deps = pkg.get("devDependencies")
+                let dev_deps = pkg
+                    .get("devDependencies")
                     .and_then(|d| d.as_object())
                     .map(|d| d.keys().cloned().collect())
                     .unwrap_or_default();
 
-                let scripts = pkg.get("scripts")
+                let scripts = pkg
+                    .get("scripts")
                     .and_then(|s| s.as_object())
                     .map(|s| {
                         s.iter()
@@ -1054,7 +1110,10 @@ impl CodebaseAnalyzer {
         match node.node_type {
             NodeType::File => {
                 stats.total_files += 1;
-                let ext = node.extension.clone().unwrap_or_else(|| "unknown".to_string());
+                let ext = node
+                    .extension
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string());
                 *stats.files_by_type.entry(ext).or_insert(0) += 1;
 
                 // 尝试计算行数
@@ -1127,13 +1186,24 @@ impl CodebaseAnalyzer {
 
         lines.push("## 检测到的模块".to_string());
         for module in &codebase.modules {
-            lines.push(format!("- {} ({:?}): {} 文件", module.name, module.module_type, module.files.len()));
+            lines.push(format!(
+                "- {} ({:?}): {} 文件",
+                module.name,
+                module.module_type,
+                module.files.len()
+            ));
         }
         lines.push(String::new());
 
         lines.push("## 依赖".to_string());
         let deps: Vec<_> = codebase.dependencies.iter().take(20).collect();
-        lines.push(format!("主要依赖: {}", deps.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")));
+        lines.push(format!(
+            "主要依赖: {}",
+            deps.iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
 
         lines.join("\n")
     }
@@ -1148,13 +1218,25 @@ impl CodebaseAnalyzer {
         }
 
         // 根据依赖推断功能
-        if codebase.dependencies.iter().any(|d| d == "express" || d == "fastify") {
+        if codebase
+            .dependencies
+            .iter()
+            .any(|d| d == "express" || d == "fastify")
+        {
             core_features.push("HTTP API 服务".to_string());
         }
-        if codebase.dependencies.iter().any(|d| d == "mongoose" || d == "prisma") {
+        if codebase
+            .dependencies
+            .iter()
+            .any(|d| d == "mongoose" || d == "prisma")
+        {
             core_features.push("数据库操作".to_string());
         }
-        if codebase.dependencies.iter().any(|d| d == "react" || d == "vue") {
+        if codebase
+            .dependencies
+            .iter()
+            .any(|d| d == "react" || d == "vue")
+        {
             core_features.push("前端界面".to_string());
         }
 
@@ -1166,17 +1248,21 @@ impl CodebaseAnalyzer {
             overview: codebase.description.clone(),
             architecture_pattern: self.infer_architecture_pattern(codebase),
             core_features,
-            module_analysis: codebase.modules.iter().map(|m| AIModuleAnalysis {
-                name: m.name.clone(),
-                purpose: format!("{:?} 模块", m.module_type),
-                responsibilities: m.responsibilities.clone(),
-                dependencies: m.imports.clone(),
-                core_features: m.responsibilities.iter().take(3).cloned().collect(),
-                boundary_constraints: self.infer_boundary_constraints(m.module_type),
-                protected_files: self.infer_protected_files(m),
-                public_interfaces: m.exports.clone(),
-                internal_details: vec![],
-            }).collect(),
+            module_analysis: codebase
+                .modules
+                .iter()
+                .map(|m| AIModuleAnalysis {
+                    name: m.name.clone(),
+                    purpose: format!("{:?} 模块", m.module_type),
+                    responsibilities: m.responsibilities.clone(),
+                    dependencies: m.imports.clone(),
+                    core_features: m.responsibilities.iter().take(3).cloned().collect(),
+                    boundary_constraints: self.infer_boundary_constraints(m.module_type),
+                    protected_files: self.infer_protected_files(m),
+                    public_interfaces: m.exports.clone(),
+                    internal_details: vec![],
+                })
+                .collect(),
             business_flows: vec![],
             architecture_decisions: vec![],
             technical_debts: vec![],
@@ -1195,7 +1281,12 @@ impl CodebaseAnalyzer {
         if codebase.dependencies.iter().any(|d| d == "@nestjs/core") {
             return "NestJS 模块化架构".to_string();
         }
-        if codebase.structure.children.iter().any(|c| c.name == "services") {
+        if codebase
+            .structure
+            .children
+            .iter()
+            .any(|c| c.name == "services")
+        {
             return "微服务架构".to_string();
         }
         "MVC / 分层架构".to_string()
@@ -1216,10 +1307,9 @@ impl CodebaseAnalyzer {
                 "不应包含业务逻辑".to_string(),
                 "数据模型变更需要迁移脚本".to_string(),
             ],
-            DetectedModuleType::Service => vec![
-                "应保持无状态".to_string(),
-                "不应依赖特定框架".to_string(),
-            ],
+            DetectedModuleType::Service => {
+                vec!["应保持无状态".to_string(), "不应依赖特定框架".to_string()]
+            }
             DetectedModuleType::Infrastructure => vec![
                 "配置不应硬编码".to_string(),
                 "敏感信息应使用环境变量".to_string(),
@@ -1233,9 +1323,7 @@ impl CodebaseAnalyzer {
         let mut protected = Vec::new();
 
         for file in &module.files {
-            let file_name = file.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let file_name = file.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             // index 文件通常是模块入口
             if file_name.starts_with("index.") || file_name == "mod.rs" || file_name == "lib.rs" {
@@ -1301,8 +1389,10 @@ impl CodebaseAnalyzer {
                 }
             } else {
                 // AI 没有分析到这个模块，使用规则推断
-                module.core_features = Some(module.responsibilities.iter().take(3).cloned().collect());
-                module.boundary_constraints = Some(self.infer_boundary_constraints(module.module_type));
+                module.core_features =
+                    Some(module.responsibilities.iter().take(3).cloned().collect());
+                module.boundary_constraints =
+                    Some(self.infer_boundary_constraints(module.module_type));
                 module.protected_files = Some(self.infer_protected_files(module));
             }
         }
@@ -1317,12 +1407,18 @@ impl CodebaseAnalyzer {
         let normalized_name = module_name.to_lowercase();
 
         // 1. 尝试完全匹配
-        if let Some(m) = ai_modules.iter().find(|m| m.name.to_lowercase() == normalized_name) {
+        if let Some(m) = ai_modules
+            .iter()
+            .find(|m| m.name.to_lowercase() == normalized_name)
+        {
             return Some(m);
         }
 
         // 2. 尝试部分匹配
-        let last_part = normalized_name.split('/').last().unwrap_or(&normalized_name);
+        let last_part = normalized_name
+            .split('/')
+            .last()
+            .unwrap_or(&normalized_name);
         if let Some(m) = ai_modules.iter().find(|m| {
             let ai_last = m.name.to_lowercase();
             let ai_last = ai_last.split('/').last().unwrap_or(&ai_last);
@@ -1349,10 +1445,10 @@ impl CodebaseAnalyzer {
         blueprint_manager: &mut BlueprintManager,
     ) -> Result<Blueprint, String> {
         // 创建蓝图
-        let mut blueprint = blueprint_manager.create_blueprint(
-            codebase.name.clone(),
-            codebase.description.clone(),
-        ).await.map_err(|e| e.to_string())?;
+        let mut blueprint = blueprint_manager
+            .create_blueprint(codebase.name.clone(), codebase.description.clone())
+            .await
+            .map_err(|e| e.to_string())?;
 
         // 添加模块
         for module in &codebase.modules {
@@ -1360,7 +1456,9 @@ impl CodebaseAnalyzer {
             let sys_module = SystemModule {
                 id: uuid::Uuid::new_v4().to_string(),
                 name: module.name.clone(),
-                description: module.ai_description.clone()
+                description: module
+                    .ai_description
+                    .clone()
                     .unwrap_or_else(|| format!("{} 模块 - {:?}", module.name, module.module_type)),
                 module_type: module.module_type.into(),
                 responsibilities: module.responsibilities.clone(),
@@ -1369,7 +1467,10 @@ impl CodebaseAnalyzer {
                 tech_stack: Some(tech_stack),
                 root_path: Some(module.root_path.clone()),
             };
-            blueprint_manager.add_module(&blueprint.id, sys_module).await.map_err(|e| e.to_string())?;
+            blueprint_manager
+                .add_module(&blueprint.id, sys_module)
+                .await
+                .map_err(|e| e.to_string())?;
         }
 
         // 添加业务流程
@@ -1381,28 +1482,42 @@ impl CodebaseAnalyzer {
                         name: flow.name.clone(),
                         description: flow.description.clone(),
                         process_type: ProcessType::ToBe,
-                        steps: flow.steps.iter().enumerate().map(|(i, step)| ProcessStep {
-                            id: uuid::Uuid::new_v4().to_string(),
-                            order: i as u32 + 1,
-                            name: step.clone(),
-                            description: step.clone(),
-                            actor: "系统".to_string(),
-                            system_action: Some(step.clone()),
-                            user_action: None,
-                            conditions: vec![],
-                            outcomes: vec![],
-                        }).collect(),
+                        steps: flow
+                            .steps
+                            .iter()
+                            .enumerate()
+                            .map(|(i, step)| ProcessStep {
+                                id: uuid::Uuid::new_v4().to_string(),
+                                order: i as u32 + 1,
+                                name: step.clone(),
+                                description: step.clone(),
+                                actor: "系统".to_string(),
+                                system_action: Some(step.clone()),
+                                user_action: None,
+                                conditions: vec![],
+                                outcomes: vec![],
+                            })
+                            .collect(),
                         actors: vec!["系统".to_string(), "用户".to_string()],
                         inputs: vec![],
                         outputs: vec![],
                     };
-                    blueprint_manager.add_business_process(&blueprint.id, process).await.map_err(|e| e.to_string())?;
+                    blueprint_manager
+                        .add_business_process(&blueprint.id, process)
+                        .await
+                        .map_err(|e| e.to_string())?;
                 }
             }
         }
 
         // 添加默认业务流程（如果没有 AI 分析结果）
-        if codebase.ai_analysis.is_none() || codebase.ai_analysis.as_ref().map(|a| a.business_flows.is_empty()).unwrap_or(true) {
+        if codebase.ai_analysis.is_none()
+            || codebase
+                .ai_analysis
+                .as_ref()
+                .map(|a| a.business_flows.is_empty())
+                .unwrap_or(true)
+        {
             let default_process = BusinessProcess {
                 id: uuid::Uuid::new_v4().to_string(),
                 name: "开发维护流程".to_string(),
@@ -1447,7 +1562,10 @@ impl CodebaseAnalyzer {
                 inputs: vec![],
                 outputs: vec![],
             };
-            blueprint_manager.add_business_process(&blueprint.id, default_process).await.map_err(|e| e.to_string())?;
+            blueprint_manager
+                .add_business_process(&blueprint.id, default_process)
+                .await
+                .map_err(|e| e.to_string())?;
         }
 
         // 添加非功能性要求
@@ -1459,11 +1577,16 @@ impl CodebaseAnalyzer {
             priority: MoscowPriority::Must,
             metric: None,
         };
-        blueprint_manager.add_nfr(&blueprint.id, nfr).await.map_err(|e| e.to_string())?;
+        blueprint_manager
+            .add_nfr(&blueprint.id, nfr)
+            .await
+            .map_err(|e| e.to_string())?;
 
         // 重要：从代码逆向生成的蓝图，直接标记为 approved 状态
         // 重新获取蓝图以获取最新状态
-        let mut blueprint = blueprint_manager.get_blueprint(&blueprint.id).await
+        let mut blueprint = blueprint_manager
+            .get_blueprint(&blueprint.id)
+            .await
             .ok_or_else(|| "蓝图不存在".to_string())?;
         blueprint.status = BlueprintStatus::Approved;
         blueprint.approved_at = Some(Utc::now());
@@ -1480,7 +1603,9 @@ impl CodebaseAnalyzer {
         task_tree_manager: &mut TaskTreeManager,
     ) -> Result<TaskTree, String> {
         // 先用标准方法生成任务树
-        let mut task_tree = task_tree_manager.generate_from_blueprint(blueprint).await
+        let mut task_tree = task_tree_manager
+            .generate_from_blueprint(blueprint)
+            .await
             .map_err(|e| e.to_string())?;
 
         // 递归标记所有任务为 passed
@@ -1586,5 +1711,7 @@ pub async fn quick_analyze(
         ..Default::default()
     };
     let mut analyzer = CodebaseAnalyzer::new(config);
-    analyzer.analyze_and_generate(blueprint_manager, task_tree_manager).await
+    analyzer
+        .analyze_and_generate(blueprint_manager, task_tree_manager)
+        .await
 }

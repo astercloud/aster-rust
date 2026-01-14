@@ -32,7 +32,6 @@ impl DiffEngine {
         Self
     }
 
-
     /// 计算两个字符串之间的 diff
     pub fn calculate_diff(&self, old_content: &str, new_content: &str) -> String {
         let old_lines: Vec<&str> = old_content.lines().collect();
@@ -97,7 +96,6 @@ impl DiffEngine {
 
         serde_json::to_string(&diff).unwrap_or_default()
     }
-
 
     /// 应用 diff 到内容
     pub fn apply_diff(&self, old_content: &str, diff_str: &str) -> String {

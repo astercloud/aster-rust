@@ -83,7 +83,10 @@ impl NetworkChecker {
         if failures.is_empty() {
             DiagnosticCheck::pass("网络连接", "网络连接正常")
         } else if !results.is_empty() {
-            DiagnosticCheck::warn("网络连接", format!("部分端点不可达: {}", failures.join(", ")))
+            DiagnosticCheck::warn(
+                "网络连接",
+                format!("部分端点不可达: {}", failures.join(", ")),
+            )
         } else {
             DiagnosticCheck::fail("网络连接", "无网络连接")
         }
@@ -126,8 +129,11 @@ impl NetworkChecker {
                 })
                 .collect();
 
-            DiagnosticCheck::pass("代理配置", format!("已配置 {} 个代理变量", set_proxies.len()))
-                .with_details(details.join(", "))
+            DiagnosticCheck::pass(
+                "代理配置",
+                format!("已配置 {} 个代理变量", set_proxies.len()),
+            )
+            .with_details(details.join(", "))
         }
     }
 
@@ -148,7 +154,6 @@ impl NetworkChecker {
         DiagnosticCheck::pass("SSL 证书", "使用系统 SSL 证书")
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -187,13 +192,13 @@ mod tests {
     fn test_proxy_credential_masking() {
         // 设置带凭证的代理
         std::env::set_var("HTTP_PROXY_TEST", "http://user:pass@proxy.example.com:8080");
-        
+
         // 检查不会泄露凭证
         let result = NetworkChecker::check_proxy_configuration();
         if let Some(details) = &result.details {
             assert!(!details.contains("pass"));
         }
-        
+
         std::env::remove_var("HTTP_PROXY_TEST");
     }
 }

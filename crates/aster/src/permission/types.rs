@@ -457,10 +457,7 @@ impl ToolPermissionUpdate {
     }
 
     /// Set the parameter_restrictions field
-    pub fn with_parameter_restrictions(
-        mut self,
-        restrictions: Vec<ParameterRestriction>,
-    ) -> Self {
+    pub fn with_parameter_restrictions(mut self, restrictions: Vec<ParameterRestriction>) -> Self {
         self.parameter_restrictions = Some(restrictions);
         self
     }

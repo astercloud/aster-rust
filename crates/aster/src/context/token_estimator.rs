@@ -93,10 +93,7 @@ impl TokenEstimator {
             return false;
         }
 
-        let asian_count = text
-            .chars()
-            .filter(|c| Self::is_asian_char(*c))
-            .count();
+        let asian_count = text.chars().filter(|c| Self::is_asian_char(*c)).count();
 
         // Consider text as Asian if more than 20% of characters are Asian
         (asian_count as f64 / total_chars as f64) > 0.2
@@ -156,10 +153,7 @@ impl TokenEstimator {
             return false;
         }
 
-        let code_char_count = text
-            .chars()
-            .filter(|c| code_indicators.contains(c))
-            .count();
+        let code_char_count = text.chars().filter(|c| code_indicators.contains(c)).count();
 
         // Check for common code patterns (keywords followed by specific syntax)
         let has_code_patterns = text.contains("fn ")
@@ -184,19 +178,18 @@ impl TokenEstimator {
             let trimmed = line.trim_start();
             let indent_size = line.len() - trimmed.len();
             // Require at least 2 spaces of indentation AND the line must have code-like content
-            indent_size >= 2 && (
-                trimmed.contains('{') || 
-                trimmed.contains('}') || 
-                trimmed.contains(';') ||
-                trimmed.starts_with("let ") ||
-                trimmed.starts_with("const ") ||
-                trimmed.starts_with("return ") ||
-                trimmed.starts_with("if ") ||
-                trimmed.starts_with("for ") ||
-                trimmed.starts_with("while ") ||
-                trimmed.starts_with("//") ||
-                trimmed.starts_with("#")
-            )
+            indent_size >= 2
+                && (trimmed.contains('{')
+                    || trimmed.contains('}')
+                    || trimmed.contains(';')
+                    || trimmed.starts_with("let ")
+                    || trimmed.starts_with("const ")
+                    || trimmed.starts_with("return ")
+                    || trimmed.starts_with("if ")
+                    || trimmed.starts_with("for ")
+                    || trimmed.starts_with("while ")
+                    || trimmed.starts_with("//")
+                    || trimmed.starts_with("#"))
         });
 
         // Consider it code if:
@@ -222,8 +215,7 @@ impl TokenEstimator {
             .count();
 
         // Each newline adds ~0.5 tokens, special chars add ~0.25 tokens
-        (newline_count as f64 * 0.5).ceil() as usize
-            + (special_count as f64 * 0.25).ceil() as usize
+        (newline_count as f64 * 0.5).ceil() as usize + (special_count as f64 * 0.25).ceil() as usize
     }
 
     /// Estimate the number of tokens in a message.

@@ -122,8 +122,8 @@ impl McpServer {
 
     /// 处理 MCP 消息
     async fn handle_message(&self, message: &str) -> Result<(), String> {
-        let request: McpRequest = serde_json::from_str(message)
-            .map_err(|e| format!("Failed to parse request: {}", e))?;
+        let request: McpRequest =
+            serde_json::from_str(message).map_err(|e| format!("Failed to parse request: {}", e))?;
 
         tracing::debug!("Received request: {}", request.method);
 
@@ -161,12 +161,17 @@ impl McpServer {
     }
 
     /// 处理 tools/call 请求
-    async fn handle_tools_call(&self, params: &serde_json::Value) -> Result<serde_json::Value, String> {
-        let name = params.get("name")
+    async fn handle_tools_call(
+        &self,
+        params: &serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        let name = params
+            .get("name")
             .and_then(|v| v.as_str())
             .ok_or_else(|| "Missing tool name".to_string())?;
 
-        let args = params.get("arguments")
+        let args = params
+            .get("arguments")
             .cloned()
             .unwrap_or(serde_json::json!({}));
 
@@ -179,7 +184,7 @@ impl McpServer {
     /// 执行工具调用
     async fn execute_tool_call(&self, tool_name: &str, args: serde_json::Value) -> McpToolResult {
         let client = self.socket_client.lock().await;
-        
+
         let connected = client.ensure_connected().await;
         if !connected {
             return self.get_disconnected_response();
@@ -261,35 +266,41 @@ impl McpServer {
 
     /// 从 Vec 标准化内容格式
     fn normalize_content_from_vec(&self, arr: &[serde_json::Value]) -> Vec<McpContent> {
-        arr.iter().map(|item| {
-            if let Some(s) = item.as_str() {
-                McpContent {
-                    content_type: "text".to_string(),
-                    text: Some(s.to_string()),
-                    data: None,
-                    mime_type: None,
+        arr.iter()
+            .map(|item| {
+                if let Some(s) = item.as_str() {
+                    McpContent {
+                        content_type: "text".to_string(),
+                        text: Some(s.to_string()),
+                        data: None,
+                        mime_type: None,
+                    }
+                } else if let Some(obj) = item.as_object() {
+                    let content_type = obj
+                        .get("type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("text")
+                        .to_string();
+
+                    McpContent {
+                        content_type,
+                        text: obj.get("text").and_then(|v| v.as_str()).map(String::from),
+                        data: obj.get("data").and_then(|v| v.as_str()).map(String::from),
+                        mime_type: obj
+                            .get("mimeType")
+                            .and_then(|v| v.as_str())
+                            .map(String::from),
+                    }
+                } else {
+                    McpContent {
+                        content_type: "text".to_string(),
+                        text: Some(item.to_string()),
+                        data: None,
+                        mime_type: None,
+                    }
                 }
-            } else if let Some(obj) = item.as_object() {
-                let content_type = obj.get("type")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("text")
-                    .to_string();
-                
-                McpContent {
-                    content_type,
-                    text: obj.get("text").and_then(|v| v.as_str()).map(String::from),
-                    data: obj.get("data").and_then(|v| v.as_str()).map(String::from),
-                    mime_type: obj.get("mimeType").and_then(|v| v.as_str()).map(String::from),
-                }
-            } else {
-                McpContent {
-                    content_type: "text".to_string(),
-                    text: Some(item.to_string()),
-                    data: None,
-                    mime_type: None,
-                }
-            }
-        }).collect()
+            })
+            .collect()
     }
 
     /// 获取断开连接时的响应

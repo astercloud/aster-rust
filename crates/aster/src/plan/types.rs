@@ -29,7 +29,6 @@ pub enum Complexity {
     VeryComplex,
 }
 
-
 /// 步骤复杂度
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -71,7 +70,6 @@ pub enum RiskCategory {
     Maintainability,
 }
 
-
 /// 实现步骤
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlanStep {
@@ -106,7 +104,6 @@ pub struct CriticalFile {
     pub last_modified: Option<u64>,
 }
 
-
 /// 风险评估
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Risk {
@@ -137,7 +134,6 @@ pub struct Alternative {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub estimated_hours: Option<f32>,
 }
-
 
 /// 架构决策
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,7 +166,6 @@ pub struct RequirementsAnalysis {
     pub assumptions: Option<Vec<String>>,
 }
 
-
 /// 计划元数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlanMetadata {
@@ -202,7 +197,6 @@ pub struct PlanMetadata {
     pub rejection_reason: Option<String>,
 }
 
-
 /// 完整的计划数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedPlan {
@@ -228,7 +222,6 @@ pub struct SavedPlan {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<u64>,
 }
-
 
 /// 计划列表选项
 #[derive(Debug, Clone, Default)]
@@ -260,7 +253,6 @@ pub enum SortOrder {
     Asc,
     Desc,
 }
-
 
 /// 计划统计信息
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -296,7 +288,6 @@ pub struct PlanVersion {
     pub author: Option<String>,
     pub is_current: bool,
 }
-
 
 /// 计划导出选项
 #[derive(Debug, Clone)]
@@ -334,7 +325,6 @@ pub struct PlanTemplate {
     pub created_at: u64,
     pub updated_at: u64,
 }
-
 
 /// 计划对比结果
 #[derive(Debug, Clone, Serialize, Deserialize)]

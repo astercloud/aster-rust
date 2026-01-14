@@ -42,11 +42,11 @@ impl SkillTool {
         args: Option<&str>,
     ) -> Result<SkillExecutionResult, String> {
         let registry = global_registry();
-        
+
         // First, get all the data we need from the skill
         let (skill_data, file_path) = {
             let registry_guard = registry.read().map_err(|e| e.to_string())?;
-            
+
             let skill = registry_guard.find(skill_name).ok_or_else(|| {
                 let available: Vec<_> = registry_guard
                     .get_all()
@@ -81,10 +81,10 @@ impl SkillTool {
                 skill.model.clone(),
             );
             let path = skill.file_path.clone();
-            
+
             (data, path)
         };
-        
+
         let (skill_name_owned, display_name, markdown_content, allowed_tools, model) = skill_data;
 
         // Build skill content
@@ -166,7 +166,6 @@ Important:
     }
 }
 
-
 #[async_trait]
 impl Tool for SkillTool {
     fn name(&self) -> &str {
@@ -210,14 +209,18 @@ impl Tool for SkillTool {
 
         match self.execute_skill(skill_name, args) {
             Ok(result) => {
-                let output = result.output.unwrap_or_else(|| "Skill executed".to_string());
+                let output = result
+                    .output
+                    .unwrap_or_else(|| "Skill executed".to_string());
                 let mut tool_result = ToolResult::success(output);
 
                 if let Some(cmd_name) = result.command_name {
-                    tool_result = tool_result.with_metadata("command_name", serde_json::json!(cmd_name));
+                    tool_result =
+                        tool_result.with_metadata("command_name", serde_json::json!(cmd_name));
                 }
                 if let Some(tools) = result.allowed_tools {
-                    tool_result = tool_result.with_metadata("allowed_tools", serde_json::json!(tools));
+                    tool_result =
+                        tool_result.with_metadata("allowed_tools", serde_json::json!(tools));
                 }
                 if let Some(model) = result.model {
                     tool_result = tool_result.with_metadata("model", serde_json::json!(model));
@@ -238,7 +241,6 @@ impl Tool for SkillTool {
         PermissionCheckResult::allow()
     }
 }
-
 
 #[cfg(test)]
 mod tests {

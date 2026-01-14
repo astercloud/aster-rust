@@ -17,9 +17,9 @@ mod property_tests {
     // Strategy for generating resource limits
     fn resource_limits_strategy() -> impl Strategy<Value = (usize, usize, usize)> {
         (
-            1usize..1000usize,   // max_tokens
-            1usize..100usize,    // max_files
-            1usize..100usize,    // max_tool_results
+            1usize..1000usize, // max_tokens
+            1usize..100usize,  // max_files
+            1usize..100usize,  // max_tool_results
         )
     }
 
@@ -51,7 +51,11 @@ mod property_tests {
     ) -> impl Strategy<Value = ResourceUsage> {
         prop_oneof![
             // Exceed tokens
-            ((max_tokens + 1)..=(max_tokens * 2), 0usize..=max_files, 0usize..=max_tool_results)
+            (
+                (max_tokens + 1)..=(max_tokens * 2),
+                0usize..=max_files,
+                0usize..=max_tool_results
+            )
                 .prop_map(|(tokens, files, tool_results)| ResourceUsage {
                     tokens_used: tokens,
                     files_accessed: files,
@@ -59,7 +63,11 @@ mod property_tests {
                     tool_calls_made: 0,
                 }),
             // Exceed files
-            (0usize..=max_tokens, (max_files + 1)..=(max_files * 2), 0usize..=max_tool_results)
+            (
+                0usize..=max_tokens,
+                (max_files + 1)..=(max_files * 2),
+                0usize..=max_tool_results
+            )
                 .prop_map(|(tokens, files, tool_results)| ResourceUsage {
                     tokens_used: tokens,
                     files_accessed: files,
@@ -67,7 +75,11 @@ mod property_tests {
                     tool_calls_made: 0,
                 }),
             // Exceed tool results
-            (0usize..=max_tokens, 0usize..=max_files, (max_tool_results + 1)..=(max_tool_results * 2))
+            (
+                0usize..=max_tokens,
+                0usize..=max_files,
+                (max_tool_results + 1)..=(max_tool_results * 2)
+            )
                 .prop_map(|(tokens, files, tool_results)| ResourceUsage {
                     tokens_used: tokens,
                     files_accessed: files,
@@ -94,12 +106,15 @@ mod property_tests {
             prop::option::of(tool_set_strategy()),
             prop::option::of(tool_set_strategy()),
         )
-            .prop_map(|((max_tokens, max_files, max_tool_results), allowed, denied)| {
-                let mut restrictions = SandboxRestrictions::new(max_tokens, max_files, max_tool_results);
-                restrictions.allowed_tools = allowed;
-                restrictions.denied_tools = denied;
-                restrictions
-            })
+            .prop_map(
+                |((max_tokens, max_files, max_tool_results), allowed, denied)| {
+                    let mut restrictions =
+                        SandboxRestrictions::new(max_tokens, max_files, max_tool_results);
+                    restrictions.allowed_tools = allowed;
+                    restrictions.denied_tools = denied;
+                    restrictions
+                },
+            )
     }
 
     /// **Property 8: Sandbox Resource Limit Enforcement**
@@ -401,8 +416,8 @@ mod property_tests {
     #[allow(dead_code)]
     fn ttl_seconds_strategy() -> impl Strategy<Value = i64> {
         prop_oneof![
-            -3600i64..-1i64,  // Expired (negative TTL)
-            1i64..3600i64,    // Valid (positive TTL)
+            -3600i64..-1i64, // Expired (negative TTL)
+            1i64..3600i64,   // Valid (positive TTL)
         ]
     }
 
@@ -565,7 +580,10 @@ mod property_tests {
 
         // Suspend should succeed
         let suspend_result = isolation.suspend(&sandbox_id);
-        assert!(suspend_result.is_ok(), "Suspend should succeed from Active state");
+        assert!(
+            suspend_result.is_ok(),
+            "Suspend should succeed from Active state"
+        );
         assert_eq!(
             isolation.get_sandbox(&sandbox_id).unwrap().state,
             SandboxState::Suspended,
@@ -574,7 +592,10 @@ mod property_tests {
 
         // Resume should succeed
         let resume_result = isolation.resume(&sandbox_id);
-        assert!(resume_result.is_ok(), "Resume should succeed from Suspended state");
+        assert!(
+            resume_result.is_ok(),
+            "Resume should succeed from Suspended state"
+        );
         assert_eq!(
             isolation.get_sandbox(&sandbox_id).unwrap().state,
             SandboxState::Active,
@@ -591,7 +612,10 @@ mod property_tests {
 
         // Terminate the sandbox
         let terminate_result = isolation.terminate(&sandbox_id);
-        assert!(terminate_result.is_ok(), "Terminate should succeed from Active state");
+        assert!(
+            terminate_result.is_ok(),
+            "Terminate should succeed from Active state"
+        );
         assert_eq!(
             isolation.get_sandbox(&sandbox_id).unwrap().state,
             SandboxState::Terminated,
@@ -600,11 +624,17 @@ mod property_tests {
 
         // Resume should fail from Terminated state
         let resume_result = isolation.resume(&sandbox_id);
-        assert!(resume_result.is_err(), "Resume should fail from Terminated state");
+        assert!(
+            resume_result.is_err(),
+            "Resume should fail from Terminated state"
+        );
 
         // Suspend should fail from Terminated state
         let suspend_result = isolation.suspend(&sandbox_id);
-        assert!(suspend_result.is_err(), "Suspend should fail from Terminated state");
+        assert!(
+            suspend_result.is_err(),
+            "Suspend should fail from Terminated state"
+        );
 
         // State should still be Terminated
         assert_eq!(
@@ -630,7 +660,10 @@ mod property_tests {
 
         // Suspending again should succeed (same state transition is allowed)
         let result = isolation.suspend(&sandbox_id);
-        assert!(result.is_ok(), "Suspending an already suspended sandbox should succeed");
+        assert!(
+            result.is_ok(),
+            "Suspending an already suspended sandbox should succeed"
+        );
         assert_eq!(
             isolation.get_sandbox(&sandbox_id).unwrap().state,
             SandboxState::Suspended,

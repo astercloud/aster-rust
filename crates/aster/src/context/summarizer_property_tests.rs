@@ -46,17 +46,22 @@ mod property_tests {
 
     /// Strategy for generating a conversation turn
     fn conversation_turn_strategy() -> impl Strategy<Value = ConversationTurn> {
-        (user_message_strategy(), assistant_message_strategy()).prop_map(|(user_text, assistant_text)| {
-            let user = Message::user().with_text(&user_text);
-            let assistant = Message::assistant().with_text(&assistant_text);
-            let token_estimate = TokenEstimator::estimate_message_tokens(&user)
-                + TokenEstimator::estimate_message_tokens(&assistant);
-            ConversationTurn::new(user, assistant, token_estimate)
-        })
+        (user_message_strategy(), assistant_message_strategy()).prop_map(
+            |(user_text, assistant_text)| {
+                let user = Message::user().with_text(&user_text);
+                let assistant = Message::assistant().with_text(&assistant_text);
+                let token_estimate = TokenEstimator::estimate_message_tokens(&user)
+                    + TokenEstimator::estimate_message_tokens(&assistant);
+                ConversationTurn::new(user, assistant, token_estimate)
+            },
+        )
     }
 
     /// Strategy for generating multiple conversation turns
-    fn conversation_turns_strategy(min: usize, max: usize) -> impl Strategy<Value = Vec<ConversationTurn>> {
+    fn conversation_turns_strategy(
+        min: usize,
+        max: usize,
+    ) -> impl Strategy<Value = Vec<ConversationTurn>> {
         prop::collection::vec(conversation_turn_strategy(), min..max)
     }
 

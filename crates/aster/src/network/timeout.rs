@@ -47,10 +47,10 @@ impl Default for TimeoutConfig {
 
 /// 默认超时配置
 pub const DEFAULT_TIMEOUTS: TimeoutConfig = TimeoutConfig {
-    connect: 30000,  // 30秒
-    request: 120000, // 2分钟
+    connect: 30000,   // 30秒
+    request: 120000,  // 2分钟
     response: 120000, // 2分钟
-    idle: 60000,     // 1分钟
+    idle: 60000,      // 1分钟
 };
 
 /// 超时错误
@@ -68,21 +68,16 @@ pub struct AbortError;
 
 /// 检查错误是否为超时错误
 pub fn is_timeout_error(error: &dyn std::error::Error) -> bool {
-    error.to_string().contains("timed out")
-        || error.to_string().contains("timeout")
+    error.to_string().contains("timed out") || error.to_string().contains("timeout")
 }
 
 /// 检查错误是否为取消错误
 pub fn is_abort_error(error: &dyn std::error::Error) -> bool {
-    error.to_string().contains("abort")
-        || error.to_string().contains("cancel")
+    error.to_string().contains("abort") || error.to_string().contains("cancel")
 }
 
 /// 带超时执行异步操作
-pub async fn with_timeout<T, F>(
-    future: F,
-    timeout_ms: u64,
-) -> Result<T, TimeoutError>
+pub async fn with_timeout<T, F>(future: F, timeout_ms: u64) -> Result<T, TimeoutError>
 where
     F: Future<Output = T>,
 {

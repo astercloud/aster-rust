@@ -48,7 +48,7 @@ use crate::session::{Session, SessionManager, SessionType};
 use crate::tool_inspection::ToolInspectionManager;
 use crate::tool_monitor::RepetitionInspector;
 use crate::tools::{
-    register_default_tools, SharedFileReadHistory, ToolRegistry, ToolRegistrationConfig,
+    register_default_tools, SharedFileReadHistory, ToolRegistrationConfig, ToolRegistry,
 };
 use crate::utils::is_token_cancelled;
 use regex::Regex;
@@ -257,7 +257,8 @@ impl Agent {
         input_schema: serde_json::Value,
         server_name: String,
     ) {
-        let wrapper = crate::tools::McpToolWrapper::new(name.clone(), description, input_schema, server_name);
+        let wrapper =
+            crate::tools::McpToolWrapper::new(name.clone(), description, input_schema, server_name);
         if let Ok(mut registry) = self.tool_registry.write() {
             registry.register_mcp(name, wrapper);
         }
@@ -1757,15 +1758,36 @@ mod tests {
         let registry_guard = registry.read().unwrap();
 
         // Verify core native tools are registered
-        assert!(registry_guard.contains("bash"), "bash tool should be registered");
-        assert!(registry_guard.contains("read"), "read tool should be registered");
-        assert!(registry_guard.contains("write"), "write tool should be registered");
-        assert!(registry_guard.contains("edit"), "edit tool should be registered");
-        assert!(registry_guard.contains("glob"), "glob tool should be registered");
-        assert!(registry_guard.contains("grep"), "grep tool should be registered");
+        assert!(
+            registry_guard.contains("bash"),
+            "bash tool should be registered"
+        );
+        assert!(
+            registry_guard.contains("read"),
+            "read tool should be registered"
+        );
+        assert!(
+            registry_guard.contains("write"),
+            "write tool should be registered"
+        );
+        assert!(
+            registry_guard.contains("edit"),
+            "edit tool should be registered"
+        );
+        assert!(
+            registry_guard.contains("glob"),
+            "glob tool should be registered"
+        );
+        assert!(
+            registry_guard.contains("grep"),
+            "grep tool should be registered"
+        );
 
         // Verify tool count
-        assert!(registry_guard.native_tool_count() >= 6, "Should have at least 6 native tools");
+        assert!(
+            registry_guard.native_tool_count() >= 6,
+            "Should have at least 6 native tools"
+        );
 
         Ok(())
     }
@@ -1780,8 +1802,14 @@ mod tests {
         let registry_guard = registry.read().unwrap();
 
         // Verify core native tools are registered
-        assert!(registry_guard.contains("bash"), "bash tool should be registered");
-        assert!(registry_guard.contains("read"), "read tool should be registered");
+        assert!(
+            registry_guard.contains("bash"),
+            "bash tool should be registered"
+        );
+        assert!(
+            registry_guard.contains("read"),
+            "read tool should be registered"
+        );
 
         Ok(())
     }
@@ -1801,8 +1829,14 @@ mod tests {
         // Verify the MCP tool is registered
         let registry = agent.tool_registry();
         let registry_guard = registry.read().unwrap();
-        assert!(registry_guard.contains("test_mcp_tool"), "MCP tool should be registered");
-        assert!(registry_guard.contains_mcp("test_mcp_tool"), "Should be registered as MCP tool");
+        assert!(
+            registry_guard.contains("test_mcp_tool"),
+            "MCP tool should be registered"
+        );
+        assert!(
+            registry_guard.contains_mcp("test_mcp_tool"),
+            "Should be registered as MCP tool"
+        );
 
         Ok(())
     }
@@ -1813,7 +1847,10 @@ mod tests {
 
         // Verify that the file read history is initialized and accessible
         let history = agent.file_read_history();
-        assert!(history.read().unwrap().is_empty(), "History should be empty initially");
+        assert!(
+            history.read().unwrap().is_empty(),
+            "History should be empty initially"
+        );
 
         Ok(())
     }

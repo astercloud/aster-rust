@@ -2,8 +2,8 @@
 //!
 //! 协调文件历史和对话状态的回退
 
-use serde::{Deserialize, Serialize};
 use super::file_history::{FileHistoryManager, RewindResult};
+use serde::{Deserialize, Serialize};
 
 /// Rewind 选项
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,7 +23,6 @@ pub struct RewindableMessage {
     pub timestamp: Option<i64>,
     pub has_file_changes: bool,
 }
-
 
 /// Rewind 操作结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,7 +46,6 @@ pub struct RewindManager {
     file_history: FileHistoryManager,
     message_count: usize,
 }
-
 
 impl RewindManager {
     /// 创建新的 Rewind 管理器
@@ -76,10 +74,10 @@ impl RewindManager {
 
     /// 记录文件修改
     pub fn record_file_change(&mut self, file_path: impl AsRef<std::path::Path>) {
-        self.file_history.backup_file_before_change(file_path.as_ref());
+        self.file_history
+            .backup_file_before_change(file_path.as_ref());
         self.file_history.track_file(file_path);
     }
-
 
     /// 执行回退操作
     pub fn rewind(&mut self, message_id: &str, option: RewindOption) -> RewindOperationResult {
@@ -121,7 +119,6 @@ impl RewindManager {
 
         result
     }
-
 
     /// 预览回退操作
     pub fn preview_rewind(&self, message_id: &str, option: RewindOption) -> RewindPreview {
@@ -180,9 +177,9 @@ pub struct RewindPreview {
 
 // ============ 全局实例管理 ============
 
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use once_cell::sync::Lazy;
 
 /// 全局 RewindManager 缓存
 static MANAGERS: Lazy<RwLock<HashMap<String, Arc<RwLock<RewindManager>>>>> =
@@ -222,7 +219,6 @@ pub fn cleanup_all_rewind_managers() {
         }
     }
 }
-
 
 // ============ 增强功能 ============
 
@@ -264,7 +260,6 @@ impl RewindManager {
         }
     }
 
-
     /// 回退到最后一个快照点
     pub fn rewind_to_last(&mut self, option: RewindOption) -> RewindOperationResult {
         match self.get_last_rewind_point() {
@@ -299,7 +294,6 @@ pub struct SnapshotDetails {
     pub files_count: usize,
     pub files: Vec<String>,
 }
-
 
 // ============ 单元测试 ============
 
@@ -336,7 +330,6 @@ mod tests {
         assert!(manager.can_rewind());
         manager.cleanup();
     }
-
 
     #[test]
     fn test_record_file_change() {
@@ -379,7 +372,6 @@ mod tests {
 
         manager.cleanup();
     }
-
 
     #[test]
     fn test_rewind_code() {
@@ -427,11 +419,10 @@ mod tests {
         manager.cleanup();
     }
 
-
     #[test]
     fn test_rewind_to_last() {
         let mut manager = RewindManager::new("test-last");
-        
+
         // 没有快照时回退
         let result = manager.rewind_to_last(RewindOption::Code);
         assert!(!result.success);
@@ -466,7 +457,7 @@ mod tests {
     fn test_global_manager() {
         let manager1 = get_rewind_manager("global-test");
         let manager2 = get_rewind_manager("global-test");
-        
+
         // 应该是同一个实例
         assert!(Arc::ptr_eq(&manager1, &manager2));
 

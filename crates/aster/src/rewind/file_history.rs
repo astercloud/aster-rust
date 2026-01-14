@@ -3,10 +3,10 @@
 //! 提供文件修改跟踪、快照创建、状态恢复功能
 
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 /// 文件备份信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,7 +20,6 @@ pub struct FileBackup {
     /// 文件哈希
     pub hash: Option<String>,
 }
-
 
 /// 快照数据结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,14 +44,25 @@ pub struct RewindResult {
 
 impl RewindResult {
     pub fn success(files_changed: Vec<String>, insertions: u32, deletions: u32) -> Self {
-        Self { success: true, files_changed, insertions, deletions, error: None }
+        Self {
+            success: true,
+            files_changed,
+            insertions,
+            deletions,
+            error: None,
+        }
     }
 
     pub fn error(msg: impl Into<String>) -> Self {
-        Self { success: false, files_changed: vec![], insertions: 0, deletions: 0, error: Some(msg.into()) }
+        Self {
+            success: false,
+            files_changed: vec![],
+            insertions: 0,
+            deletions: 0,
+            error: Some(msg.into()),
+        }
     }
 }
-
 
 /// 文件历史管理器
 pub struct FileHistoryManager {
@@ -95,10 +105,11 @@ impl FileHistoryManager {
         self.enabled = enabled;
     }
 
-
     /// 开始跟踪文件
     pub fn track_file(&mut self, file_path: impl AsRef<Path>) {
-        if !self.enabled { return; }
+        if !self.enabled {
+            return;
+        }
         let path = self.normalize_path(file_path.as_ref());
         self.tracked_files.insert(path);
     }
@@ -111,7 +122,9 @@ impl FileHistoryManager {
 
     /// 在文件修改前创建备份
     pub fn backup_file_before_change(&mut self, file_path: impl AsRef<Path>) -> Option<FileBackup> {
-        if !self.enabled { return None; }
+        if !self.enabled {
+            return None;
+        }
 
         let path = file_path.as_ref();
         let normalized = self.normalize_path(path);
@@ -129,8 +142,13 @@ impl FileHistoryManager {
         // 读取文件内容并计算哈希
         let content = fs::read(path).ok()?;
         let hash = self.compute_hash(&content);
-        let mtime = fs::metadata(path).ok()?.modified().ok()?
-            .duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+        let mtime = fs::metadata(path)
+            .ok()?
+            .modified()
+            .ok()?
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_secs();
 
         // 生成备份文件名
         let backup_file_name = self.generate_backup_file_name(path, &hash);
@@ -152,10 +170,11 @@ impl FileHistoryManager {
         })
     }
 
-
     /// 创建快照
     pub fn create_snapshot(&mut self, message_id: impl Into<String>) {
-        if !self.enabled { return; }
+        if !self.enabled {
+            return;
+        }
 
         let mut tracked_file_backups = HashMap::new();
 
@@ -189,7 +208,11 @@ impl FileHistoryManager {
         }
 
         // 查找快照
-        let snapshot = self.snapshots.iter().rev().find(|s| s.message_id == message_id);
+        let snapshot = self
+            .snapshots
+            .iter()
+            .rev()
+            .find(|s| s.message_id == message_id);
         let snapshot = match snapshot {
             Some(s) => s,
             None => return RewindResult::error(format!("未找到消息 {} 的快照", message_id)),
@@ -197,7 +220,6 @@ impl FileHistoryManager {
 
         self.apply_snapshot(snapshot, dry_run)
     }
-
 
     /// 应用快照
     fn apply_snapshot(&self, snapshot: &FileSnapshot, dry_run: bool) -> RewindResult {
@@ -255,7 +277,6 @@ impl FileHistoryManager {
         RewindResult::success(files_changed, insertions, deletions)
     }
 
-
     /// 计算文件差异
     fn calculate_diff(&self, current: &Path, backup: &Path) -> (u32, u32) {
         let current_lines = self.count_lines(current);
@@ -276,9 +297,15 @@ impl FileHistoryManager {
 
     /// 生成备份文件名
     fn generate_backup_file_name(&self, file_path: &Path, hash: &str) -> String {
-        let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+        let file_name = file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("file");
         let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        let name = file_path.file_stem().and_then(|n| n.to_str()).unwrap_or("file");
+        let name = file_path
+            .file_stem()
+            .and_then(|n| n.to_str())
+            .unwrap_or("file");
 
         if ext.is_empty() {
             format!("{}_{}", name, &hash[..8])
@@ -321,7 +348,6 @@ impl FileHistoryManager {
     }
 }
 
-
 // ============ 增强功能 ============
 
 impl FileHistoryManager {
@@ -361,10 +387,12 @@ impl FileHistoryManager {
         self.snapshots.last()
     }
 
-
     /// 删除指定消息之后的所有快照
     pub fn remove_snapshots_after(&mut self, message_id: &str) -> usize {
-        let idx = self.snapshots.iter().position(|s| s.message_id == message_id);
+        let idx = self
+            .snapshots
+            .iter()
+            .position(|s| s.message_id == message_id);
         match idx {
             Some(i) if i + 1 < self.snapshots.len() => {
                 let removed = self.snapshots.len() - i - 1;
@@ -376,7 +404,11 @@ impl FileHistoryManager {
     }
 
     /// 获取文件在指定快照时的内容
-    pub fn get_file_content_at_snapshot(&self, message_id: &str, file_path: &str) -> Option<Vec<u8>> {
+    pub fn get_file_content_at_snapshot(
+        &self,
+        message_id: &str,
+        file_path: &str,
+    ) -> Option<Vec<u8>> {
         let snapshot = self.get_snapshot(message_id)?;
         let backup = snapshot.tracked_file_backups.get(file_path)?;
         let backup_name = backup.backup_file_name.as_ref()?;
@@ -392,14 +424,14 @@ impl FileHistoryManager {
     fn calculate_dir_size(&self, path: &Path) -> u64 {
         fs::read_dir(path)
             .map(|entries| {
-                entries.filter_map(|e| e.ok())
+                entries
+                    .filter_map(|e| e.ok())
                     .map(|e| e.metadata().map(|m| m.len()).unwrap_or(0))
                     .sum()
             })
             .unwrap_or(0)
     }
 }
-
 
 // ============ 单元测试 ============
 
@@ -436,7 +468,6 @@ mod tests {
         manager.cleanup();
     }
 
-
     #[test]
     fn test_untrack_file() {
         let mut manager = FileHistoryManager::new("test-untrack");
@@ -453,7 +484,7 @@ mod tests {
         let test_file = create_test_file(temp_dir.path(), "test.txt", "hello world");
 
         let mut manager = FileHistoryManager::new("test-backup");
-        
+
         // 备份文件
         let backup = manager.backup_file_before_change(&test_file);
         assert!(backup.is_some());
@@ -469,14 +500,13 @@ mod tests {
         manager.cleanup();
     }
 
-
     #[test]
     fn test_rewind_to_message() {
         let temp_dir = TempDir::new().unwrap();
         let test_file = create_test_file(temp_dir.path(), "test.txt", "original content");
 
         let mut manager = FileHistoryManager::new("test-rewind");
-        
+
         // 备份原始状态
         manager.backup_file_before_change(&test_file);
         manager.create_snapshot("msg-1");
@@ -487,7 +517,7 @@ mod tests {
         // 预览回退
         let preview = manager.rewind_to_message("msg-1", true);
         assert!(preview.success);
-        
+
         // 文件应该还是修改后的内容（dry_run）
         let content = fs::read_to_string(&test_file).unwrap();
         assert_eq!(content, "modified content");
@@ -512,7 +542,6 @@ mod tests {
         manager.cleanup();
     }
 
-
     #[test]
     fn test_disabled_manager() {
         let mut manager = FileHistoryManager::new("test-disabled");
@@ -534,7 +563,7 @@ mod tests {
     #[test]
     fn test_remove_snapshots_after() {
         let mut manager = FileHistoryManager::new("test-remove");
-        
+
         manager.create_snapshot("msg-1");
         manager.create_snapshot("msg-2");
         manager.create_snapshot("msg-3");
@@ -555,11 +584,11 @@ mod tests {
         let hash1 = manager.compute_hash(b"hello");
         let hash2 = manager.compute_hash(b"hello");
         let hash3 = manager.compute_hash(b"world");
-        
+
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);
         assert_eq!(hash1.len(), 64); // SHA256 hex
-        
+
         manager.cleanup();
     }
 }

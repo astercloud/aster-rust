@@ -33,7 +33,6 @@ pub struct FileCheckpoint {
     pub tags: Option<Vec<String>>,
 }
 
-
 /// 文件元数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileMetadata {
@@ -69,7 +68,6 @@ pub struct CheckpointRestoreOptions {
     pub preserve_metadata: Option<bool>,
 }
 
-
 /// 检查点统计信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckpointStats {
@@ -102,7 +100,6 @@ pub struct CheckpointHistory {
     pub checkpoints: Vec<CheckpointHistoryItem>,
     pub current_index: i32,
 }
-
 
 /// 检查点 diff 结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,7 +143,6 @@ impl CheckpointResult {
         }
     }
 }
-
 
 /// 会话元数据
 #[derive(Debug, Clone, Serialize, Deserialize)]

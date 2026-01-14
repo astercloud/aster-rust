@@ -21,18 +21,14 @@ impl SystemChecker {
 
         // 获取负载平均值
         #[cfg(target_os = "macos")]
-        let load_result = Command::new("sysctl")
-            .args(["-n", "vm.loadavg"])
-            .output();
+        let load_result = Command::new("sysctl").args(["-n", "vm.loadavg"]).output();
 
         #[cfg(target_os = "linux")]
         let load_result = std::fs::read_to_string("/proc/loadavg")
-            .map(|s| {
-                std::process::Output {
-                    status: std::process::ExitStatus::default(),
-                    stdout: s.into_bytes(),
-                    stderr: Vec::new(),
-                }
+            .map(|s| std::process::Output {
+                status: std::process::ExitStatus::default(),
+                stdout: s.into_bytes(),
+                stderr: Vec::new(),
             })
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
 
@@ -169,30 +165,28 @@ impl SystemChecker {
         for config_path in &mcp_config_paths {
             if config_path.exists() {
                 match std::fs::read_to_string(config_path) {
-                    Ok(content) => {
-                        match serde_json::from_str::<serde_json::Value>(&content) {
-                            Ok(config) => {
-                                let servers = config
-                                    .get("mcpServers")
-                                    .and_then(|s| s.as_object())
-                                    .map(|o| o.keys().cloned().collect::<Vec<_>>())
-                                    .unwrap_or_default();
+                    Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+                        Ok(config) => {
+                            let servers = config
+                                .get("mcpServers")
+                                .and_then(|s| s.as_object())
+                                .map(|o| o.keys().cloned().collect::<Vec<_>>())
+                                .unwrap_or_default();
 
-                                if servers.is_empty() {
-                                    return DiagnosticCheck::pass("MCP 服务器", "未配置 MCP 服务器");
-                                }
+                            if servers.is_empty() {
+                                return DiagnosticCheck::pass("MCP 服务器", "未配置 MCP 服务器");
+                            }
 
-                                return DiagnosticCheck::pass(
-                                    "MCP 服务器",
-                                    format!("{} 个服务器: {}", servers.len(), servers.join(", ")),
-                                );
-                            }
-                            Err(e) => {
-                                return DiagnosticCheck::warn("MCP 服务器", "MCP 配置格式错误")
-                                    .with_details(e.to_string());
-                            }
+                            return DiagnosticCheck::pass(
+                                "MCP 服务器",
+                                format!("{} 个服务器: {}", servers.len(), servers.join(", ")),
+                            );
                         }
-                    }
+                        Err(e) => {
+                            return DiagnosticCheck::warn("MCP 服务器", "MCP 配置格式错误")
+                                .with_details(e.to_string());
+                        }
+                    },
                     Err(e) => {
                         return DiagnosticCheck::warn("MCP 服务器", "无法读取 MCP 配置")
                             .with_details(e.to_string());
@@ -204,7 +198,6 @@ impl SystemChecker {
         DiagnosticCheck::pass("MCP 服务器", "未配置 MCP 服务器")
     }
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -35,7 +35,12 @@ impl MemoryManager {
 
         let project_dir_path = project_dir
             .map(|p| p.join(".aster").join("memory"))
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().join(".aster").join("memory"));
+            .unwrap_or_else(|| {
+                std::env::current_dir()
+                    .unwrap_or_default()
+                    .join(".aster")
+                    .join("memory")
+            });
 
         let global_store_path = global_dir.join("memory.json");
         let project_store_path = project_dir_path.join("memory.json");
@@ -65,7 +70,9 @@ impl MemoryManager {
             key: key.to_string(),
             value: value.to_string(),
             scope,
-            created_at: existing.map(|e| e.created_at.clone()).unwrap_or_else(|| current_time.clone()),
+            created_at: existing
+                .map(|e| e.created_at.clone())
+                .unwrap_or_else(|| current_time.clone()),
             updated_at: current_time,
         };
 
@@ -73,12 +80,17 @@ impl MemoryManager {
         Self::save_store(store_path, store);
     }
 
-
     /// 获取记忆值
     pub fn get(&self, key: &str, scope: Option<MemoryScope>) -> Option<&str> {
         match scope {
-            Some(MemoryScope::Global) => self.global_store.entries.get(key).map(|e| e.value.as_str()),
-            Some(MemoryScope::Project) => self.project_store.entries.get(key).map(|e| e.value.as_str()),
+            Some(MemoryScope::Global) => {
+                self.global_store.entries.get(key).map(|e| e.value.as_str())
+            }
+            Some(MemoryScope::Project) => self
+                .project_store
+                .entries
+                .get(key)
+                .map(|e| e.value.as_str()),
             None => {
                 // 先查项目，再查全局
                 self.project_store
@@ -160,7 +172,6 @@ impl MemoryManager {
             })
             .collect()
     }
-
 
     // === 私有方法 ===
 

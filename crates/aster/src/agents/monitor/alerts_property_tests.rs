@@ -46,13 +46,16 @@ fn timeout_not_exceeded_strategy() -> impl Strategy<Value = (u64, u64)> {
 
 /// Strategy for generating cost scenarios where threshold is exceeded
 fn cost_exceeded_strategy() -> impl Strategy<Value = (f64, f64)> {
-    (0.01f64..10.0, 0.01f64..5.0).prop_filter_map("cost must exceed threshold", |(cost, threshold)| {
-        if cost > threshold {
-            Some((cost, threshold))
-        } else {
-            Some((threshold + cost, threshold))
-        }
-    })
+    (0.01f64..10.0, 0.01f64..5.0).prop_filter_map(
+        "cost must exceed threshold",
+        |(cost, threshold)| {
+            if cost > threshold {
+                Some((cost, threshold))
+            } else {
+                Some((threshold + cost, threshold))
+            }
+        },
+    )
 }
 
 /// Strategy for generating cost scenarios where threshold is NOT exceeded
@@ -462,23 +465,40 @@ mod additional_tests {
     #[test]
     fn test_latency_severity_scaling() {
         // Ratio < 2.0 -> Medium
-        let alert1 = Alert::latency("agent-1", Duration::from_millis(150), Duration::from_millis(100));
+        let alert1 = Alert::latency(
+            "agent-1",
+            Duration::from_millis(150),
+            Duration::from_millis(100),
+        );
         assert_eq!(alert1.severity, AlertSeverity::Medium);
 
         // Ratio >= 2.0 and < 3.0 -> High
-        let alert2 = Alert::latency("agent-1", Duration::from_millis(250), Duration::from_millis(100));
+        let alert2 = Alert::latency(
+            "agent-1",
+            Duration::from_millis(250),
+            Duration::from_millis(100),
+        );
         assert_eq!(alert2.severity, AlertSeverity::High);
 
         // Ratio >= 3.0 -> Critical
-        let alert3 = Alert::latency("agent-1", Duration::from_millis(350), Duration::from_millis(100));
+        let alert3 = Alert::latency(
+            "agent-1",
+            Duration::from_millis(350),
+            Duration::from_millis(100),
+        );
         assert_eq!(alert3.severity, AlertSeverity::Critical);
     }
 
     #[test]
     fn test_alert_with_custom_metadata() {
-        let alert = Alert::new(AlertType::Custom("test".to_string()), AlertSeverity::Medium, "agent-1", "Test")
-            .with_metadata("key1", serde_json::json!("value1"))
-            .with_metadata("key2", serde_json::json!(42));
+        let alert = Alert::new(
+            AlertType::Custom("test".to_string()),
+            AlertSeverity::Medium,
+            "agent-1",
+            "Test",
+        )
+        .with_metadata("key1", serde_json::json!("value1"))
+        .with_metadata("key2", serde_json::json!(42));
 
         let metadata = alert.metadata.unwrap();
         assert_eq!(metadata.get("key1").unwrap(), &serde_json::json!("value1"));
@@ -521,11 +541,12 @@ mod additional_tests {
 
         let alerts = manager.check_all(&metrics);
         // Only timeout alert possible (if configured in metrics)
-        assert!(alerts.is_empty() || alerts.iter().all(|a| a.alert_type == AlertType::Timeout),
-            "Only timeout alerts when other thresholds are None");
+        assert!(
+            alerts.is_empty() || alerts.iter().all(|a| a.alert_type == AlertType::Timeout),
+            "Only timeout alerts when other thresholds are None"
+        );
     }
 }
-
 
 // **Property 29: Alert Lifecycle Management**
 //
@@ -602,7 +623,7 @@ proptest! {
     #[test]
     fn property_29_acknowledge_all_updates_all_flags(
         alerts_data in prop::collection::vec(
-            (agent_id_strategy(), 
+            (agent_id_strategy(),
              prop_oneof![
                  Just(AlertType::Timeout),
                  Just(AlertType::CostThreshold),
@@ -872,14 +893,19 @@ mod lifecycle_additional_tests {
     fn test_acknowledge_preserves_other_alert_data() {
         let mut manager = AlertManager::new();
 
-        let alert = Alert::new(AlertType::Timeout, AlertSeverity::Critical, "agent-1", "Test message")
-            .with_metadata("key", serde_json::json!("value"));
+        let alert = Alert::new(
+            AlertType::Timeout,
+            AlertSeverity::Critical,
+            "agent-1",
+            "Test message",
+        )
+        .with_metadata("key", serde_json::json!("value"));
         let alert_id = manager.add_alert(alert);
 
         manager.acknowledge(&alert_id);
 
         let alert = manager.get_alert(&alert_id).unwrap();
-        
+
         // All other fields should be preserved
         assert_eq!(alert.alert_type, AlertType::Timeout);
         assert_eq!(alert.severity, AlertSeverity::Critical);
@@ -898,11 +924,16 @@ mod lifecycle_additional_tests {
 
         // Add mix of acknowledged and unacknowledged
         let alert1 = Alert::new(AlertType::Timeout, AlertSeverity::High, "agent-1", "Test 1");
-        let alert2 = Alert::new(AlertType::CostThreshold, AlertSeverity::Medium, "agent-2", "Test 2");
-        
+        let alert2 = Alert::new(
+            AlertType::CostThreshold,
+            AlertSeverity::Medium,
+            "agent-2",
+            "Test 2",
+        );
+
         let id1 = manager.add_alert(alert1);
         manager.add_alert(alert2);
-        
+
         manager.acknowledge(&id1);
 
         assert_eq!(manager.alert_count(), 2);
@@ -919,8 +950,18 @@ mod lifecycle_additional_tests {
 
         // Add multiple alerts for same agent
         let alert1 = Alert::new(AlertType::Timeout, AlertSeverity::High, "agent-1", "Test 1");
-        let alert2 = Alert::new(AlertType::CostThreshold, AlertSeverity::Medium, "agent-1", "Test 2");
-        let alert3 = Alert::new(AlertType::ErrorRate, AlertSeverity::Low, "agent-2", "Test 3");
+        let alert2 = Alert::new(
+            AlertType::CostThreshold,
+            AlertSeverity::Medium,
+            "agent-1",
+            "Test 2",
+        );
+        let alert3 = Alert::new(
+            AlertType::ErrorRate,
+            AlertSeverity::Low,
+            "agent-2",
+            "Test 3",
+        );
 
         let id1 = manager.add_alert(alert1);
         manager.add_alert(alert2);
@@ -947,7 +988,7 @@ mod lifecycle_additional_tests {
         assert!(manager.get_all_alerts().is_empty());
         assert!(!manager.acknowledge("nonexistent"));
         assert_eq!(manager.clear_acknowledged(), 0);
-        
+
         manager.acknowledge_all(); // Should not panic
         manager.clear_all(); // Should not panic
     }

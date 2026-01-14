@@ -53,9 +53,7 @@ fn is_sensitive_field(key: &str) -> bool {
 pub fn sanitize_value(value: &Value) -> Value {
     match value {
         Value::String(s) => Value::String(sanitize_string(s)),
-        Value::Array(arr) => {
-            Value::Array(arr.iter().map(sanitize_value).collect())
-        }
+        Value::Array(arr) => Value::Array(arr.iter().map(sanitize_value).collect()),
         Value::Object(obj) => {
             let mut result = serde_json::Map::new();
             for (key, val) in obj {
@@ -119,9 +117,6 @@ mod tests {
             result.get("password"),
             Some(&Value::String("[REDACTED]".to_string()))
         );
-        assert_eq!(
-            result.get("name"),
-            Some(&Value::String("John".to_string()))
-        );
+        assert_eq!(result.get("name"), Some(&Value::String("John".to_string())));
     }
 }

@@ -3,13 +3,13 @@
 //! 使用 LLM 为模块和符号生成业务语义描述
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 use super::types::ModuleNode;
 use super::types_enhanced::{
-    SemanticInfo, ProjectSemantic, KeyConcept, ArchitectureLayer,
-    SymbolEntry, EnhancedAnalysisProgress, EnhancedAnalysisPhase,
+    ArchitectureLayer, EnhancedAnalysisPhase, EnhancedAnalysisProgress, KeyConcept,
+    ProjectSemantic, SemanticInfo, SymbolEntry,
 };
 
 /// 默认模型
@@ -44,7 +44,6 @@ impl Default for SemanticGeneratorOptions {
         }
     }
 }
-
 
 /// 模块语义响应
 #[derive(Debug, Clone)]
@@ -146,13 +145,21 @@ impl SemanticGenerator {
     /// 生成项目级语义描述
     pub fn generate_project_semantic(&self, modules: &[ModuleNode]) -> ProjectSemantic {
         // 收集项目信息
-        let _module_list: Vec<_> = modules.iter().take(50).map(|m| {
-            (
-                m.id.clone(),
-                m.classes.iter().map(|c| c.name.clone()).collect::<Vec<_>>(),
-                m.functions.iter().take(10).map(|f| f.name.clone()).collect::<Vec<_>>(),
-            )
-        }).collect();
+        let _module_list: Vec<_> = modules
+            .iter()
+            .take(50)
+            .map(|m| {
+                (
+                    m.id.clone(),
+                    m.classes.iter().map(|c| c.name.clone()).collect::<Vec<_>>(),
+                    m.functions
+                        .iter()
+                        .take(10)
+                        .map(|f| f.name.clone())
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect();
 
         // TODO: 调用 LLM API
         // 目前返回基于规则的语义
@@ -178,7 +185,6 @@ impl SemanticGenerator {
         }
     }
 
-
     // ========================================================================
     // Prompt 构建
     // ========================================================================
@@ -186,8 +192,18 @@ impl SemanticGenerator {
     /// 构建模块提示词
     fn build_module_prompt(&self, module: &ModuleNode, content: &str) -> String {
         let classes: Vec<_> = module.classes.iter().map(|c| c.name.as_str()).collect();
-        let functions: Vec<_> = module.functions.iter().take(10).map(|f| f.name.as_str()).collect();
-        let imports: Vec<_> = module.imports.iter().take(5).map(|i| i.source.as_str()).collect();
+        let functions: Vec<_> = module
+            .functions
+            .iter()
+            .take(10)
+            .map(|f| f.name.as_str())
+            .collect();
+        let imports: Vec<_> = module
+            .imports
+            .iter()
+            .take(5)
+            .map(|i| i.source.as_str())
+            .collect();
 
         format!(
             r#"分析以下代码模块，生成简洁的业务描述。
@@ -235,7 +251,12 @@ architectureLayer 说明：
         let modules_summary: String = module_list
             .iter()
             .map(|(path, classes, functions)| {
-                format!("- {}: 类[{}], 函数[{}]", path, classes.join(", "), functions.join(", "))
+                format!(
+                    "- {}: 类[{}], 函数[{}]",
+                    path,
+                    classes.join(", "),
+                    functions.join(", ")
+                )
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -266,7 +287,6 @@ architectureLayer 说明：
         )
     }
 
-
     // ========================================================================
     // 辅助方法
     // ========================================================================
@@ -290,9 +310,13 @@ architectureLayer 说明：
 
         for module in modules {
             let module_path = module.id.to_lowercase();
-            let has_matching_class = module.classes.iter()
+            let has_matching_class = module
+                .classes
+                .iter()
                 .any(|c| c.name.to_lowercase().contains(&lower_name));
-            let has_matching_function = module.functions.iter()
+            let has_matching_function = module
+                .functions
+                .iter()
                 .any(|f| f.name.to_lowercase().contains(&lower_name));
 
             if module_path.contains(&lower_name) || has_matching_class || has_matching_function {
@@ -308,15 +332,28 @@ architectureLayer 说明：
         let path_parts: Vec<&str> = module.id.split('/').collect();
         let file_name = path_parts.last().unwrap_or(&"module");
 
-        let (layer, description) = if module.id.contains("/ui/") || module.id.contains("/components/") {
-            (ArchitectureLayer::Presentation, format!("UI 组件模块 {}", file_name))
-        } else if module.id.contains("/core/") || module.id.contains("/services/") {
-            (ArchitectureLayer::Business, format!("业务逻辑模块 {}", file_name))
-        } else if module.id.contains("/api/") || module.id.contains("/data/") {
-            (ArchitectureLayer::Data, format!("数据处理模块 {}", file_name))
-        } else {
-            (ArchitectureLayer::Infrastructure, format!("{} 模块", file_name))
-        };
+        let (layer, description) =
+            if module.id.contains("/ui/") || module.id.contains("/components/") {
+                (
+                    ArchitectureLayer::Presentation,
+                    format!("UI 组件模块 {}", file_name),
+                )
+            } else if module.id.contains("/core/") || module.id.contains("/services/") {
+                (
+                    ArchitectureLayer::Business,
+                    format!("业务逻辑模块 {}", file_name),
+                )
+            } else if module.id.contains("/api/") || module.id.contains("/data/") {
+                (
+                    ArchitectureLayer::Data,
+                    format!("数据处理模块 {}", file_name),
+                )
+            } else {
+                (
+                    ArchitectureLayer::Infrastructure,
+                    format!("{} 模块", file_name),
+                )
+            };
 
         let tags: Vec<String> = path_parts
             .iter()
@@ -338,14 +375,22 @@ architectureLayer 说明：
     /// 生成回退项目语义
     fn generate_fallback_project_semantic(&self, modules: &[ModuleNode]) -> ProjectSemantic {
         let paths: Vec<&str> = modules.iter().map(|m| m.id.as_str()).collect();
-        let has_ui = paths.iter().any(|p| p.contains("/ui/") || p.contains("/components/"));
+        let has_ui = paths
+            .iter()
+            .any(|p| p.contains("/ui/") || p.contains("/components/"));
         let has_tools = paths.iter().any(|p| p.contains("/tools/"));
         let has_core = paths.iter().any(|p| p.contains("/core/"));
 
         let mut domains = Vec::new();
-        if has_ui { domains.push("用户界面".to_string()); }
-        if has_tools { domains.push("工具系统".to_string()); }
-        if has_core { domains.push("核心引擎".to_string()); }
+        if has_ui {
+            domains.push("用户界面".to_string());
+        }
+        if has_tools {
+            domains.push("工具系统".to_string());
+        }
+        if has_core {
+            domains.push("核心引擎".to_string());
+        }
 
         if domains.is_empty() {
             domains.push("软件开发".to_string());

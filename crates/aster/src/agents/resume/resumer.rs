@@ -12,9 +12,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{
-    AgentState, AgentStateManager, AgentStateStatus, Checkpoint, StateManagerError,
-};
+use super::{AgentState, AgentStateManager, AgentStateStatus, Checkpoint, StateManagerError};
 
 /// Result type alias for resumer operations
 pub type ResumerResult<T> = Result<T, ResumerError>;
@@ -149,7 +147,9 @@ impl ResumePointInfo {
             checkpoint_available: false,
             last_checkpoint: None,
             error_count: 0,
-            suggestions: Some(vec!["Agent state not found. Start a new agent instead.".to_string()]),
+            suggestions: Some(vec![
+                "Agent state not found. Start a new agent instead.".to_string()
+            ]),
         }
     }
 
@@ -163,7 +163,8 @@ impl ResumePointInfo {
 
         if can_resume {
             if checkpoint_available {
-                suggestions.push("Resume from the last checkpoint for a clean restart.".to_string());
+                suggestions
+                    .push("Resume from the last checkpoint for a clean restart.".to_string());
             }
             if state.error_count > 0 {
                 suggestions.push(format!(
@@ -247,7 +248,8 @@ impl AgentResumer {
     pub async fn resume(&self, options: ResumeOptions) -> ResumerResult<AgentState> {
         // Load the state
         let state = self.state_manager.load_state(&options.agent_id).await?;
-        let mut state = state.ok_or_else(|| ResumerError::AgentNotFound(options.agent_id.clone()))?;
+        let mut state =
+            state.ok_or_else(|| ResumerError::AgentNotFound(options.agent_id.clone()))?;
 
         // Check if resumable
         if !state.can_resume() {
@@ -269,7 +271,7 @@ impl AgentResumer {
                     .load_checkpoint(&options.agent_id, checkpoint_id)
                     .await?
                     .ok_or_else(|| ResumerError::CheckpointNotFound(checkpoint_id.clone()))?;
-                
+
                 state.restore_from_checkpoint(&checkpoint);
             }
             ResumePoint::Beginning => {
@@ -347,7 +349,10 @@ impl AgentResumer {
         if state.checkpoints.is_empty() {
             summary.push_str("- No checkpoints available\n\n");
         } else {
-            summary.push_str(&format!("- Available Checkpoints: {}\n", state.checkpoints.len()));
+            summary.push_str(&format!(
+                "- Available Checkpoints: {}\n",
+                state.checkpoints.len()
+            ));
             for (i, cp) in state.checkpoints.iter().enumerate() {
                 let name = cp.name.as_deref().unwrap_or("unnamed");
                 summary.push_str(&format!("  {}. {} (step {})\n", i + 1, name, cp.step));
@@ -357,8 +362,14 @@ impl AgentResumer {
 
         // Timestamps
         summary.push_str(&format!("## Timestamps\n"));
-        summary.push_str(&format!("- Created: {}\n", state.created_at.format("%Y-%m-%d %H:%M:%S UTC")));
-        summary.push_str(&format!("- Last Updated: {}\n\n", state.updated_at.format("%Y-%m-%d %H:%M:%S UTC")));
+        summary.push_str(&format!(
+            "- Created: {}\n",
+            state.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+        ));
+        summary.push_str(&format!(
+            "- Last Updated: {}\n\n",
+            state.updated_at.format("%Y-%m-%d %H:%M:%S UTC")
+        ));
 
         // Original prompt (truncated if too long)
         summary.push_str(&format!("## Original Prompt\n"));
@@ -383,7 +394,9 @@ impl AgentResumer {
             }
         } else {
             if !state.checkpoints.is_empty() {
-                summary.push_str("- Consider resuming from the latest checkpoint for a clean restart.\n");
+                summary.push_str(
+                    "- Consider resuming from the latest checkpoint for a clean restart.\n",
+                );
             }
             if state.error_count > 0 {
                 summary.push_str(&format!(
@@ -426,9 +439,15 @@ mod tests {
             .with_additional_context("Extra context");
 
         assert_eq!(options.agent_id, "agent-1");
-        assert_eq!(options.continue_from, ResumePoint::Checkpoint("cp-1".to_string()));
+        assert_eq!(
+            options.continue_from,
+            ResumePoint::Checkpoint("cp-1".to_string())
+        );
         assert!(options.reset_errors);
-        assert_eq!(options.additional_context, Some("Extra context".to_string()));
+        assert_eq!(
+            options.additional_context,
+            Some("Extra context".to_string())
+        );
     }
 
     #[test]
@@ -497,7 +516,7 @@ mod tests {
     async fn test_resumer_can_resume_running() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         let state = create_test_state("agent-1");
         state_manager.save_state(&state).await.unwrap();
 
@@ -509,7 +528,7 @@ mod tests {
     async fn test_resumer_can_resume_completed() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         let state = create_test_state("agent-1").with_status(AgentStateStatus::Completed);
         state_manager.save_state(&state).await.unwrap();
 
@@ -532,7 +551,7 @@ mod tests {
     async fn test_resumer_get_resume_point_existing() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         let mut state = create_test_state("agent-1");
         state.current_step = 5;
         state.total_steps = Some(10);
@@ -551,16 +570,16 @@ mod tests {
     async fn test_resumer_resume_from_last() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         let mut state = create_test_state("agent-1").with_status(AgentStateStatus::Paused);
         state.current_step = 5;
         state_manager.save_state(&state).await.unwrap();
 
         let resumer = AgentResumer::new(state_manager);
         let options = ResumeOptions::new("agent-1");
-        
+
         let resumed = resumer.resume(options).await.unwrap();
-        
+
         assert_eq!(resumed.current_step, 5);
         assert_eq!(resumed.status, AgentStateStatus::Running);
     }
@@ -569,12 +588,12 @@ mod tests {
     async fn test_resumer_resume_from_checkpoint() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         // Create state with checkpoint
         let mut state = create_test_state("agent-1");
         state.current_step = 3;
         let checkpoint = state.create_checkpoint(Some("cp-1"));
-        
+
         // Advance state further
         state.current_step = 10;
         state.add_result(serde_json::json!({"result": "later"}));
@@ -582,11 +601,10 @@ mod tests {
         state_manager.save_checkpoint(&checkpoint).await.unwrap();
 
         let resumer = AgentResumer::new(state_manager);
-        let options = ResumeOptions::new("agent-1")
-            .from_checkpoint(&checkpoint.id);
-        
+        let options = ResumeOptions::new("agent-1").from_checkpoint(&checkpoint.id);
+
         let resumed = resumer.resume(options).await.unwrap();
-        
+
         // Should be restored to checkpoint state
         assert_eq!(resumed.current_step, 3);
     }
@@ -595,18 +613,17 @@ mod tests {
     async fn test_resumer_resume_from_beginning() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         let mut state = create_test_state("agent-1");
         state.current_step = 10;
         state.add_result(serde_json::json!({"result": "test"}));
         state_manager.save_state(&state).await.unwrap();
 
         let resumer = AgentResumer::new(state_manager);
-        let options = ResumeOptions::new("agent-1")
-            .from_point(ResumePoint::Beginning);
-        
+        let options = ResumeOptions::new("agent-1").from_point(ResumePoint::Beginning);
+
         let resumed = resumer.resume(options).await.unwrap();
-        
+
         assert_eq!(resumed.current_step, 0);
         assert!(resumed.messages.is_empty());
         assert!(resumed.tool_calls.is_empty());
@@ -617,18 +634,17 @@ mod tests {
     async fn test_resumer_resume_with_reset_errors() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         let mut state = create_test_state("agent-1").with_status(AgentStateStatus::Failed);
         state.error_count = 5;
         state.retry_count = 3;
         state_manager.save_state(&state).await.unwrap();
 
         let resumer = AgentResumer::new(state_manager);
-        let options = ResumeOptions::new("agent-1")
-            .with_reset_errors(true);
-        
+        let options = ResumeOptions::new("agent-1").with_reset_errors(true);
+
         let resumed = resumer.resume(options).await.unwrap();
-        
+
         assert_eq!(resumed.error_count, 0);
         assert_eq!(resumed.retry_count, 0);
         assert_eq!(resumed.status, AgentStateStatus::Running);
@@ -638,19 +654,22 @@ mod tests {
     async fn test_resumer_resume_with_additional_context() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         let state = create_test_state("agent-1");
         state_manager.save_state(&state).await.unwrap();
 
         let resumer = AgentResumer::new(state_manager);
-        let options = ResumeOptions::new("agent-1")
-            .with_additional_context("Extra context for resume");
-        
+        let options =
+            ResumeOptions::new("agent-1").with_additional_context("Extra context for resume");
+
         let resumed = resumer.resume(options).await.unwrap();
-        
+
         let context = resumed.metadata.get("additional_context");
         assert!(context.is_some());
-        assert_eq!(context.unwrap(), &serde_json::json!("Extra context for resume"));
+        assert_eq!(
+            context.unwrap(),
+            &serde_json::json!("Extra context for resume")
+        );
     }
 
     #[tokio::test]
@@ -661,23 +680,26 @@ mod tests {
 
         let options = ResumeOptions::new("nonexistent");
         let result = resumer.resume(options).await;
-        
+
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ResumerError::AgentNotFound(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ResumerError::AgentNotFound(_)
+        ));
     }
 
     #[tokio::test]
     async fn test_resumer_resume_completed_fails() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         let state = create_test_state("agent-1").with_status(AgentStateStatus::Completed);
         state_manager.save_state(&state).await.unwrap();
 
         let resumer = AgentResumer::new(state_manager);
         let options = ResumeOptions::new("agent-1");
         let result = resumer.resume(options).await;
-        
+
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ResumerError::CannotResume(_)));
     }
@@ -686,24 +708,26 @@ mod tests {
     async fn test_resumer_resume_invalid_checkpoint_fails() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         let state = create_test_state("agent-1");
         state_manager.save_state(&state).await.unwrap();
 
         let resumer = AgentResumer::new(state_manager);
-        let options = ResumeOptions::new("agent-1")
-            .from_checkpoint("nonexistent-checkpoint");
+        let options = ResumeOptions::new("agent-1").from_checkpoint("nonexistent-checkpoint");
         let result = resumer.resume(options).await;
-        
+
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ResumerError::CheckpointNotFound(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ResumerError::CheckpointNotFound(_)
+        ));
     }
 
     #[tokio::test]
     async fn test_resumer_create_resume_summary() {
         let temp_dir = TempDir::new().unwrap();
         let state_manager = AgentStateManager::new(Some(temp_dir.path().to_path_buf()));
-        
+
         let mut state = create_test_state("agent-1");
         state.current_step = 5;
         state.total_steps = Some(10);
@@ -713,7 +737,7 @@ mod tests {
 
         let resumer = AgentResumer::new(state_manager);
         let summary = resumer.create_resume_summary("agent-1").await.unwrap();
-        
+
         // Verify summary contains expected sections
         assert!(summary.contains("Resume Summary"));
         assert!(summary.contains("agent-1"));
@@ -734,8 +758,11 @@ mod tests {
         let resumer = AgentResumer::new(state_manager);
 
         let result = resumer.create_resume_summary("nonexistent").await;
-        
+
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ResumerError::AgentNotFound(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ResumerError::AgentNotFound(_)
+        ));
     }
 }

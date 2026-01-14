@@ -245,7 +245,11 @@ pub struct AgentState {
 
 impl AgentState {
     /// Create a new agent state
-    pub fn new(id: impl Into<String>, agent_type: impl Into<String>, prompt: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        agent_type: impl Into<String>,
+        prompt: impl Into<String>,
+    ) -> Self {
         let now = Utc::now();
         Self {
             id: id.into(),
@@ -507,7 +511,6 @@ impl Default for AgentStateManager {
     }
 }
 
-
 impl AgentStateManager {
     /// Create a new AgentStateManager
     pub fn new(storage_dir: Option<PathBuf>) -> Self {
@@ -537,7 +540,8 @@ impl AgentStateManager {
 
     /// Get the file path for a checkpoint
     fn checkpoint_file_path(&self, agent_id: &str, checkpoint_id: &str) -> PathBuf {
-        self.checkpoints_dir(agent_id).join(format!("{}.json", checkpoint_id))
+        self.checkpoints_dir(agent_id)
+            .join(format!("{}.json", checkpoint_id))
     }
 
     /// Save agent state to disk
@@ -567,7 +571,10 @@ impl AgentStateManager {
     }
 
     /// List all saved agent states with optional filtering
-    pub async fn list_states(&self, filter: Option<StateFilter>) -> StateManagerResult<Vec<AgentState>> {
+    pub async fn list_states(
+        &self,
+        filter: Option<StateFilter>,
+    ) -> StateManagerResult<Vec<AgentState>> {
         if !self.storage_dir.exists() {
             return Ok(Vec::new());
         }
@@ -577,7 +584,7 @@ impl AgentStateManager {
 
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            
+
             // Skip directories and non-JSON files
             if path.is_dir() || path.extension().map_or(true, |ext| ext != "json") {
                 continue;
@@ -641,7 +648,7 @@ impl AgentStateManager {
 
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            
+
             // Skip directories and non-JSON files
             if path.is_dir() || path.extension().map_or(true, |ext| ext != "json") {
                 continue;
@@ -654,7 +661,7 @@ impl AgentStateManager {
                         // Delete the state file
                         if tokio::fs::remove_file(&path).await.is_ok() {
                             cleaned += 1;
-                            
+
                             // Also delete checkpoints directory
                             let checkpoints_dir = self.checkpoints_dir(&state.id);
                             let _ = tokio::fs::remove_dir_all(&checkpoints_dir).await;
@@ -680,7 +687,11 @@ impl AgentStateManager {
     }
 
     /// Load a checkpoint from disk
-    pub async fn load_checkpoint(&self, agent_id: &str, checkpoint_id: &str) -> StateManagerResult<Option<Checkpoint>> {
+    pub async fn load_checkpoint(
+        &self,
+        agent_id: &str,
+        checkpoint_id: &str,
+    ) -> StateManagerResult<Option<Checkpoint>> {
         let file_path = self.checkpoint_file_path(agent_id, checkpoint_id);
 
         if !file_path.exists() {
@@ -706,7 +717,7 @@ impl AgentStateManager {
 
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            
+
             // Skip non-JSON files
             if path.extension().map_or(true, |ext| ext != "json") {
                 continue;
@@ -726,7 +737,11 @@ impl AgentStateManager {
     }
 
     /// Delete a checkpoint
-    pub async fn delete_checkpoint(&self, agent_id: &str, checkpoint_id: &str) -> StateManagerResult<bool> {
+    pub async fn delete_checkpoint(
+        &self,
+        agent_id: &str,
+        checkpoint_id: &str,
+    ) -> StateManagerResult<bool> {
         let file_path = self.checkpoint_file_path(agent_id, checkpoint_id);
 
         if !file_path.exists() {
@@ -834,8 +849,7 @@ mod tests {
 
     #[test]
     fn test_checkpoint_creation() {
-        let checkpoint = Checkpoint::new("agent-1", 5)
-            .with_name("test_checkpoint");
+        let checkpoint = Checkpoint::new("agent-1", 5).with_name("test_checkpoint");
 
         assert!(!checkpoint.id.is_empty());
         assert_eq!(checkpoint.agent_id, "agent-1");
@@ -1042,7 +1056,10 @@ mod tests {
 
         manager.save_checkpoint(&checkpoint).await.unwrap();
 
-        let loaded = manager.load_checkpoint("agent-1", &checkpoint.id).await.unwrap();
+        let loaded = manager
+            .load_checkpoint("agent-1", &checkpoint.id)
+            .await
+            .unwrap();
         assert!(loaded.is_some());
         let loaded = loaded.unwrap();
         assert_eq!(loaded.step, 5);

@@ -43,7 +43,11 @@ pub async fn archive_session(session_id: &str) -> Result<PathBuf> {
     let archive_path = archive_dir.join(format!("{}.json", session_id));
     fs::write(&archive_path, &json)?;
 
-    info!("Session {} archived to {}", session_id, archive_path.display());
+    info!(
+        "Session {} archived to {}",
+        session_id,
+        archive_path.display()
+    );
 
     Ok(archive_path)
 }
@@ -68,9 +72,7 @@ pub async fn archive_and_delete_session(session_id: &str) -> Result<PathBuf> {
 ///
 /// # Returns
 /// Results for each session (archived path or error)
-pub async fn bulk_archive_sessions(
-    session_ids: &[String],
-) -> BulkArchiveResult {
+pub async fn bulk_archive_sessions(session_ids: &[String]) -> BulkArchiveResult {
     let mut result = BulkArchiveResult::default();
 
     for id in session_ids {
@@ -189,11 +191,15 @@ mod tests {
         assert!(result.all_succeeded());
         assert_eq!(result.success_count(), 0);
 
-        result.archived.push(("test1".to_string(), PathBuf::from("/tmp/test1.json")));
+        result
+            .archived
+            .push(("test1".to_string(), PathBuf::from("/tmp/test1.json")));
         assert!(result.all_succeeded());
         assert_eq!(result.success_count(), 1);
 
-        result.failed.push(("test2".to_string(), "error".to_string()));
+        result
+            .failed
+            .push(("test2".to_string(), "error".to_string()));
         assert!(!result.all_succeeded());
         assert_eq!(result.failure_count(), 1);
     }

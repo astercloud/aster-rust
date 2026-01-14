@@ -48,7 +48,6 @@ pub struct MatchResult {
     pub positions: Vec<usize>,
 }
 
-
 /// Edit Tool for modifying files
 ///
 /// Supports:
@@ -105,7 +104,6 @@ impl EditTool {
     }
 }
 
-
 // =============================================================================
 // Smart String Matching (Requirements: 4.7)
 // =============================================================================
@@ -159,10 +157,7 @@ impl EditTool {
 
     /// Find exact matches without quote normalization
     fn find_matches_exact(&self, content: &str, search: &str) -> MatchResult {
-        let positions: Vec<usize> = content
-            .match_indices(search)
-            .map(|(pos, _)| pos)
-            .collect();
+        let positions: Vec<usize> = content.match_indices(search).map(|(pos, _)| pos).collect();
 
         MatchResult {
             count: positions.len(),
@@ -198,7 +193,6 @@ impl EditTool {
         self.find_matches(content, search).count == 1
     }
 }
-
 
 // =============================================================================
 // Single Edit Implementation
@@ -287,13 +281,12 @@ impl EditTool {
             new_str.len()
         );
 
-        Ok(ToolResult::success(format!(
-            "Successfully edited {}",
-            full_path.display()
-        ))
-        .with_metadata("path", serde_json::json!(full_path.to_string_lossy()))
-        .with_metadata("old_length", serde_json::json!(old_str.len()))
-        .with_metadata("new_length", serde_json::json!(new_str.len())))
+        Ok(
+            ToolResult::success(format!("Successfully edited {}", full_path.display()))
+                .with_metadata("path", serde_json::json!(full_path.to_string_lossy()))
+                .with_metadata("old_length", serde_json::json!(old_str.len()))
+                .with_metadata("new_length", serde_json::json!(new_str.len())),
+        )
     }
 
     /// Check for external file modifications since last read
@@ -337,7 +330,6 @@ impl EditTool {
         Ok(())
     }
 }
-
 
 // =============================================================================
 // Batch Edit Implementation (Requirements: 4.8)
@@ -433,7 +425,6 @@ impl EditTool {
         .with_metadata("edit_count", serde_json::json!(edits.len())))
     }
 }
-
 
 // =============================================================================
 // Tool Trait Implementation
@@ -574,7 +565,6 @@ impl Tool for EditTool {
     }
 }
 
-
 // =============================================================================
 // Unit Tests
 // =============================================================================
@@ -612,19 +602,22 @@ mod tests {
         let smart_double_close = "\u{201D}"; // "
         let smart_single_open = "\u{2018}"; // '
         let smart_single_close = "\u{2019}"; // '
-        
+
         // Test smart double quotes
         let input = format!("{}hello{}", smart_double_open, smart_double_close);
         assert_eq!(EditTool::normalize_quotes(&input), "\"hello\"");
-        
+
         // Test smart single quotes
         let input = format!("{}hello{}", smart_single_open, smart_single_close);
         assert_eq!(EditTool::normalize_quotes(&input), "'hello'");
-        
+
         // Test mixed
-        let input = format!("{}it{}s{}", smart_double_open, smart_single_close, smart_double_close);
+        let input = format!(
+            "{}it{}s{}",
+            smart_double_open, smart_single_close, smart_double_close
+        );
         assert_eq!(EditTool::normalize_quotes(&input), "\"it's\"");
-        
+
         // No quotes
         assert_eq!(EditTool::normalize_quotes("hello"), "hello");
     }
@@ -724,9 +717,7 @@ mod tests {
         let tool = create_edit_tool();
         let context = create_test_context(temp_dir.path());
 
-        let result = tool
-            .edit_file(&file_path, "old", "new", &context)
-            .await;
+        let result = tool.edit_file(&file_path, "old", "new", &context).await;
 
         assert!(result.is_err());
     }
@@ -751,9 +742,7 @@ mod tests {
         }
         history.write().unwrap().record_read(record);
 
-        let result = tool
-            .edit_file(&file_path, "foo", "bar", &context)
-            .await;
+        let result = tool.edit_file(&file_path, "foo", "bar", &context).await;
 
         assert!(result.is_err());
     }
@@ -778,9 +767,7 @@ mod tests {
         }
         history.write().unwrap().record_read(record);
 
-        let result = tool
-            .edit_file(&file_path, "hello", "hi", &context)
-            .await;
+        let result = tool.edit_file(&file_path, "hello", "hi", &context).await;
 
         assert!(result.is_err());
         // Original content should be preserved
@@ -840,10 +827,7 @@ mod tests {
         history.write().unwrap().record_read(record);
 
         // Second edit will fail (string not found after first edit)
-        let edits = vec![
-            Edit::new("hello", "hi"),
-            Edit::new("nonexistent", "bar"),
-        ];
+        let edits = vec![Edit::new("hello", "hi"), Edit::new("nonexistent", "bar")];
 
         let result = tool.batch_edit(&file_path, &edits, &context).await;
 

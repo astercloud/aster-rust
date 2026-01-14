@@ -133,10 +133,7 @@ pub fn migrate_permission_config(
             conditions: Vec::new(),
             parameter_restrictions: Vec::new(),
             scope,
-            reason: Some(format!(
-                "Migrated from {} always_allow",
-                category
-            )),
+            reason: Some(format!("Migrated from {} always_allow", category)),
             expires_at: None,
             metadata,
         });
@@ -195,10 +192,7 @@ pub fn migrate_permission_config(
             conditions: Vec::new(),
             parameter_restrictions: Vec::new(),
             scope,
-            reason: Some(format!(
-                "Migrated from {} never_allow",
-                category
-            )),
+            reason: Some(format!("Migrated from {} never_allow", category)),
             expires_at: None,
             metadata,
         });
@@ -293,10 +287,7 @@ pub fn migrate_known_tools(
         // Check smart_approve permissions (if different from user permissions)
         if let Some(level) = old_manager.get_smart_approve_permission(tool_name) {
             // Only add if not already added from user permissions
-            let already_exists = result
-                .permissions
-                .iter()
-                .any(|p| p.tool == *tool_name);
+            let already_exists = result.permissions.iter().any(|p| p.tool == *tool_name);
 
             if !already_exists {
                 let mut permission = migrate_permission_level(tool_name, level.clone(), scope);
@@ -362,8 +353,11 @@ mod tests {
 
     #[test]
     fn test_migrate_permission_level_always_allow() {
-        let permission =
-            migrate_permission_level("test_tool", PermissionLevel::AlwaysAllow, PermissionScope::Global);
+        let permission = migrate_permission_level(
+            "test_tool",
+            PermissionLevel::AlwaysAllow,
+            PermissionScope::Global,
+        );
 
         assert_eq!(permission.tool, "test_tool");
         assert!(permission.allowed);
@@ -378,8 +372,11 @@ mod tests {
 
     #[test]
     fn test_migrate_permission_level_ask_before() {
-        let permission =
-            migrate_permission_level("test_tool", PermissionLevel::AskBefore, PermissionScope::Project);
+        let permission = migrate_permission_level(
+            "test_tool",
+            PermissionLevel::AskBefore,
+            PermissionScope::Project,
+        );
 
         assert_eq!(permission.tool, "test_tool");
         assert!(permission.allowed);
@@ -394,8 +391,11 @@ mod tests {
 
     #[test]
     fn test_migrate_permission_level_never_allow() {
-        let permission =
-            migrate_permission_level("test_tool", PermissionLevel::NeverAllow, PermissionScope::Session);
+        let permission = migrate_permission_level(
+            "test_tool",
+            PermissionLevel::NeverAllow,
+            PermissionScope::Session,
+        );
 
         assert_eq!(permission.tool, "test_tool");
         assert!(!permission.allowed);
@@ -488,11 +488,8 @@ mod tests {
             Some(PermissionLevel::AlwaysAllow)
         );
 
-        let ask_before = migrate_permission_level(
-            "tool2",
-            PermissionLevel::AskBefore,
-            PermissionScope::Global,
-        );
+        let ask_before =
+            migrate_permission_level("tool2", PermissionLevel::AskBefore, PermissionScope::Global);
         assert_eq!(
             get_original_permission_level(&ask_before),
             Some(PermissionLevel::AskBefore)

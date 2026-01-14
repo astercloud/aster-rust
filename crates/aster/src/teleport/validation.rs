@@ -49,7 +49,6 @@ pub fn normalize_repo_url(url: &str) -> String {
     normalized.to_lowercase()
 }
 
-
 /// 比较两个仓库 URL 是否相同
 pub fn compare_repo_urls(url1: &str, url2: &str) -> bool {
     normalize_repo_url(url1) == normalize_repo_url(url2)
@@ -126,13 +125,10 @@ pub async fn is_working_directory_clean() -> bool {
         .await;
 
     match output {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout).trim().is_empty()
-        }
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().is_empty(),
         _ => false,
     }
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -24,7 +24,9 @@ impl ChunkedBlueprintGenerator {
     pub fn new(root_path: impl AsRef<Path>, options: Option<ChunkedGenerateOptions>) -> Self {
         let root = root_path.as_ref().to_path_buf();
         let opts = options.unwrap_or_default();
-        let map_dir = opts.output_dir.as_ref()
+        let map_dir = opts
+            .output_dir
+            .as_ref()
             .map(PathBuf::from)
             .unwrap_or_else(|| root.join(".claude").join("map"));
         let chunks_dir = map_dir.join("chunks");
@@ -36,7 +38,6 @@ impl ChunkedBlueprintGenerator {
             chunks_dir,
         }
     }
-
 
     /// 生成分块蓝图
     pub fn generate(&self) -> std::io::Result<()> {
@@ -63,7 +64,10 @@ impl ChunkedBlueprintGenerator {
         Ok(())
     }
 
-    fn group_modules_by_directory(&self, modules: &HashMap<String, EnhancedModule>) -> HashMap<String, Vec<EnhancedModule>> {
+    fn group_modules_by_directory(
+        &self,
+        modules: &HashMap<String, EnhancedModule>,
+    ) -> HashMap<String, Vec<EnhancedModule>> {
         let mut chunks: HashMap<String, Vec<EnhancedModule>> = HashMap::new();
 
         for module in modules.values() {
@@ -80,7 +84,6 @@ impl ChunkedBlueprintGenerator {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default()
     }
-
 
     fn generate_chunks(
         &self,
@@ -104,23 +107,31 @@ impl ChunkedBlueprintGenerator {
         modules: &[EnhancedModule],
         blueprint: &EnhancedCodeBlueprint,
     ) -> ChunkData {
-        let module_ids: std::collections::HashSet<_> = modules.iter().map(|m| m.id.clone()).collect();
+        let module_ids: std::collections::HashSet<_> =
+            modules.iter().map(|m| m.id.clone()).collect();
 
-        let chunk_modules: HashMap<String, EnhancedModule> = modules.iter()
-            .map(|m| (m.id.clone(), m.clone()))
-            .collect();
+        let chunk_modules: HashMap<String, EnhancedModule> =
+            modules.iter().map(|m| (m.id.clone(), m.clone())).collect();
 
-        let chunk_symbols: HashMap<String, SymbolEntry> = blueprint.symbols.iter()
+        let chunk_symbols: HashMap<String, SymbolEntry> = blueprint
+            .symbols
+            .iter()
             .filter(|(_, s)| module_ids.contains(&s.module_id))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
         let chunk_refs = ChunkReferences {
-            module_deps: blueprint.references.module_deps.iter()
+            module_deps: blueprint
+                .references
+                .module_deps
+                .iter()
                 .filter(|d| module_ids.contains(&d.source) || module_ids.contains(&d.target))
                 .cloned()
                 .collect(),
-            symbol_calls: blueprint.references.symbol_calls.iter()
+            symbol_calls: blueprint
+                .references
+                .symbol_calls
+                .iter()
                 .filter(|c| {
                     let caller_mod = c.caller.split("::").next().unwrap_or("");
                     let callee_mod = c.callee.split("::").next().unwrap_or("");
@@ -128,7 +139,10 @@ impl ChunkedBlueprintGenerator {
                 })
                 .cloned()
                 .collect(),
-            type_refs: blueprint.references.type_refs.iter()
+            type_refs: blueprint
+                .references
+                .type_refs
+                .iter()
                 .filter(|r| {
                     let child_mod = r.child.split("::").next().unwrap_or("");
                     let parent_mod = r.parent.split("::").next().unwrap_or("");
@@ -150,8 +164,11 @@ impl ChunkedBlueprintGenerator {
         }
     }
 
-
-    fn write_chunk_file(&self, dir_path: &str, chunk_data: &ChunkData) -> std::io::Result<ChunkMetadata> {
+    fn write_chunk_file(
+        &self,
+        dir_path: &str,
+        chunk_data: &ChunkData,
+    ) -> std::io::Result<ChunkMetadata> {
         let chunk_file_name = self.get_chunk_file_name(dir_path);
         let chunk_path = self.chunks_dir.join(&chunk_file_name);
 
@@ -219,7 +236,6 @@ impl ChunkedBlueprintGenerator {
         }
     }
 
-
     fn build_lightweight_views(
         &self,
         blueprint: &EnhancedCodeBlueprint,
@@ -227,8 +243,16 @@ impl ChunkedBlueprintGenerator {
         chunk_index: &HashMap<String, String>,
     ) -> LightweightViews {
         LightweightViews {
-            directory_tree: self.convert_tree_with_chunks(&blueprint.views.directory_tree, chunks, chunk_index),
-            architecture_layers: self.convert_layers_with_chunks(&blueprint.views.architecture_layers, chunks, chunk_index),
+            directory_tree: self.convert_tree_with_chunks(
+                &blueprint.views.directory_tree,
+                chunks,
+                chunk_index,
+            ),
+            architecture_layers: self.convert_layers_with_chunks(
+                &blueprint.views.architecture_layers,
+                chunks,
+                chunk_index,
+            ),
         }
     }
 
@@ -248,7 +272,8 @@ impl ChunkedBlueprintGenerator {
             chunk_file,
             module_count,
             children: tree.children.as_ref().map(|children| {
-                children.iter()
+                children
+                    .iter()
                     .map(|c| self.convert_tree_with_chunks(c, chunks, chunk_index))
                     .collect()
             }),
@@ -292,15 +317,21 @@ impl ChunkedBlueprintGenerator {
         }
     }
 
-    fn build_global_dependency_graph(&self, blueprint: &EnhancedCodeBlueprint) -> HashMap<String, GlobalDependencyNode> {
+    fn build_global_dependency_graph(
+        &self,
+        blueprint: &EnhancedCodeBlueprint,
+    ) -> HashMap<String, GlobalDependencyNode> {
         let mut graph: HashMap<String, GlobalDependencyNode> = HashMap::new();
 
         for module_id in blueprint.modules.keys() {
-            graph.insert(module_id.clone(), GlobalDependencyNode {
-                imports: Vec::new(),
-                imported_by: Vec::new(),
-                exports_symbols: false,
-            });
+            graph.insert(
+                module_id.clone(),
+                GlobalDependencyNode {
+                    imports: Vec::new(),
+                    imported_by: Vec::new(),
+                    exports_symbols: false,
+                },
+            );
         }
 
         for dep in &blueprint.references.module_deps {

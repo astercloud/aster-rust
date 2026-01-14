@@ -7,8 +7,8 @@
 //! **Validates: Requirements 9.1**
 
 use aster::permission::{
-    ConditionOperator, ConditionType, ParameterRestriction, PermissionCondition,
-    PermissionScope, RestrictionType, ToolPermission, ToolPermissionManager,
+    ConditionOperator, ConditionType, ParameterRestriction, PermissionCondition, PermissionScope,
+    RestrictionType, ToolPermission, ToolPermissionManager,
 };
 use proptest::prelude::*;
 use serde_json::Value;

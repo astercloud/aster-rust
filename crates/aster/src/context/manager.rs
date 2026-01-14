@@ -147,40 +147,36 @@ impl EnhancedContextManager {
     /// * `user` - The user's message
     /// * `assistant` - The assistant's response
     /// * `api_usage` - Optional token usage from the API call
-    pub fn add_turn(
-        &mut self,
-        user: Message,
-        assistant: Message,
-        api_usage: Option<TokenUsage>,
-    ) {
+    pub fn add_turn(&mut self, user: Message, assistant: Message, api_usage: Option<TokenUsage>) {
         // Estimate tokens for the turn
         let user_tokens = TokenEstimator::estimate_message_tokens(&user);
         let assistant_tokens = TokenEstimator::estimate_message_tokens(&assistant);
         let total_tokens = user_tokens + assistant_tokens;
 
         // Apply incremental compression if enabled
-        let (final_user, final_assistant, final_tokens) =
-            if self.config.enable_incremental_compression {
-                let compression_config = CompressionConfig {
-                    code_block_max_lines: self.config.code_block_max_lines,
-                    tool_output_max_chars: self.config.tool_output_max_chars,
-                    ..Default::default()
-                };
-
-                let compressed_user = MessageCompressor::compress_message(&user, &compression_config);
-                let compressed_assistant =
-                    MessageCompressor::compress_message(&assistant, &compression_config);
-
-                let compressed_user_tokens =
-                    TokenEstimator::estimate_message_tokens(&compressed_user);
-                let compressed_assistant_tokens =
-                    TokenEstimator::estimate_message_tokens(&compressed_assistant);
-                let compressed_total = compressed_user_tokens + compressed_assistant_tokens;
-
-                (compressed_user, compressed_assistant, compressed_total)
-            } else {
-                (user, assistant, total_tokens)
+        let (final_user, final_assistant, final_tokens) = if self
+            .config
+            .enable_incremental_compression
+        {
+            let compression_config = CompressionConfig {
+                code_block_max_lines: self.config.code_block_max_lines,
+                tool_output_max_chars: self.config.tool_output_max_chars,
+                ..Default::default()
             };
+
+            let compressed_user = MessageCompressor::compress_message(&user, &compression_config);
+            let compressed_assistant =
+                MessageCompressor::compress_message(&assistant, &compression_config);
+
+            let compressed_user_tokens = TokenEstimator::estimate_message_tokens(&compressed_user);
+            let compressed_assistant_tokens =
+                TokenEstimator::estimate_message_tokens(&compressed_assistant);
+            let compressed_total = compressed_user_tokens + compressed_assistant_tokens;
+
+            (compressed_user, compressed_assistant, compressed_total)
+        } else {
+            (user, assistant, total_tokens)
+        };
 
         // Create the turn
         let mut turn = ConversationTurn::new(final_user, final_assistant, final_tokens);
@@ -278,7 +274,6 @@ impl EnhancedContextManager {
             .collect()
     }
 
-
     // ========================================================================
     // Token Management (Task 14.2)
     // ========================================================================
@@ -349,7 +344,8 @@ impl EnhancedContextManager {
         }
 
         // Get turns to summarize (excluding already summarized ones)
-        let unsummarized_indices: Vec<usize> = self.turns
+        let unsummarized_indices: Vec<usize> = self
+            .turns
             .iter()
             .enumerate()
             .take(turns_to_summarize)
@@ -370,8 +366,12 @@ impl EnhancedContextManager {
         // Generate summary
         let summary = if self.has_summarizer_client() {
             let client = self.summarizer_client.as_ref().unwrap();
-            Summarizer::generate_ai_summary(&turns_for_summary, client.as_ref(), DEFAULT_SUMMARY_BUDGET)
-                .await?
+            Summarizer::generate_ai_summary(
+                &turns_for_summary,
+                client.as_ref(),
+                DEFAULT_SUMMARY_BUDGET,
+            )
+            .await?
         } else {
             Summarizer::create_simple_summary(&turns_for_summary)
         };
@@ -558,7 +558,6 @@ impl EnhancedContextManager {
         CompressionResult::new(original_tokens, current_tokens, "context_compression")
     }
 
-
     // ========================================================================
     // Tool Reference Collapsing (Task 14.7)
     // ========================================================================
@@ -644,9 +643,7 @@ impl EnhancedContextManager {
     ///
     /// Tool references typically contain markers like "tool_reference" or
     /// specific patterns indicating they're references to previous tool calls.
-    fn is_tool_reference_response(
-        resp: &crate::conversation::message::ToolResponse,
-    ) -> bool {
+    fn is_tool_reference_response(resp: &crate::conversation::message::ToolResponse) -> bool {
         if let Ok(result) = &resp.tool_result {
             for content in &result.content {
                 if let Some(text) = content.as_text() {

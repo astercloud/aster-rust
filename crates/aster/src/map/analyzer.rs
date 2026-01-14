@@ -31,18 +31,29 @@ fn detect_language(file_path: &Path) -> &'static str {
 
 /// 默认包含模式
 const DEFAULT_INCLUDE: &[&str] = &[
-    "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx",
-    "**/*.py", "**/*.go", "**/*.rs", "**/*.java",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx",
+    "**/*.py",
+    "**/*.go",
+    "**/*.rs",
+    "**/*.java",
 ];
 
 /// 默认排除模式
 const DEFAULT_EXCLUDE: &[&str] = &[
-    "**/node_modules/**", "**/dist/**", "**/build/**",
-    "**/.git/**", "**/coverage/**", "**/__pycache__/**",
-    "**/vendor/**", "**/target/**",
-    "**/*.min.js", "**/*.bundle.js",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/coverage/**",
+    "**/__pycache__/**",
+    "**/vendor/**",
+    "**/target/**",
+    "**/*.min.js",
+    "**/*.bundle.js",
 ];
-
 
 /// 代码分析器
 pub struct CodeMapAnalyzer {
@@ -95,7 +106,6 @@ impl CodeMapAnalyzer {
         }
         analyzer
     }
-
 
     /// 发现所有待分析的文件
     pub fn discover_files(&self) -> Vec<PathBuf> {
@@ -164,7 +174,6 @@ impl CodeMapAnalyzer {
         })
     }
 
-
     /// 批量分析文件
     pub fn analyze_files(&self, files: Option<Vec<PathBuf>>) -> Vec<ModuleNode> {
         let files_to_analyze = files.unwrap_or_else(|| self.discover_files());
@@ -194,25 +203,30 @@ impl CodeMapAnalyzer {
         imports
     }
 
-
     /// 提取 JS/TS 导入
     fn extract_js_imports(&self, content: &str, module_id: &str, imports: &mut Vec<ImportInfo>) {
         let import_re = regex::Regex::new(
-            r#"import\s+(?:(?:\{([^}]*)\}|(\*\s+as\s+\w+)|(\w+))\s+from\s+)?['"]([^'"]+)['"]"#
-        ).unwrap();
+            r#"import\s+(?:(?:\{([^}]*)\}|(\*\s+as\s+\w+)|(\w+))\s+from\s+)?['"]([^'"]+)['"]"#,
+        )
+        .unwrap();
 
         for (line_num, line) in content.lines().enumerate() {
             if let Some(caps) = import_re.captures(line) {
-                let source = caps.get(4).map(|m| m.as_str().to_string()).unwrap_or_default();
+                let source = caps
+                    .get(4)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
                 let mut symbols = Vec::new();
                 let mut is_default = false;
                 let mut is_namespace = false;
 
                 if let Some(named) = caps.get(1) {
                     symbols.extend(
-                        named.as_str().split(',')
+                        named
+                            .as_str()
+                            .split(',')
                             .map(|s| s.trim().to_string())
-                            .filter(|s| !s.is_empty())
+                            .filter(|s| !s.is_empty()),
                     );
                 }
                 if caps.get(2).is_some() {
@@ -241,9 +255,13 @@ impl CodeMapAnalyzer {
         }
     }
 
-
     /// 提取 Python 导入
-    fn extract_python_imports(&self, content: &str, module_id: &str, imports: &mut Vec<ImportInfo>) {
+    fn extract_python_imports(
+        &self,
+        content: &str,
+        module_id: &str,
+        imports: &mut Vec<ImportInfo>,
+    ) {
         let from_import_re = regex::Regex::new(r"^from\s+(\S+)\s+import\s+(.+)$").unwrap();
         let import_re = regex::Regex::new(r"^import\s+(.+)$").unwrap();
 
@@ -251,11 +269,21 @@ impl CodeMapAnalyzer {
             let trimmed = line.trim();
 
             if let Some(caps) = from_import_re.captures(trimmed) {
-                let source = caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+                let source = caps
+                    .get(1)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
                 let import_part = caps.get(2).map(|m| m.as_str()).unwrap_or("");
                 let symbols: Vec<String> = import_part
                     .split(',')
-                    .map(|s| s.trim().split(" as ").next().unwrap_or("").trim().to_string())
+                    .map(|s| {
+                        s.trim()
+                            .split(" as ")
+                            .next()
+                            .unwrap_or("")
+                            .trim()
+                            .to_string()
+                    })
                     .filter(|s| !s.is_empty() && s != "*")
                     .collect();
 
@@ -275,7 +303,12 @@ impl CodeMapAnalyzer {
                 });
             } else if let Some(caps) = import_re.captures(trimmed) {
                 let import_part = caps.get(1).map(|m| m.as_str()).unwrap_or("");
-                let source = import_part.split(',').next().unwrap_or("").trim().to_string();
+                let source = import_part
+                    .split(',')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
 
                 imports.push(ImportInfo {
                     source,
@@ -294,7 +327,6 @@ impl CodeMapAnalyzer {
             }
         }
     }
-
 
     /// 提取 Rust 导入
     fn extract_rust_imports(&self, content: &str, module_id: &str, imports: &mut Vec<ImportInfo>) {
@@ -340,7 +372,10 @@ impl CodeMapAnalyzer {
         if let Some(re) = fn_re {
             for (line_num, line) in content.lines().enumerate() {
                 if let Some(caps) = re.captures(line) {
-                    let name = caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+                    let name = caps
+                        .get(1)
+                        .map(|m| m.as_str().to_string())
+                        .unwrap_or_default();
                     functions.push(FunctionNode {
                         id: format!("{}::{}", module_id, name),
                         name: name.clone(),
@@ -369,7 +404,6 @@ impl CodeMapAnalyzer {
     }
 }
 
-
 /// 创建分析器的便捷函数
 pub fn create_analyzer(root_path: impl AsRef<Path>) -> CodeMapAnalyzer {
     CodeMapAnalyzer::new(root_path)
@@ -395,7 +429,9 @@ pub fn generate_ontology(
         statistics.total_variables += module.variables.len();
         statistics.total_lines += module.lines;
 
-        *language_breakdown.entry(module.language.clone()).or_insert(0) += 1;
+        *language_breakdown
+            .entry(module.language.clone())
+            .or_insert(0) += 1;
 
         for class in &module.classes {
             statistics.total_methods += class.methods.len();
@@ -408,7 +444,8 @@ pub fn generate_ontology(
         version: "1.0.0".to_string(),
         generated_at: chrono::Utc::now().to_rfc3339(),
         project: ProjectInfo {
-            name: root_path.as_ref()
+            name: root_path
+                .as_ref()
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default(),

@@ -135,7 +135,10 @@ impl CancellationToken {
         let inner = self.inner.read().await;
         if inner.cancelled {
             let reason = inner.reason.unwrap_or(CancellationReason::UserCancelled);
-            return Err(McpError::cancelled(reason.to_string(), Some(reason.to_string())));
+            return Err(McpError::cancelled(
+                reason.to_string(),
+                Some(reason.to_string()),
+            ));
         }
         Ok(())
     }
@@ -162,21 +165,13 @@ pub enum CancellationEvent {
         method: String,
     },
     /// Request unregistered
-    RequestUnregistered {
-        id: String,
-        server_name: String,
-    },
+    RequestUnregistered { id: String, server_name: String },
     /// Request cancelled
     RequestCancelled(CancellationResult),
     /// Server requests cancelled
-    ServerCancelled {
-        server_name: String,
-        count: usize,
-    },
+    ServerCancelled { server_name: String, count: usize },
     /// All requests cancelled
-    AllCancelled {
-        count: usize,
-    },
+    AllCancelled { count: usize },
 }
 
 /// Manages request cancellation for MCP operations
@@ -233,11 +228,13 @@ impl McpCancellationManager {
         self.requests.write().await.insert(id.clone(), request);
         self.tokens.write().await.insert(id.clone(), token.clone());
 
-        let _ = self.event_sender.send(CancellationEvent::RequestRegistered {
-            id,
-            server_name,
-            method,
-        });
+        let _ = self
+            .event_sender
+            .send(CancellationEvent::RequestRegistered {
+                id,
+                server_name,
+                method,
+            });
 
         token
     }
@@ -248,10 +245,12 @@ impl McpCancellationManager {
         self.tokens.write().await.remove(id);
 
         if let Some(req) = request {
-            let _ = self.event_sender.send(CancellationEvent::RequestUnregistered {
-                id: id.to_string(),
-                server_name: req.server_name,
-            });
+            let _ = self
+                .event_sender
+                .send(CancellationEvent::RequestUnregistered {
+                    id: id.to_string(),
+                    server_name: req.server_name,
+                });
             true
         } else {
             false
@@ -307,7 +306,9 @@ impl McpCancellationManager {
             duration,
         };
 
-        let _ = self.event_sender.send(CancellationEvent::RequestCancelled(result.clone()));
+        let _ = self
+            .event_sender
+            .send(CancellationEvent::RequestCancelled(result.clone()));
 
         Some(result)
     }
@@ -463,9 +464,15 @@ mod tests {
 
     #[test]
     fn test_cancellation_reason_display() {
-        assert_eq!(CancellationReason::UserCancelled.to_string(), "Request cancelled by user");
+        assert_eq!(
+            CancellationReason::UserCancelled.to_string(),
+            "Request cancelled by user"
+        );
         assert_eq!(CancellationReason::Timeout.to_string(), "Request timed out");
-        assert_eq!(CancellationReason::Shutdown.to_string(), "Cancelled due to shutdown");
+        assert_eq!(
+            CancellationReason::Shutdown.to_string(),
+            "Cancelled due to shutdown"
+        );
     }
 
     #[tokio::test]
@@ -479,16 +486,19 @@ mod tests {
     async fn test_cancellation_token_cancel() {
         let token = CancellationToken::new();
         token.cancel(CancellationReason::UserCancelled).await;
-        
+
         assert!(token.is_cancelled().await);
-        assert_eq!(token.reason().await, Some(CancellationReason::UserCancelled));
+        assert_eq!(
+            token.reason().await,
+            Some(CancellationReason::UserCancelled)
+        );
     }
 
     #[tokio::test]
     async fn test_cancellation_token_throw_if_cancelled() {
         let token = CancellationToken::new();
         assert!(token.throw_if_cancelled().await.is_ok());
-        
+
         token.cancel(CancellationReason::Timeout).await;
         assert!(token.throw_if_cancelled().await.is_err());
     }
@@ -496,8 +506,10 @@ mod tests {
     #[tokio::test]
     async fn test_manager_register_request() {
         let manager = McpCancellationManager::new();
-        let token = manager.register_request("req-1", "server-1", "tools/call", None).await;
-        
+        let token = manager
+            .register_request("req-1", "server-1", "tools/call", None)
+            .await;
+
         assert!(!token.is_cancelled().await);
         assert!(manager.has_request("req-1").await);
     }
@@ -505,8 +517,10 @@ mod tests {
     #[tokio::test]
     async fn test_manager_unregister_request() {
         let manager = McpCancellationManager::new();
-        manager.register_request("req-1", "server-1", "tools/call", None).await;
-        
+        manager
+            .register_request("req-1", "server-1", "tools/call", None)
+            .await;
+
         assert!(manager.unregister_request("req-1").await);
         assert!(!manager.has_request("req-1").await);
     }
@@ -514,10 +528,14 @@ mod tests {
     #[tokio::test]
     async fn test_manager_cancel_request() {
         let manager = McpCancellationManager::new();
-        let token = manager.register_request("req-1", "server-1", "tools/call", None).await;
-        
-        let result = manager.cancel_request("req-1", CancellationReason::UserCancelled).await;
-        
+        let token = manager
+            .register_request("req-1", "server-1", "tools/call", None)
+            .await;
+
+        let result = manager
+            .cancel_request("req-1", CancellationReason::UserCancelled)
+            .await;
+
         assert!(result.is_some());
         let result = result.unwrap();
         assert!(result.success);
@@ -528,12 +546,20 @@ mod tests {
     #[tokio::test]
     async fn test_manager_cancel_server_requests() {
         let manager = McpCancellationManager::new();
-        manager.register_request("req-1", "server-1", "tools/call", None).await;
-        manager.register_request("req-2", "server-1", "resources/read", None).await;
-        manager.register_request("req-3", "server-2", "tools/call", None).await;
-        
-        let results = manager.cancel_server_requests("server-1", CancellationReason::Shutdown).await;
-        
+        manager
+            .register_request("req-1", "server-1", "tools/call", None)
+            .await;
+        manager
+            .register_request("req-2", "server-1", "resources/read", None)
+            .await;
+        manager
+            .register_request("req-3", "server-2", "tools/call", None)
+            .await;
+
+        let results = manager
+            .cancel_server_requests("server-1", CancellationReason::Shutdown)
+            .await;
+
         assert_eq!(results.len(), 2);
         assert!(!manager.has_request("req-1").await);
         assert!(!manager.has_request("req-2").await);
@@ -543,11 +569,15 @@ mod tests {
     #[tokio::test]
     async fn test_manager_cancel_all() {
         let manager = McpCancellationManager::new();
-        manager.register_request("req-1", "server-1", "tools/call", None).await;
-        manager.register_request("req-2", "server-2", "tools/call", None).await;
-        
+        manager
+            .register_request("req-1", "server-1", "tools/call", None)
+            .await;
+        manager
+            .register_request("req-2", "server-2", "tools/call", None)
+            .await;
+
         let results = manager.cancel_all(CancellationReason::Shutdown).await;
-        
+
         assert_eq!(results.len(), 2);
         assert!(manager.get_all_requests().await.is_empty());
     }
@@ -555,12 +585,23 @@ mod tests {
     #[tokio::test]
     async fn test_manager_get_stats() {
         let manager = McpCancellationManager::new();
-        manager.register_request("req-1", "server-1", "tools/call", Some(Duration::from_secs(30))).await;
-        manager.register_request("req-2", "server-1", "resources/read", None).await;
-        manager.register_request("req-3", "server-2", "tools/call", None).await;
-        
+        manager
+            .register_request(
+                "req-1",
+                "server-1",
+                "tools/call",
+                Some(Duration::from_secs(30)),
+            )
+            .await;
+        manager
+            .register_request("req-2", "server-1", "resources/read", None)
+            .await;
+        manager
+            .register_request("req-3", "server-2", "tools/call", None)
+            .await;
+
         let stats = manager.get_stats().await;
-        
+
         assert_eq!(stats.active_requests, 3);
         assert_eq!(stats.by_server.get("server-1"), Some(&2));
         assert_eq!(stats.by_server.get("server-2"), Some(&1));

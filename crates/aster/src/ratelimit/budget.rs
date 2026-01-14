@@ -39,7 +39,6 @@ pub struct BudgetManager {
     budget_limit: RwLock<Option<f64>>,
 }
 
-
 impl BudgetManager {
     /// 创建新的预算管理器
     pub fn new(budget_limit: Option<f64>) -> Self {
@@ -76,7 +75,6 @@ impl BudgetManager {
         }
     }
 
-
     /// 获取剩余预算
     pub fn get_remaining_budget(&self) -> Option<f64> {
         let limit = self.budget_limit.read();
@@ -110,15 +108,24 @@ impl BudgetManager {
 
     /// 获取模型成本
     pub fn get_model_cost(&self, model: &str) -> f64 {
-        self.tracker.read().cost_per_model.get(model).copied().unwrap_or(0.0)
+        self.tracker
+            .read()
+            .cost_per_model
+            .get(model)
+            .copied()
+            .unwrap_or(0.0)
     }
 
     /// 获取会话成本
     pub fn get_session_cost(&self, session_id: &str) -> f64 {
-        self.tracker.read().cost_per_session.get(session_id).copied().unwrap_or(0.0)
+        self.tracker
+            .read()
+            .cost_per_session
+            .get(session_id)
+            .copied()
+            .unwrap_or(0.0)
     }
 }
-
 
 impl Default for BudgetManager {
     fn default() -> Self {

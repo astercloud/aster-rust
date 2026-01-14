@@ -13,8 +13,7 @@ use std::path::PathBuf;
 use tokio::fs;
 
 use super::types::{
-    PersistedTaskState, PersistedAgentState, PersistenceStats,
-    TaskStats, AgentStats, TaskType,
+    AgentStats, PersistedAgentState, PersistedTaskState, PersistenceStats, TaskStats, TaskType,
 };
 
 /// 持久化配置
@@ -25,7 +24,6 @@ pub struct PersistenceOptions {
     pub expiry_time_ms: u64,
     pub compress: bool,
 }
-
 
 impl Default for PersistenceOptions {
     fn default() -> Self {
@@ -49,7 +47,7 @@ impl PersistenceManager {
     /// 创建新的持久化管理器
     pub async fn new(options: PersistenceOptions) -> Result<Self, String> {
         let storage_dir = options.storage_dir.clone();
-        
+
         // 确保存储目录存在
         if !storage_dir.exists() {
             fs::create_dir_all(&storage_dir)
@@ -57,9 +55,11 @@ impl PersistenceManager {
                 .map_err(|e| format!("Failed to create storage directory: {}", e))?;
         }
 
-        Ok(Self { storage_dir, options })
+        Ok(Self {
+            storage_dir,
+            options,
+        })
     }
-
 
     /// 获取任务文件路径
     fn get_task_file_path(&self, id: &str, task_type: TaskType) -> PathBuf {
@@ -76,18 +76,18 @@ impl PersistenceManager {
         let file_path = self.get_task_file_path(&task.id, task.task_type);
         let data = serde_json::to_string_pretty(task)
             .map_err(|e| format!("Failed to serialize task: {}", e))?;
-        
+
         fs::write(&file_path, data)
             .await
             .map_err(|e| format!("Failed to write task file: {}", e))?;
-        
+
         Ok(())
     }
 
     /// 加载任务状态
     pub async fn load_task(&self, id: &str, task_type: TaskType) -> Option<PersistedTaskState> {
         let file_path = self.get_task_file_path(id, task_type);
-        
+
         if !file_path.exists() {
             return None;
         }
@@ -104,17 +104,16 @@ impl PersistenceManager {
         Some(task)
     }
 
-
     /// 删除任务状态
     pub async fn delete_task(&self, id: &str, task_type: TaskType) -> Result<(), String> {
         let file_path = self.get_task_file_path(id, task_type);
-        
+
         if file_path.exists() {
             fs::remove_file(&file_path)
                 .await
                 .map_err(|e| format!("Failed to delete task file: {}", e))?;
         }
-        
+
         Ok(())
     }
 
@@ -127,10 +126,12 @@ impl PersistenceManager {
 
     /// 保存 Agent 状态
     pub async fn save_agent(&self, agent: &PersistedAgentState) -> Result<(), String> {
-        let agent_dir = self.storage_dir.parent()
+        let agent_dir = self
+            .storage_dir
+            .parent()
             .unwrap_or(&self.storage_dir)
             .join("agents");
-        
+
         if !agent_dir.exists() {
             fs::create_dir_all(&agent_dir)
                 .await
@@ -140,18 +141,19 @@ impl PersistenceManager {
         let file_path = agent_dir.join(format!("{}.json", agent.id));
         let data = serde_json::to_string_pretty(agent)
             .map_err(|e| format!("Failed to serialize agent: {}", e))?;
-        
+
         fs::write(&file_path, data)
             .await
             .map_err(|e| format!("Failed to write agent file: {}", e))?;
-        
+
         Ok(())
     }
 
-
     /// 加载 Agent 状态
     pub async fn load_agent(&self, id: &str) -> Option<PersistedAgentState> {
-        let agent_dir = self.storage_dir.parent()
+        let agent_dir = self
+            .storage_dir
+            .parent()
             .unwrap_or(&self.storage_dir)
             .join("agents");
         let file_path = agent_dir.join(format!("{}.json", id));
@@ -167,7 +169,7 @@ impl PersistenceManager {
     /// 列出所有保存的任务
     pub async fn list_tasks(&self, task_type: Option<TaskType>) -> Vec<PersistedTaskState> {
         let mut tasks = Vec::new();
-        
+
         let mut entries = match fs::read_dir(&self.storage_dir).await {
             Ok(e) => e,
             Err(_) => return tasks,
@@ -179,9 +181,7 @@ impl PersistenceManager {
                 continue;
             }
 
-            let file_name = path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             let file_type = if file_name.starts_with("bash_") {
                 Some(TaskType::Bash)
@@ -207,11 +207,12 @@ impl PersistenceManager {
         tasks
     }
 
-
     /// 列出所有保存的 Agent
     pub async fn list_agents(&self) -> Vec<PersistedAgentState> {
         let mut agents = Vec::new();
-        let agent_dir = self.storage_dir.parent()
+        let agent_dir = self
+            .storage_dir
+            .parent()
             .unwrap_or(&self.storage_dir)
             .join("agents");
 
@@ -254,7 +255,6 @@ impl PersistenceManager {
         cleaned
     }
 
-
     /// 清理已完成的任务
     pub async fn cleanup_completed(&self) -> usize {
         let tasks = self.list_tasks(None).await;
@@ -274,7 +274,7 @@ impl PersistenceManager {
     /// 清除所有任务
     pub async fn clear_all(&self) -> usize {
         let mut cleared = 0;
-        
+
         let mut entries = match fs::read_dir(&self.storage_dir).await {
             Ok(e) => e,
             Err(_) => return cleared,
@@ -291,7 +291,6 @@ impl PersistenceManager {
 
         cleared
     }
-
 
     /// 获取统计信息
     pub async fn get_stats(&self) -> PersistenceStats {

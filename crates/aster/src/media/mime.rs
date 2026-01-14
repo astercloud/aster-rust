@@ -15,23 +15,14 @@ pub fn get_mime_type_sync(buffer: &[u8]) -> Option<&'static str> {
     }
 
     // JPEG: FF D8 FF
-    if buffer.len() >= 3
-        && buffer[0] == 0xFF
-        && buffer[1] == 0xD8
-        && buffer[2] == 0xFF
-    {
+    if buffer.len() >= 3 && buffer[0] == 0xFF && buffer[1] == 0xD8 && buffer[2] == 0xFF {
         return Some("image/jpeg");
     }
 
     // GIF: 47 49 46
-    if buffer.len() >= 6
-        && buffer[0] == 0x47
-        && buffer[1] == 0x49
-        && buffer[2] == 0x46
-    {
+    if buffer.len() >= 6 && buffer[0] == 0x47 && buffer[1] == 0x49 && buffer[2] == 0x46 {
         return Some("image/gif");
     }
-
 
     // WebP: 52 49 46 46 ... 57 45 42 50
     if buffer.len() >= 12
@@ -69,7 +60,6 @@ pub fn get_mime_type_sync(buffer: &[u8]) -> Option<&'static str> {
 
     None
 }
-
 
 /// 媒体类别
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

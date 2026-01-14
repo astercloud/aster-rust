@@ -16,8 +16,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use std::sync::RwLock;
 use serde::{Deserialize, Serialize};
+use std::sync::RwLock;
 
 // Re-export tools
 pub use edit::EditTool;
@@ -154,7 +154,9 @@ impl FileReadHistory {
     /// - Some(false) if the file has not been modified
     /// - None if the file has not been read or mtime is not available
     pub fn is_file_modified(&self, path: &PathBuf, current_mtime: SystemTime) -> Option<bool> {
-        self.records.get(path).map(|record| record.is_modified(current_mtime))
+        self.records
+            .get(path)
+            .map(|record| record.is_modified(current_mtime))
     }
 }
 
@@ -182,11 +184,7 @@ mod tests {
 
     #[test]
     fn test_file_read_record_new() {
-        let record = FileReadRecord::new(
-            PathBuf::from("/tmp/test.txt"),
-            "abc123".to_string(),
-            100,
-        );
+        let record = FileReadRecord::new(PathBuf::from("/tmp/test.txt"), "abc123".to_string(), 100);
 
         assert_eq!(record.path, PathBuf::from("/tmp/test.txt"));
         assert_eq!(record.content_hash, "abc123");
@@ -198,24 +196,16 @@ mod tests {
     #[test]
     fn test_file_read_record_with_mtime() {
         let mtime = SystemTime::now();
-        let record = FileReadRecord::new(
-            PathBuf::from("/tmp/test.txt"),
-            "abc123".to_string(),
-            100,
-        )
-        .with_mtime(mtime);
+        let record = FileReadRecord::new(PathBuf::from("/tmp/test.txt"), "abc123".to_string(), 100)
+            .with_mtime(mtime);
 
         assert_eq!(record.mtime, Some(mtime));
     }
 
     #[test]
     fn test_file_read_record_with_line_count() {
-        let record = FileReadRecord::new(
-            PathBuf::from("/tmp/test.txt"),
-            "abc123".to_string(),
-            100,
-        )
-        .with_line_count(50);
+        let record = FileReadRecord::new(PathBuf::from("/tmp/test.txt"), "abc123".to_string(), 100)
+            .with_line_count(50);
 
         assert_eq!(record.line_count, Some(50));
     }
@@ -223,12 +213,8 @@ mod tests {
     #[test]
     fn test_file_read_record_is_modified() {
         let mtime = SystemTime::now();
-        let record = FileReadRecord::new(
-            PathBuf::from("/tmp/test.txt"),
-            "abc123".to_string(),
-            100,
-        )
-        .with_mtime(mtime);
+        let record = FileReadRecord::new(PathBuf::from("/tmp/test.txt"), "abc123".to_string(), 100)
+            .with_mtime(mtime);
 
         // Same mtime - not modified
         assert!(!record.is_modified(mtime));
@@ -324,8 +310,7 @@ mod tests {
         let mut history = FileReadHistory::new();
         let path = PathBuf::from("/tmp/test.txt");
         let mtime = SystemTime::now();
-        let record = FileReadRecord::new(path.clone(), "abc123".to_string(), 100)
-            .with_mtime(mtime);
+        let record = FileReadRecord::new(path.clone(), "abc123".to_string(), 100).with_mtime(mtime);
 
         history.record_read(record);
 

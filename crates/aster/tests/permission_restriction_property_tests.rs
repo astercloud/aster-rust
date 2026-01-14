@@ -35,11 +35,7 @@ fn arb_bool_value() -> impl Strategy<Value = Value> {
 
 /// Generate arbitrary JSON values (strings, numbers, bools)
 fn arb_json_value() -> impl Strategy<Value = Value> {
-    prop_oneof![
-        arb_string_value(),
-        arb_number_value(),
-        arb_bool_value(),
-    ]
+    prop_oneof![arb_string_value(), arb_number_value(), arb_bool_value(),]
 }
 
 /// Generate a list of unique string values for whitelist/blacklist
@@ -47,12 +43,8 @@ fn arb_value_list(size: usize) -> impl Strategy<Value = Vec<Value>> {
     prop::collection::vec(arb_string_value(), 1..=size)
 }
 
-
 /// Generate a whitelist restriction
-fn arb_whitelist_restriction(
-    param_name: String,
-    values: Vec<Value>,
-) -> ParameterRestriction {
+fn arb_whitelist_restriction(param_name: String, values: Vec<Value>) -> ParameterRestriction {
     ParameterRestriction {
         parameter: param_name,
         restriction_type: RestrictionType::Whitelist,
@@ -67,10 +59,7 @@ fn arb_whitelist_restriction(
 }
 
 /// Generate a blacklist restriction
-fn arb_blacklist_restriction(
-    param_name: String,
-    values: Vec<Value>,
-) -> ParameterRestriction {
+fn arb_blacklist_restriction(param_name: String, values: Vec<Value>) -> ParameterRestriction {
     ParameterRestriction {
         parameter: param_name,
         restriction_type: RestrictionType::Blacklist,
@@ -103,7 +92,6 @@ fn arb_range_restriction(
     }
 }
 
-
 // ============================================================================
 // Property Tests
 // ============================================================================
@@ -125,14 +113,14 @@ proptest! {
     ) {
         let safe_index = index % values.len();
         let restriction = arb_whitelist_restriction("param".to_string(), values.clone());
-        
+
         // Value in whitelist should pass
         let value_in_list = &values[safe_index];
         prop_assert!(
             validate_restriction(&restriction, value_in_list),
             "Value in whitelist should be allowed"
         );
-        
+
         // Value not in whitelist should fail
         let value_not_in_list = Value::String("__definitely_not_in_list__".to_string());
         prop_assert!(
@@ -155,14 +143,14 @@ proptest! {
     ) {
         let safe_index = index % values.len();
         let restriction = arb_blacklist_restriction("param".to_string(), values.clone());
-        
+
         // Value in blacklist should fail
         let value_in_list = &values[safe_index];
         prop_assert!(
             !validate_restriction(&restriction, value_in_list),
             "Value in blacklist should be denied"
         );
-        
+
         // Value not in blacklist should pass
         let value_not_in_list = Value::String("__definitely_not_in_list__".to_string());
         prop_assert!(
@@ -186,10 +174,10 @@ proptest! {
     ) {
         let whitelist = arb_whitelist_restriction("param".to_string(), values.clone());
         let blacklist = arb_blacklist_restriction("param".to_string(), values);
-        
+
         let whitelist_result = validate_restriction(&whitelist, &test_value);
         let blacklist_result = validate_restriction(&blacklist, &test_value);
-        
+
         // If value is in list: whitelist allows, blacklist denies
         // If value is not in list: whitelist denies, blacklist allows
         prop_assert_ne!(
@@ -213,10 +201,10 @@ proptest! {
     ) {
         let restriction = arb_range_restriction("count".to_string(), Some(min), Some(max));
         let test_value = serde_json::json!(value_offset);
-        
+
         let result = validate_restriction(&restriction, &test_value);
         let expected = value_offset >= min && value_offset <= max;
-        
+
         prop_assert_eq!(
             result, expected,
             "Range validation should correctly check boundaries: value={}, min={}, max={}",
@@ -237,10 +225,10 @@ proptest! {
     ) {
         let restriction = arb_range_restriction("count".to_string(), Some(min), None);
         let test_value = serde_json::json!(value);
-        
+
         let result = validate_restriction(&restriction, &test_value);
         let expected = value >= min;
-        
+
         prop_assert_eq!(
             result, expected,
             "Range with only min should allow values >= min"
@@ -261,10 +249,10 @@ proptest! {
     ) {
         let restriction = arb_range_restriction("count".to_string(), None, Some(max));
         let test_value = serde_json::json!(value);
-        
+
         let result = validate_restriction(&restriction, &test_value);
         let expected = value <= max;
-        
+
         prop_assert_eq!(
             result, expected,
             "Range with only max should allow values <= max"
@@ -294,9 +282,9 @@ proptest! {
             required: false,
             description: Some("Custom validator".to_string()),
         };
-        
+
         let result = validate_restriction(&restriction, &test_value);
-        
+
         prop_assert_eq!(
             result, validator_returns,
             "Custom validator result should be respected"
@@ -314,9 +302,9 @@ proptest! {
         test_value in arb_json_value()
     ) {
         let restriction = arb_whitelist_restriction("param".to_string(), vec![]);
-        
+
         let result = validate_restriction(&restriction, &test_value);
-        
+
         prop_assert!(
             !result,
             "Empty whitelist should deny all values"
@@ -335,9 +323,9 @@ proptest! {
         test_value in arb_json_value()
     ) {
         let restriction = arb_blacklist_restriction("param".to_string(), vec![]);
-        
+
         let result = validate_restriction(&restriction, &test_value);
-        
+
         prop_assert!(
             result,
             "Empty blacklist should allow all values"
@@ -368,12 +356,12 @@ proptest! {
                 description: None,
             },
         ];
-        
+
         let mut params = HashMap::new();
         params.insert("cmd".to_string(), allowed_value);
-        
+
         let result = check_parameter_restrictions(&restrictions, &params);
-        
+
         prop_assert!(
             result.is_ok(),
             "check_parameter_restrictions should return Ok when all restrictions pass"
@@ -405,17 +393,17 @@ proptest! {
                 description: None,
             },
         ];
-        
+
         let mut params = HashMap::new();
         params.insert("cmd".to_string(), denied_value);
-        
+
         let result = check_parameter_restrictions(&restrictions, &params);
-        
+
         prop_assert!(
             result.is_err(),
             "check_parameter_restrictions should return Err when any restriction fails"
         );
-        
+
         let violations = result.unwrap_err();
         prop_assert!(
             !violations.is_empty(),
@@ -452,16 +440,16 @@ proptest! {
                 description: None,
             },
         ];
-        
+
         let params = HashMap::new(); // Empty params
-        
+
         let result = check_parameter_restrictions(&restrictions, &params);
-        
+
         prop_assert!(
             result.is_err(),
             "Missing required parameter should cause error"
         );
-        
+
         let violations = result.unwrap_err();
         prop_assert!(
             violations.iter().any(|v| v.contains("Required") && v.contains(&param_name)),
@@ -493,11 +481,11 @@ proptest! {
                 description: None,
             },
         ];
-        
+
         let params = HashMap::new(); // Empty params
-        
+
         let result = check_parameter_restrictions(&restrictions, &params);
-        
+
         prop_assert!(
             result.is_ok(),
             "Missing optional parameter should not cause error"
@@ -529,17 +517,17 @@ proptest! {
                 description: None,
             })
             .collect();
-        
+
         // Provide values that will all fail
         let mut params = HashMap::new();
         for i in 0..num_restrictions {
             params.insert(format!("param{}", i), Value::String("denied".to_string()));
         }
-        
+
         let result = check_parameter_restrictions(&restrictions, &params);
-        
+
         prop_assert!(result.is_err(), "Should have violations");
-        
+
         let violations = result.unwrap_err();
         prop_assert_eq!(
             violations.len(), num_restrictions,
@@ -560,12 +548,12 @@ proptest! {
         param_value in arb_json_value()
     ) {
         let restrictions: Vec<ParameterRestriction> = vec![];
-        
+
         let mut params = HashMap::new();
         params.insert(param_name, param_value);
-        
+
         let result = check_parameter_restrictions(&restrictions, &params);
-        
+
         prop_assert!(
             result.is_ok(),
             "Empty restrictions should allow all parameters"
@@ -604,14 +592,14 @@ proptest! {
             required: false,
             description: None,
         };
-        
+
         // Value that matches
         let matching_value = Value::String(format!("{}{}", prefix, suffix));
         prop_assert!(
             validate_restriction(&restriction, &matching_value),
             "Value matching pattern should be allowed"
         );
-        
+
         // Value that doesn't match (different prefix)
         let non_matching_value = Value::String(format!("XX{}", suffix));
         prop_assert!(
@@ -641,16 +629,15 @@ proptest! {
             required: false,
             description: None,
         };
-        
+
         let result = validate_restriction(&restriction, &test_value);
-        
+
         prop_assert!(
             result,
             "Pattern restriction with None pattern should allow all strings"
         );
     }
 }
-
 
 // ============================================================================
 // Edge Case Unit Tests
@@ -674,7 +661,10 @@ mod edge_case_tests {
             description: None,
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("anything".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("anything".to_string())
+        ));
     }
 
     #[test]
@@ -691,7 +681,10 @@ mod edge_case_tests {
             description: None,
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("anything".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("anything".to_string())
+        ));
     }
 
     #[test]
@@ -709,11 +702,20 @@ mod edge_case_tests {
         };
 
         // String that can be parsed as number
-        assert!(validate_restriction(&restriction, &Value::String("50".to_string())));
-        assert!(!validate_restriction(&restriction, &Value::String("150".to_string())));
-        
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("50".to_string())
+        ));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("150".to_string())
+        ));
+
         // String that cannot be parsed
-        assert!(!validate_restriction(&restriction, &Value::String("not a number".to_string())));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("not a number".to_string())
+        ));
     }
 
     #[test]
@@ -732,7 +734,10 @@ mod edge_case_tests {
 
         assert!(!validate_restriction(&restriction, &Value::Bool(true)));
         assert!(!validate_restriction(&restriction, &Value::Null));
-        assert!(!validate_restriction(&restriction, &serde_json::json!({"key": "value"})));
+        assert!(!validate_restriction(
+            &restriction,
+            &serde_json::json!({"key": "value"})
+        ));
     }
 
     #[test]
@@ -750,7 +755,10 @@ mod edge_case_tests {
         };
 
         // Invalid regex should cause validation to fail
-        assert!(!validate_restriction(&restriction, &Value::String("anything".to_string())));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("anything".to_string())
+        ));
     }
 
     #[test]
@@ -786,29 +794,33 @@ mod edge_case_tests {
             description: None,
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("anything".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("anything".to_string())
+        ));
     }
 
     #[test]
     fn test_check_restrictions_with_extra_params() {
         // Extra parameters not covered by restrictions should be allowed
-        let restrictions = vec![
-            ParameterRestriction {
-                parameter: "cmd".to_string(),
-                restriction_type: RestrictionType::Whitelist,
-                values: Some(vec![Value::String("ls".to_string())]),
-                pattern: None,
-                validator: None,
-                min: None,
-                max: None,
-                required: false,
-                description: None,
-            },
-        ];
+        let restrictions = vec![ParameterRestriction {
+            parameter: "cmd".to_string(),
+            restriction_type: RestrictionType::Whitelist,
+            values: Some(vec![Value::String("ls".to_string())]),
+            pattern: None,
+            validator: None,
+            min: None,
+            max: None,
+            required: false,
+            description: None,
+        }];
 
         let mut params = HashMap::new();
         params.insert("cmd".to_string(), Value::String("ls".to_string()));
-        params.insert("extra_param".to_string(), Value::String("extra_value".to_string()));
+        params.insert(
+            "extra_param".to_string(),
+            Value::String("extra_value".to_string()),
+        );
 
         let result = check_parameter_restrictions(&restrictions, &params);
         assert!(result.is_ok());
@@ -832,10 +844,16 @@ mod edge_case_tests {
             description: None,
         };
 
-        assert!(validate_restriction(&restriction, &Value::String("text".to_string())));
+        assert!(validate_restriction(
+            &restriction,
+            &Value::String("text".to_string())
+        ));
         assert!(validate_restriction(&restriction, &serde_json::json!(42)));
         assert!(validate_restriction(&restriction, &Value::Bool(true)));
-        assert!(!validate_restriction(&restriction, &Value::String("other".to_string())));
+        assert!(!validate_restriction(
+            &restriction,
+            &Value::String("other".to_string())
+        ));
     }
 
     #[test]
@@ -855,9 +873,15 @@ mod edge_case_tests {
         // Boundary values should be included
         assert!(validate_restriction(&restriction, &serde_json::json!(0)));
         assert!(validate_restriction(&restriction, &serde_json::json!(100)));
-        
+
         // Just outside boundaries
-        assert!(!validate_restriction(&restriction, &serde_json::json!(-0.001)));
-        assert!(!validate_restriction(&restriction, &serde_json::json!(100.001)));
+        assert!(!validate_restriction(
+            &restriction,
+            &serde_json::json!(-0.001)
+        ));
+        assert!(!validate_restriction(
+            &restriction,
+            &serde_json::json!(100.001)
+        ));
     }
 }

@@ -23,7 +23,6 @@ pub struct SafetyCheckResult {
     pub suggestion: Option<String>,
 }
 
-
 impl SafetyCheckResult {
     /// 创建安全结果
     pub fn safe() -> Self {
@@ -55,7 +54,6 @@ impl SafetyCheckResult {
         }
     }
 }
-
 
 /// 敏感文件检查结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,7 +93,6 @@ static CAUTION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     ]
 });
 
-
 /// 敏感文件模式
 static SENSITIVE_FILE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
@@ -119,7 +116,6 @@ static SENSITIVE_FILE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 
 /// Git 安全检查工具类
 pub struct GitSafety;
-
 
 impl GitSafety {
     /// 检查 Git 命令是否安全
@@ -151,7 +147,6 @@ impl GitSafety {
     pub fn is_dangerous(command: &str) -> bool {
         !Self::validate_git_command(command).safe
     }
-
 
     /// 检查是否强制推送到 main/master
     pub fn check_force_push_to_main(command: &str, current_branch: &str) -> SafetyCheckResult {
@@ -198,7 +193,6 @@ impl GitSafety {
         }
     }
 
-
     /// 检查是否跳过钩子
     pub fn check_skip_hooks(command: &str) -> SafetyCheckResult {
         if command.contains("--no-verify") {
@@ -230,7 +224,6 @@ impl GitSafety {
 
         SafetyCheckResult::safe()
     }
-
 
     /// 综合安全检查
     pub fn comprehensive_check(
@@ -270,7 +263,10 @@ impl GitSafety {
                 let sensitive_check = Self::check_sensitive_files(file_list);
                 if sensitive_check.has_sensitive_files {
                     return SafetyCheckResult::safe_with_warning(
-                        format!("检测到敏感文件: {}", sensitive_check.sensitive_files.join(", ")),
+                        format!(
+                            "检测到敏感文件: {}",
+                            sensitive_check.sensitive_files.join(", ")
+                        ),
                         "不要提交可能包含密钥的文件 (.env, credentials.json 等)。",
                     );
                 }
@@ -285,7 +281,6 @@ impl GitSafety {
         SafetyCheckResult::safe()
     }
 }
-
 
 /// 检查是否是危险的 Git 命令（便捷函数）
 pub fn is_dangerous_command(command: &str) -> bool {

@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use super::config::{LSPServerConfig, default_lsp_configs, load_lsp_config_file};
-use super::server::{LSPServer, LSPServerState, LSPDiagnostic};
+use super::config::{default_lsp_configs, load_lsp_config_file, LSPServerConfig};
+use super::server::{LSPDiagnostic, LSPServer, LSPServerState};
 
 /// 初始化选项
 #[derive(Debug, Clone, Default)]
@@ -20,7 +20,6 @@ pub struct InitializeLSPOptions {
     /// 自定义服务器配置
     pub custom_configs: Vec<LSPServerConfig>,
 }
-
 
 /// LSP 服务器管理器
 pub struct LSPServerManager {
@@ -43,7 +42,6 @@ impl LSPServerManager {
         }
     }
 
-
     /// 注册 LSP 服务器配置
     pub async fn register_server(&self, config: LSPServerConfig) {
         // 建立扩展名索引
@@ -54,7 +52,10 @@ impl LSPServerManager {
             } else {
                 format!(".{}", ext.to_lowercase())
             };
-            ext_map.entry(normalized).or_default().push(config.name.clone());
+            ext_map
+                .entry(normalized)
+                .or_default()
+                .push(config.name.clone());
         }
 
         self.server_configs.write().await.push(config);
@@ -68,7 +69,6 @@ impl LSPServerManager {
         }
         configs
     }
-
 
     /// 初始化所有服务器
     pub async fn initialize(&self, options: InitializeLSPOptions) -> Result<(), String> {
@@ -87,8 +87,13 @@ impl LSPServerManager {
 
         // 3. 注册默认服务器
         if options.use_defaults {
-            let existing: std::collections::HashSet<_> = self.server_configs.read().await
-                .iter().map(|c| c.name.clone()).collect();
+            let existing: std::collections::HashSet<_> = self
+                .server_configs
+                .read()
+                .await
+                .iter()
+                .map(|c| c.name.clone())
+                .collect();
             for config in default_lsp_configs() {
                 if !existing.contains(&config.name) {
                     self.register_server(config).await;
@@ -104,14 +109,16 @@ impl LSPServerManager {
                 tracing::warn!("[LSP] 启动 {} 失败: {}", config.name, e);
                 continue;
             }
-            self.servers.write().await.insert(config.name.clone(), server);
+            self.servers
+                .write()
+                .await
+                .insert(config.name.clone(), server);
         }
 
         let count = self.servers.read().await.len();
         tracing::info!("[LSP] 初始化完成: {} 个服务器启动成功", count);
         Ok(())
     }
-
 
     /// 关闭所有服务器
     pub async fn shutdown(&self) {
@@ -156,7 +163,12 @@ impl LSPServerManager {
     /// 获取文件的诊断信息
     pub async fn get_file_diagnostics(&self, file_path: &Path) -> Vec<LSPDiagnostic> {
         let uri = format!("file://{}", file_path.display());
-        self.diagnostics_cache.read().await.get(&uri).cloned().unwrap_or_default()
+        self.diagnostics_cache
+            .read()
+            .await
+            .get(&uri)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// 清除诊断缓存

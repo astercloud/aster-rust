@@ -35,13 +35,15 @@ pub struct PRComment {
     pub created_at: String,
 }
 
-
 /// 获取 PR 信息
 pub async fn get_pr_info(pr_number: u32) -> Option<PRInfo> {
     let output = Command::new("gh")
         .args([
-            "pr", "view", &pr_number.to_string(),
-            "--json", "title,body,author,state,additions,deletions,changedFiles",
+            "pr",
+            "view",
+            &pr_number.to_string(),
+            "--json",
+            "title,body,author,state,additions,deletions,changedFiles",
         ])
         .output()
         .await
@@ -52,7 +54,7 @@ pub async fn get_pr_info(pr_number: u32) -> Option<PRInfo> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     #[derive(Deserialize)]
     struct GhPRInfo {
         title: String,
@@ -75,7 +77,10 @@ pub async fn get_pr_info(pr_number: u32) -> Option<PRInfo> {
     Some(PRInfo {
         title: data.title,
         body: data.body.unwrap_or_default(),
-        author: data.author.map(|a| a.login).unwrap_or_else(|| "unknown".to_string()),
+        author: data
+            .author
+            .map(|a| a.login)
+            .unwrap_or_else(|| "unknown".to_string()),
         state: data.state,
         additions: data.additions,
         deletions: data.deletions,
@@ -83,14 +88,10 @@ pub async fn get_pr_info(pr_number: u32) -> Option<PRInfo> {
     })
 }
 
-
 /// 获取 PR 评论
 pub async fn get_pr_comments(pr_number: u32) -> Vec<PRComment> {
     let output = Command::new("gh")
-        .args([
-            "pr", "view", &pr_number.to_string(),
-            "--json", "comments",
-        ])
+        .args(["pr", "view", &pr_number.to_string(), "--json", "comments"])
         .output()
         .await;
 
@@ -127,7 +128,10 @@ pub async fn get_pr_comments(pr_number: u32) -> Vec<PRComment> {
     data.comments
         .into_iter()
         .map(|c| PRComment {
-            author: c.author.map(|a| a.login).unwrap_or_else(|| "unknown".to_string()),
+            author: c
+                .author
+                .map(|a| a.login)
+                .unwrap_or_else(|| "unknown".to_string()),
             body: c.body,
             created_at: c.created_at,
         })
@@ -143,7 +147,6 @@ pub async fn add_pr_comment(pr_number: u32, body: &str) -> bool {
 
     output.map(|o| o.status.success()).unwrap_or(false)
 }
-
 
 /// 创建 PR 选项
 #[derive(Debug, Clone, Default)]
@@ -196,10 +199,7 @@ pub async fn create_pr(options: CreatePROptions) -> CreatePRResult {
         args.push("--draft".to_string());
     }
 
-    let output = Command::new("gh")
-        .args(&args)
-        .output()
-        .await;
+    let output = Command::new("gh").args(&args).output().await;
 
     match output {
         Ok(o) if o.status.success() => {

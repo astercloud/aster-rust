@@ -23,7 +23,6 @@ pub enum LSPServerState {
     Stopped,
 }
 
-
 /// LSP 诊断信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LSPDiagnostic {
@@ -57,7 +56,6 @@ struct OpenDocument {
     content: String,
 }
 
-
 /// LSP 服务器实例
 pub struct LSPServer {
     config: LSPServerConfig,
@@ -84,7 +82,6 @@ impl LSPServer {
             request_tx: None,
         }
     }
-
 
     /// 启动 LSP 服务器
     pub async fn start(&mut self, workspace_root: &Path) -> Result<(), String> {
@@ -123,7 +120,6 @@ impl LSPServer {
         }
     }
 
-
     /// 停止 LSP 服务器
     pub async fn stop(&mut self) -> Result<(), String> {
         let mut state = self.state.write().await;
@@ -161,7 +157,6 @@ impl LSPServer {
         *self.restart_count.read().await
     }
 
-
     /// 打开文档
     pub async fn open_document(&self, file_path: &Path, content: &str, language_id: &str) {
         let uri = format!("file://{}", file_path.display());
@@ -171,17 +166,26 @@ impl LSPServer {
             version: 1,
             content: content.to_string(),
         };
-        self.open_documents.write().await.insert(file_path.display().to_string(), doc);
+        self.open_documents
+            .write()
+            .await
+            .insert(file_path.display().to_string(), doc);
     }
 
     /// 关闭文档
     pub async fn close_document(&self, file_path: &Path) {
-        self.open_documents.write().await.remove(&file_path.display().to_string());
+        self.open_documents
+            .write()
+            .await
+            .remove(&file_path.display().to_string());
     }
 
     /// 检查文档是否打开
     pub async fn is_document_open(&self, file_path: &Path) -> bool {
-        self.open_documents.read().await.contains_key(&file_path.display().to_string())
+        self.open_documents
+            .read()
+            .await
+            .contains_key(&file_path.display().to_string())
     }
 
     /// 获取下一个请求 ID

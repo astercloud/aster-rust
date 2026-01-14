@@ -12,8 +12,7 @@ use tokio_util::sync::CancellationToken;
 use crate::config::permission::PermissionLevel;
 use crate::mcp_utils::ToolResult;
 use crate::permission::{
-    AuditLogEntry, AuditLogLevel, AuditLogger, Permission, PermissionContext,
-    ToolPermissionManager,
+    AuditLogEntry, AuditLogLevel, AuditLogger, Permission, PermissionContext, ToolPermissionManager,
 };
 use crate::tools::{ToolContext, ToolRegistry};
 use rmcp::model::{Content, ServerNotification};
@@ -187,8 +186,7 @@ impl Agent {
         session: &Session,
         cancellation_token: Option<CancellationToken>,
     ) -> ToolContext {
-        let mut ctx = ToolContext::new(session.working_dir.clone())
-            .with_session_id(&session.id);
+        let mut ctx = ToolContext::new(session.working_dir.clone()).with_session_id(&session.id);
 
         if let Some(token) = cancellation_token {
             ctx = ctx.with_cancellation_token(token);
@@ -244,7 +242,9 @@ impl Agent {
         on_permission_request: Option<crate::tools::PermissionRequestCallback>,
     ) -> Result<crate::tools::ToolResult, crate::tools::ToolError> {
         let context = Self::create_tool_context(session, cancellation_token);
-        registry.execute(tool_name, params, &context, on_permission_request).await
+        registry
+            .execute(tool_name, params, &context, on_permission_request)
+            .await
     }
 
     /// Log a tool execution to the audit logger
@@ -313,9 +313,7 @@ impl Agent {
     fn params_to_hashmap(params: &serde_json::Value) -> HashMap<String, serde_json::Value> {
         match params {
             serde_json::Value::Object(map) => {
-                map.iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect()
+                map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
             }
             _ => HashMap::new(),
         }
@@ -351,7 +349,9 @@ impl Agent {
         if result.allowed {
             Ok(())
         } else {
-            Err(result.reason.unwrap_or_else(|| format!("Permission denied for tool '{}'", tool_name)))
+            Err(result
+                .reason
+                .unwrap_or_else(|| format!("Permission denied for tool '{}'", tool_name)))
         }
     }
 
@@ -398,7 +398,9 @@ impl Agent {
 
         // Step 2: Execute the tool
         let context = Self::create_tool_context(session, cancellation_token);
-        let result = registry.execute(tool_name, params.clone(), &context, None).await;
+        let result = registry
+            .execute(tool_name, params.clone(), &context, None)
+            .await;
 
         // Step 3: Log the execution
         let duration = start_time.elapsed();
@@ -477,7 +479,9 @@ impl Agent {
 
         // Step 2: Execute the tool with permission request callback
         let context = Self::create_tool_context(session, cancellation_token);
-        let result = registry.execute(tool_name, params.clone(), &context, on_permission_request).await;
+        let result = registry
+            .execute(tool_name, params.clone(), &context, on_permission_request)
+            .await;
 
         // Step 3: Log the execution
         let duration = start_time.elapsed();
@@ -527,7 +531,10 @@ impl Agent {
     /// Requirements: 8.2, 8.3
     pub fn create_permission_callback(
         request_id: String,
-        _confirmation_tx: tokio::sync::mpsc::Sender<(String, crate::permission::PermissionConfirmation)>,
+        _confirmation_tx: tokio::sync::mpsc::Sender<(
+            String,
+            crate::permission::PermissionConfirmation,
+        )>,
     ) -> crate::tools::PermissionRequestCallback {
         Box::new(move |tool_name: String, message: String| {
             let req_id = request_id.clone();
@@ -584,4 +591,3 @@ impl Agent {
         audit_logger.log_permission_check(entry);
     }
 }
-

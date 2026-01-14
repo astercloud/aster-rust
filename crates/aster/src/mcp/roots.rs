@@ -3,11 +3,11 @@
 //! Manages root directories for MCP servers. Roots define the base directories
 //! that servers can access, providing a sandboxing mechanism for file operations.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
-use serde::{Deserialize, Serialize};
 
 /// Root directory for MCP protocol
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,7 +101,10 @@ impl McpRootsManager {
         // Initialize with provided roots (blocking for simplicity)
         for root in config.roots {
             let root_info = manager.parse_root_sync(&root);
-            manager.roots.blocking_write().insert(root.uri.clone(), root_info);
+            manager
+                .roots
+                .blocking_write()
+                .insert(root.uri.clone(), root_info);
         }
 
         manager
@@ -115,8 +118,13 @@ impl McpRootsManager {
     /// Add a root directory
     pub async fn add_root(&self, root: Root) -> RootInfo {
         let root_info = self.parse_root(&root);
-        self.roots.write().await.insert(root.uri.clone(), root_info.clone());
-        let _ = self.event_sender.send(RootEvent::RootAdded { root: root_info.clone() });
+        self.roots
+            .write()
+            .await
+            .insert(root.uri.clone(), root_info.clone());
+        let _ = self.event_sender.send(RootEvent::RootAdded {
+            root: root_info.clone(),
+        });
         root_info
     }
 
@@ -124,7 +132,9 @@ impl McpRootsManager {
     pub async fn remove_root(&self, uri: &str) -> Option<RootInfo> {
         let root = self.roots.write().await.remove(uri);
         if let Some(ref r) = root {
-            let _ = self.event_sender.send(RootEvent::RootRemoved { root: r.clone() });
+            let _ = self
+                .event_sender
+                .send(RootEvent::RootRemoved { root: r.clone() });
         }
         root
     }
@@ -195,11 +205,11 @@ impl McpRootsManager {
                 if self.validate_paths {
                     exists = path.exists();
                     if exists {
-                        let read = path.metadata().map(|m| !m.permissions().readonly()).unwrap_or(false);
-                        let write = std::fs::OpenOptions::new()
-                            .write(true)
-                            .open(&path)
-                            .is_ok();
+                        let read = path
+                            .metadata()
+                            .map(|m| !m.permissions().readonly())
+                            .unwrap_or(false);
+                        let write = std::fs::OpenOptions::new().write(true).open(&path).is_ok();
                         permissions = Some(RootPermissions { read, write });
                     }
                 }
@@ -222,7 +232,7 @@ impl McpRootsManager {
         }
 
         let path_str = &uri[7..]; // Remove "file://"
-        
+
         #[cfg(windows)]
         let path_str = if path_str.starts_with('/') && path_str.chars().nth(2) == Some(':') {
             &path_str[1..] // Remove leading / for Windows paths like /C:/
@@ -243,10 +253,10 @@ impl McpRootsManager {
         };
 
         let path_str = absolute.to_string_lossy();
-        
+
         #[cfg(windows)]
         let uri = format!("file:///{}", path_str.replace('\\', "/"));
-        
+
         #[cfg(not(windows))]
         let uri = format!("file://{}", path_str);
 
@@ -274,7 +284,9 @@ impl McpRootsManager {
     /// Check if a path is within a specific root
     fn is_path_in_root(&self, path: &Path, root_path: &Path) -> bool {
         let normalized_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        let normalized_root = root_path.canonicalize().unwrap_or_else(|_| root_path.to_path_buf());
+        let normalized_root = root_path
+            .canonicalize()
+            .unwrap_or_else(|_| root_path.to_path_buf());
         normalized_path.starts_with(&normalized_root)
     }
 
@@ -297,7 +309,11 @@ impl McpRootsManager {
     }
 
     /// Add a root from a local path
-    pub async fn add_root_from_path(&self, path: &Path, name: Option<String>) -> Result<RootInfo, &'static str> {
+    pub async fn add_root_from_path(
+        &self,
+        path: &Path,
+        name: Option<String>,
+    ) -> Result<RootInfo, &'static str> {
         if !self.allow_dynamic_roots {
             return Err("Dynamic roots are not allowed");
         }
@@ -310,13 +326,15 @@ impl McpRootsManager {
     /// Add the current working directory as a root
     pub async fn add_cwd_root(&self, name: Option<String>) -> Result<RootInfo, &'static str> {
         let cwd = std::env::current_dir().map_err(|_| "Could not get current directory")?;
-        self.add_root_from_path(&cwd, name.or(Some("Current Directory".to_string()))).await
+        self.add_root_from_path(&cwd, name.or(Some("Current Directory".to_string())))
+            .await
     }
 
     /// Add home directory as a root
     pub async fn add_home_root(&self, name: Option<String>) -> Result<RootInfo, &'static str> {
         let home = dirs::home_dir().ok_or("Could not determine home directory")?;
-        self.add_root_from_path(&home, name.or(Some("Home Directory".to_string()))).await
+        self.add_root_from_path(&home, name.or(Some("Home Directory".to_string())))
+            .await
     }
 
     /// Get statistics about roots
@@ -325,8 +343,14 @@ impl McpRootsManager {
         RootsStats {
             total_roots: roots.len(),
             existing_roots: roots.iter().filter(|r| r.exists).count(),
-            readable_roots: roots.iter().filter(|r| r.permissions.map(|p| p.read).unwrap_or(false)).count(),
-            writable_roots: roots.iter().filter(|r| r.permissions.map(|p| p.write).unwrap_or(false)).count(),
+            readable_roots: roots
+                .iter()
+                .filter(|r| r.permissions.map(|p| p.read).unwrap_or(false))
+                .count(),
+            writable_roots: roots
+                .iter()
+                .filter(|r| r.permissions.map(|p| p.write).unwrap_or(false))
+                .count(),
             allow_dynamic_roots: self.allow_dynamic_roots,
             validate_paths: self.validate_paths,
         }
@@ -382,7 +406,7 @@ pub fn create_root_from_path(path: &Path, name: Option<String>) -> Root {
 
     #[cfg(windows)]
     let uri = format!("file:///{}", absolute.to_string_lossy().replace('\\', "/"));
-    
+
     #[cfg(not(windows))]
     let uri = format!("file://{}", absolute.to_string_lossy());
 
@@ -393,7 +417,10 @@ pub fn create_root_from_path(path: &Path, name: Option<String>) -> Root {
 pub fn get_default_roots_config() -> RootsConfig {
     let cwd = std::env::current_dir().unwrap_or_default();
     RootsConfig {
-        roots: vec![create_root_from_path(&cwd, Some("Current Directory".to_string()))],
+        roots: vec![create_root_from_path(
+            &cwd,
+            Some("Current Directory".to_string()),
+        )],
         allow_dynamic_roots: true,
         validate_paths: true,
     }
@@ -428,7 +455,7 @@ mod tests {
             uri: "file:///tmp/test".to_string(),
             name: Some("Test".to_string()),
         };
-        
+
         let info = manager.add_root(root).await;
         assert_eq!(info.uri, "file:///tmp/test");
         assert!(manager.has_root("file:///tmp/test").await);
@@ -441,10 +468,10 @@ mod tests {
             uri: "file:///tmp/test".to_string(),
             name: None,
         };
-        
+
         manager.add_root(root).await;
         assert!(manager.has_root("file:///tmp/test").await);
-        
+
         manager.remove_root("file:///tmp/test").await;
         assert!(!manager.has_root("file:///tmp/test").await);
     }
@@ -452,10 +479,20 @@ mod tests {
     #[tokio::test]
     async fn test_manager_get_roots() {
         let manager = McpRootsManager::default();
-        
-        manager.add_root(Root { uri: "file:///tmp/a".to_string(), name: None }).await;
-        manager.add_root(Root { uri: "file:///tmp/b".to_string(), name: None }).await;
-        
+
+        manager
+            .add_root(Root {
+                uri: "file:///tmp/a".to_string(),
+                name: None,
+            })
+            .await;
+        manager
+            .add_root(Root {
+                uri: "file:///tmp/b".to_string(),
+                name: None,
+            })
+            .await;
+
         let roots = manager.get_roots().await;
         assert_eq!(roots.len(), 2);
     }
@@ -463,10 +500,20 @@ mod tests {
     #[tokio::test]
     async fn test_manager_clear_roots() {
         let manager = McpRootsManager::default();
-        
-        manager.add_root(Root { uri: "file:///tmp/a".to_string(), name: None }).await;
-        manager.add_root(Root { uri: "file:///tmp/b".to_string(), name: None }).await;
-        
+
+        manager
+            .add_root(Root {
+                uri: "file:///tmp/a".to_string(),
+                name: None,
+            })
+            .await;
+        manager
+            .add_root(Root {
+                uri: "file:///tmp/b".to_string(),
+                name: None,
+            })
+            .await;
+
         manager.clear_roots().await;
         assert!(manager.get_roots().await.is_empty());
     }
@@ -474,12 +521,14 @@ mod tests {
     #[tokio::test]
     async fn test_get_roots_for_protocol() {
         let manager = McpRootsManager::default();
-        
-        manager.add_root(Root {
-            uri: "file:///tmp/test".to_string(),
-            name: Some("Test".to_string()),
-        }).await;
-        
+
+        manager
+            .add_root(Root {
+                uri: "file:///tmp/test".to_string(),
+                name: Some("Test".to_string()),
+            })
+            .await;
+
         let roots = manager.get_roots_for_protocol().await;
         assert_eq!(roots.len(), 1);
         assert_eq!(roots[0].uri, "file:///tmp/test");
@@ -489,10 +538,20 @@ mod tests {
     #[tokio::test]
     async fn test_get_stats() {
         let manager = McpRootsManager::default();
-        
-        manager.add_root(Root { uri: "file:///tmp/a".to_string(), name: None }).await;
-        manager.add_root(Root { uri: "file:///tmp/b".to_string(), name: None }).await;
-        
+
+        manager
+            .add_root(Root {
+                uri: "file:///tmp/a".to_string(),
+                name: None,
+            })
+            .await;
+        manager
+            .add_root(Root {
+                uri: "file:///tmp/b".to_string(),
+                name: None,
+            })
+            .await;
+
         let stats = manager.get_stats().await;
         assert_eq!(stats.total_roots, 2);
         assert!(stats.allow_dynamic_roots);

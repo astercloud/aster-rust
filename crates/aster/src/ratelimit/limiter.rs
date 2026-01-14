@@ -25,7 +25,6 @@ pub struct RateLimitConfig {
     pub retryable_status_codes: Vec<u16>,
 }
 
-
 impl Default for RateLimitConfig {
     fn default() -> Self {
         Self {
@@ -66,12 +65,15 @@ impl Default for RateLimitState {
     }
 }
 
-
 /// 速率限制事件
 #[derive(Debug, Clone)]
 pub enum RateLimitEvent {
     /// 被限流
-    RateLimited { reason: String, current: u32, limit: u32 },
+    RateLimited {
+        reason: String,
+        current: u32,
+        limit: u32,
+    },
     /// 限流重置
     RateLimitReset,
 }
@@ -105,7 +107,6 @@ impl RateLimiter {
         self.event_tx = Some(tx);
         self
     }
-
 
     /// 检查是否需要重置计数器
     fn maybe_reset(&self) {
@@ -148,7 +149,6 @@ impl RateLimiter {
         true
     }
 
-
     /// 记录请求
     pub fn record_request(&self, tokens: Option<u32>) {
         self.maybe_reset();
@@ -183,7 +183,6 @@ impl RateLimiter {
             }
         }
     }
-
 
     /// 处理 API 返回的限流响应
     pub fn handle_rate_limit_response(&self, retry_after: Option<u64>) {
@@ -226,7 +225,6 @@ impl RateLimiter {
         &self.config
     }
 }
-
 
 impl Default for RateLimiter {
     fn default() -> Self {

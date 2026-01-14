@@ -10,16 +10,16 @@
 //! - 多文件恢复
 //! - 压缩和存储优化
 
-pub mod types;
+pub mod diff;
 pub mod session;
 pub mod storage;
-pub mod diff;
+pub mod types;
 
 #[cfg(test)]
 mod tests;
 
 // Re-exports
-pub use types::*;
+pub use diff::*;
 pub use session::*;
 pub use storage::*;
-pub use diff::*;
+pub use types::*;

@@ -468,8 +468,8 @@ mod tests {
 
     #[test]
     fn test_retry_config_calculate_delay_fixed() {
-        let config = RetryConfig::new(3, Duration::from_millis(100))
-            .with_strategy(RetryStrategy::Fixed);
+        let config =
+            RetryConfig::new(3, Duration::from_millis(100)).with_strategy(RetryStrategy::Fixed);
 
         assert_eq!(config.calculate_delay(0), Duration::from_millis(100));
         assert_eq!(config.calculate_delay(1), Duration::from_millis(100));
@@ -478,8 +478,8 @@ mod tests {
 
     #[test]
     fn test_retry_config_calculate_delay_linear() {
-        let config = RetryConfig::new(3, Duration::from_millis(100))
-            .with_strategy(RetryStrategy::Linear);
+        let config =
+            RetryConfig::new(3, Duration::from_millis(100)).with_strategy(RetryStrategy::Linear);
 
         assert_eq!(config.calculate_delay(0), Duration::from_millis(100));
         assert_eq!(config.calculate_delay(1), Duration::from_millis(200));

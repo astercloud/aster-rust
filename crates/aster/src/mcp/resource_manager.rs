@@ -53,7 +53,11 @@ pub struct McpResource {
 
 impl McpResource {
     /// Create a new MCP resource
-    pub fn new(uri: impl Into<String>, name: impl Into<String>, server_name: impl Into<String>) -> Self {
+    pub fn new(
+        uri: impl Into<String>,
+        name: impl Into<String>,
+        server_name: impl Into<String>,
+    ) -> Self {
         Self {
             uri: uri.into(),
             name: name.into(),
@@ -80,7 +84,6 @@ impl McpResource {
         }
     }
 }
-
 
 /// MCP resource template definition
 ///
@@ -133,7 +136,7 @@ impl McpResourceTemplate {
     pub fn get_parameters(&self) -> Vec<String> {
         let mut params = Vec::new();
         let mut chars = self.uri_template.chars().peekable();
-        
+
         while let Some(c) = chars.next() {
             if c == '{' {
                 let mut param = String::new();
@@ -179,7 +182,11 @@ impl ResourceContent {
     }
 
     /// Create binary content
-    pub fn blob(uri: impl Into<String>, blob: impl Into<String>, mime_type: impl Into<String>) -> Self {
+    pub fn blob(
+        uri: impl Into<String>,
+        blob: impl Into<String>,
+        mime_type: impl Into<String>,
+    ) -> Self {
         Self {
             uri: uri.into(),
             text: None,
@@ -211,7 +218,6 @@ pub enum ResourceEvent {
     /// Subscription removed
     Unsubscribed { uri: String, server_name: String },
 }
-
 
 /// Resource cache entry
 #[derive(Debug, Clone)]
@@ -255,7 +261,10 @@ pub trait ResourceManager: Send + Sync {
     async fn list_resources(&self, server_name: Option<&str>) -> McpResult<Vec<McpResource>>;
 
     /// List resource templates from connected servers
-    async fn list_templates(&self, server_name: Option<&str>) -> McpResult<Vec<McpResourceTemplate>>;
+    async fn list_templates(
+        &self,
+        server_name: Option<&str>,
+    ) -> McpResult<Vec<McpResourceTemplate>>;
 
     /// Read resource content by URI
     async fn read_resource(&self, server_name: &str, uri: &str) -> McpResult<ResourceContent>;
@@ -263,7 +272,11 @@ pub trait ResourceManager: Send + Sync {
     /// Read resource content with caching
     ///
     /// Returns cached content if available and not expired.
-    async fn read_resource_cached(&self, server_name: &str, uri: &str) -> McpResult<ResourceContent>;
+    async fn read_resource_cached(
+        &self,
+        server_name: &str,
+        uri: &str,
+    ) -> McpResult<ResourceContent>;
 
     /// Subscribe to resource changes
     async fn subscribe(&self, server_name: &str, uri: &str) -> McpResult<()>;
@@ -284,9 +297,12 @@ pub trait ResourceManager: Send + Sync {
     fn subscribe_events(&self) -> mpsc::Receiver<ResourceEvent>;
 
     /// Expand a URI template with parameters
-    fn expand_template(&self, template: &McpResourceTemplate, params: &HashMap<String, String>) -> String;
+    fn expand_template(
+        &self,
+        template: &McpResourceTemplate,
+        params: &HashMap<String, String>,
+    ) -> String;
 }
-
 
 /// Default implementation of the resource manager
 pub struct McpResourceManager<C: ConnectionManager> {
@@ -385,7 +401,10 @@ impl<C: ConnectionManager> McpResourceManager<C> {
             .filter_map(|r| {
                 let uri = r.get("uri")?.as_str()?.to_string();
                 let name = r.get("name")?.as_str()?.to_string();
-                let description = r.get("description").and_then(|d| d.as_str()).map(String::from);
+                let description = r
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .map(String::from);
                 let mime_type = r.get("mimeType").and_then(|m| m.as_str()).map(String::from);
 
                 Some(McpResource {
@@ -402,7 +421,10 @@ impl<C: ConnectionManager> McpResourceManager<C> {
     }
 
     /// Fetch resource templates from a server
-    async fn fetch_templates_from_server(&self, server_name: &str) -> McpResult<Vec<McpResourceTemplate>> {
+    async fn fetch_templates_from_server(
+        &self,
+        server_name: &str,
+    ) -> McpResult<Vec<McpResourceTemplate>> {
         // Get connection for the server
         let connection = self
             .connection_manager
@@ -439,7 +461,10 @@ impl<C: ConnectionManager> McpResourceManager<C> {
             .filter_map(|t| {
                 let uri_template = t.get("uriTemplate")?.as_str()?.to_string();
                 let name = t.get("name")?.as_str()?.to_string();
-                let description = t.get("description").and_then(|d| d.as_str()).map(String::from);
+                let description = t
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .map(String::from);
                 let mime_type = t.get("mimeType").and_then(|m| m.as_str()).map(String::from);
 
                 Some(McpResourceTemplate {
@@ -473,7 +498,6 @@ impl<C: ConnectionManager> McpResourceManager<C> {
     }
 }
 
-
 #[async_trait]
 impl<C: ConnectionManager + 'static> ResourceManager for McpResourceManager<C> {
     async fn list_resources(&self, server_name: Option<&str>) -> McpResult<Vec<McpResource>> {
@@ -502,7 +526,10 @@ impl<C: ConnectionManager + 'static> ResourceManager for McpResourceManager<C> {
         }
     }
 
-    async fn list_templates(&self, server_name: Option<&str>) -> McpResult<Vec<McpResourceTemplate>> {
+    async fn list_templates(
+        &self,
+        server_name: Option<&str>,
+    ) -> McpResult<Vec<McpResourceTemplate>> {
         match server_name {
             Some(name) => self.fetch_templates_from_server(name).await,
             None => {
@@ -573,9 +600,18 @@ impl<C: ConnectionManager + 'static> ResourceManager for McpResourceManager<C> {
             .and_then(|u| u.as_str())
             .unwrap_or(uri)
             .to_string();
-        let text = content.get("text").and_then(|t| t.as_str()).map(String::from);
-        let blob = content.get("blob").and_then(|b| b.as_str()).map(String::from);
-        let mime_type = content.get("mimeType").and_then(|m| m.as_str()).map(String::from);
+        let text = content
+            .get("text")
+            .and_then(|t| t.as_str())
+            .map(String::from);
+        let blob = content
+            .get("blob")
+            .and_then(|b| b.as_str())
+            .map(String::from);
+        let mime_type = content
+            .get("mimeType")
+            .and_then(|m| m.as_str())
+            .map(String::from);
 
         Ok(ResourceContent {
             uri: resource_uri,
@@ -585,7 +621,11 @@ impl<C: ConnectionManager + 'static> ResourceManager for McpResourceManager<C> {
         })
     }
 
-    async fn read_resource_cached(&self, server_name: &str, uri: &str) -> McpResult<ResourceContent> {
+    async fn read_resource_cached(
+        &self,
+        server_name: &str,
+        uri: &str,
+    ) -> McpResult<ResourceContent> {
         let cache_key = Self::cache_key(server_name, uri);
 
         // Check cache first
@@ -750,11 +790,14 @@ impl<C: ConnectionManager + 'static> ResourceManager for McpResourceManager<C> {
         rx
     }
 
-    fn expand_template(&self, template: &McpResourceTemplate, params: &HashMap<String, String>) -> String {
+    fn expand_template(
+        &self,
+        template: &McpResourceTemplate,
+        params: &HashMap<String, String>,
+    ) -> String {
         template.expand(params)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -785,26 +828,18 @@ mod tests {
 
     #[test]
     fn test_resource_template_new() {
-        let template = McpResourceTemplate::new(
-            "file:///{path}",
-            "File Template",
-            "test-server",
-        );
+        let template = McpResourceTemplate::new("file:///{path}", "File Template", "test-server");
         assert_eq!(template.uri_template, "file:///{path}");
         assert_eq!(template.name, "File Template");
     }
 
     #[test]
     fn test_resource_template_expand() {
-        let template = McpResourceTemplate::new(
-            "file:///{path}",
-            "File Template",
-            "test-server",
-        );
-        
+        let template = McpResourceTemplate::new("file:///{path}", "File Template", "test-server");
+
         let mut params = HashMap::new();
         params.insert("path".to_string(), "documents/test.txt".to_string());
-        
+
         let expanded = template.expand(&params);
         assert_eq!(expanded, "file:///documents/test.txt");
     }
@@ -816,11 +851,11 @@ mod tests {
             "Database Template",
             "test-server",
         );
-        
+
         let mut params = HashMap::new();
         params.insert("database".to_string(), "mydb".to_string());
         params.insert("table".to_string(), "users".to_string());
-        
+
         let expanded = template.expand(&params);
         assert_eq!(expanded, "db://mydb/users");
     }
@@ -832,7 +867,7 @@ mod tests {
             "Database Template",
             "test-server",
         );
-        
+
         let params = template.get_parameters();
         assert_eq!(params.len(), 3);
         assert!(params.contains(&"database".to_string()));
@@ -842,14 +877,10 @@ mod tests {
 
     #[test]
     fn test_resource_template_expand_missing_param() {
-        let template = McpResourceTemplate::new(
-            "file:///{path}",
-            "File Template",
-            "test-server",
-        );
-        
+        let template = McpResourceTemplate::new("file:///{path}", "File Template", "test-server");
+
         let params = HashMap::new(); // Empty params
-        
+
         let expanded = template.expand(&params);
         // Missing params are not replaced
         assert_eq!(expanded, "file:///{path}");
@@ -875,10 +906,11 @@ mod tests {
 
     #[test]
     fn test_cache_key_generation() {
-        let key = McpResourceManager::<crate::mcp::connection_manager::McpConnectionManager>::cache_key(
-            "server1",
-            "file:///test.txt",
-        );
+        let key =
+            McpResourceManager::<crate::mcp::connection_manager::McpConnectionManager>::cache_key(
+                "server1",
+                "file:///test.txt",
+            );
         assert_eq!(key, "server1:file:///test.txt");
     }
 

@@ -8,19 +8,19 @@
 //! - `routes`: API 路由处理
 //! - `services`: 业务逻辑服务
 
-pub mod types;
-pub mod server;
 pub mod routes;
+pub mod server;
 pub mod services;
+pub mod types;
 
 // 类型导出
 pub use types::*;
 
 // 服务器导出
-pub use server::{VisualizationServer, VisualizationServerOptions, start_visualization_server};
+pub use server::{start_visualization_server, VisualizationServer, VisualizationServerOptions};
 
 // 服务导出
 pub use services::{
-    architecture::{build_architecture_map, get_module_detail, get_symbol_refs, get_dir},
-    dependency::{detect_entry_points, build_dependency_tree},
+    architecture::{build_architecture_map, get_dir, get_module_detail, get_symbol_refs},
+    dependency::{build_dependency_tree, detect_entry_points},
 };

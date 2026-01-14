@@ -2,10 +2,10 @@
 //!
 //! 使用 LSP 协议提取代码符号
 
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 
 use super::lsp_manager::LspManager;
 use super::types::*;
@@ -39,7 +39,9 @@ impl From<LspSymbolKind> for SymbolKind {
             LspSymbolKind::Constant => SymbolKind::Constant,
             LspSymbolKind::Interface => SymbolKind::Interface,
             LspSymbolKind::Enum => SymbolKind::Enum,
-            LspSymbolKind::Module | LspSymbolKind::Namespace | LspSymbolKind::Package => SymbolKind::Module,
+            LspSymbolKind::Module | LspSymbolKind::Namespace | LspSymbolKind::Package => {
+                SymbolKind::Module
+            }
             LspSymbolKind::TypeParameter | LspSymbolKind::Struct => SymbolKind::Type,
             _ => SymbolKind::Variable,
         }
@@ -140,7 +142,8 @@ impl LspSymbolExtractor {
             .unwrap_or_default();
 
         let manager = self.manager.read().await;
-        let language = manager.get_language_by_extension(&ext)
+        let language = manager
+            .get_language_by_extension(&ext)
             .ok_or_else(|| format!("Unsupported file type: {}", ext))?;
 
         let client = manager.get_client(&language).await?;
@@ -161,7 +164,9 @@ impl LspSymbolExtractor {
         };
 
         // 打开文档
-        client.open_document(&uri, &language_id, version, &content).await;
+        client
+            .open_document(&uri, &language_id, version, &content)
+            .await;
 
         // 获取符号
         let symbols = client.get_document_symbols(&uri).await?;
@@ -187,7 +192,8 @@ impl LspSymbolExtractor {
             .unwrap_or_default();
 
         let manager = self.manager.read().await;
-        let language = manager.get_language_by_extension(&ext)
+        let language = manager
+            .get_language_by_extension(&ext)
             .ok_or_else(|| format!("Unsupported file type: {}", ext))?;
 
         let client = manager.get_client(&language).await?;
@@ -201,28 +207,32 @@ impl LspSymbolExtractor {
         let locations = client.find_references(&uri, position).await?;
 
         // 转换结果
-        let references: Vec<Reference> = locations.iter().map(|loc| {
-            let file = Self::uri_to_file(&loc.uri);
-            let ref_line = loc.range.start.line + 1;
+        let references: Vec<Reference> = locations
+            .iter()
+            .map(|loc| {
+                let file = Self::uri_to_file(&loc.uri);
+                let ref_line = loc.range.start.line + 1;
 
-            // 尝试读取行文本
-            let text = std::fs::read_to_string(&file)
-                .ok()
-                .and_then(|content| {
-                    content.lines()
-                        .nth(ref_line as usize - 1)
-                        .map(|s| s.to_string())
-                })
-                .unwrap_or_default();
+                // 尝试读取行文本
+                let text = std::fs::read_to_string(&file)
+                    .ok()
+                    .and_then(|content| {
+                        content
+                            .lines()
+                            .nth(ref_line as usize - 1)
+                            .map(|s| s.to_string())
+                    })
+                    .unwrap_or_default();
 
-            Reference {
-                file,
-                line: ref_line,
-                column: loc.range.start.character,
-                text,
-                is_definition: false,
-            }
-        }).collect();
+                Reference {
+                    file,
+                    line: ref_line,
+                    column: loc.range.start.character,
+                    text,
+                    is_definition: false,
+                }
+            })
+            .collect();
 
         Ok(references)
     }
@@ -241,7 +251,8 @@ impl LspSymbolExtractor {
             .unwrap_or_default();
 
         let manager = self.manager.read().await;
-        let language = manager.get_language_by_extension(&ext)
+        let language = manager
+            .get_language_by_extension(&ext)
             .ok_or_else(|| format!("Unsupported file type: {}", ext))?;
 
         let client = manager.get_client(&language).await?;
@@ -261,7 +272,8 @@ impl LspSymbolExtractor {
             let text = std::fs::read_to_string(&file)
                 .ok()
                 .and_then(|content| {
-                    content.lines()
+                    content
+                        .lines()
                         .nth(def_line as usize - 1)
                         .map(|s| s.to_string())
                 })
@@ -301,10 +313,16 @@ mod tests {
 
     #[test]
     fn test_symbol_kind_from_lsp() {
-        assert_eq!(SymbolKind::from(LspSymbolKind::Function), SymbolKind::Function);
+        assert_eq!(
+            SymbolKind::from(LspSymbolKind::Function),
+            SymbolKind::Function
+        );
         assert_eq!(SymbolKind::from(LspSymbolKind::Class), SymbolKind::Class);
         assert_eq!(SymbolKind::from(LspSymbolKind::Method), SymbolKind::Method);
-        assert_eq!(SymbolKind::from(LspSymbolKind::Interface), SymbolKind::Interface);
+        assert_eq!(
+            SymbolKind::from(LspSymbolKind::Interface),
+            SymbolKind::Interface
+        );
     }
 
     #[test]
@@ -322,37 +340,33 @@ mod tests {
 
     #[test]
     fn test_flatten_symbols() {
-        let symbols = vec![
-            CodeSymbol {
-                name: "Parent".to_string(),
-                kind: SymbolKind::Class,
+        let symbols = vec![CodeSymbol {
+            name: "Parent".to_string(),
+            kind: SymbolKind::Class,
+            location: SymbolLocation {
+                file: "test.rs".to_string(),
+                start_line: 1,
+                start_column: 0,
+                end_line: 10,
+                end_column: 0,
+            },
+            children: Some(vec![CodeSymbol {
+                name: "child".to_string(),
+                kind: SymbolKind::Method,
                 location: SymbolLocation {
                     file: "test.rs".to_string(),
-                    start_line: 1,
+                    start_line: 2,
                     start_column: 0,
-                    end_line: 10,
+                    end_line: 5,
                     end_column: 0,
                 },
-                children: Some(vec![
-                    CodeSymbol {
-                        name: "child".to_string(),
-                        kind: SymbolKind::Method,
-                        location: SymbolLocation {
-                            file: "test.rs".to_string(),
-                            start_line: 2,
-                            start_column: 0,
-                            end_line: 5,
-                            end_column: 0,
-                        },
-                        children: None,
-                        signature: None,
-                        documentation: None,
-                    }
-                ]),
+                children: None,
                 signature: None,
                 documentation: None,
-            }
-        ];
+            }]),
+            signature: None,
+            documentation: None,
+        }];
 
         let flat = LspSymbolExtractor::flatten_symbols(&symbols);
         assert_eq!(flat.len(), 2);

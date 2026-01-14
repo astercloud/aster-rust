@@ -6,9 +6,7 @@
 //!
 //! **Validates: Requirements 7.5**
 
-use aster::permission::{
-    PermissionScope, ToolPermission, ToolPermissionManager,
-};
+use aster::permission::{PermissionScope, ToolPermission, ToolPermissionManager};
 use proptest::prelude::*;
 use std::collections::HashMap;
 
@@ -59,15 +57,11 @@ fn create_simple_permission(tool: &str, allowed: bool, scope: PermissionScope) -
 /// Generate arbitrary template (vector of permissions with unique tool names)
 fn arb_template(size: usize) -> impl Strategy<Value = Vec<ToolPermission>> {
     // Generate unique tool names to avoid HashMap key collisions
-    prop::collection::hash_set(arb_tool_name(), 1..=size)
-        .prop_flat_map(|tools| {
-            let tools_vec: Vec<_> = tools.into_iter().collect();
-            let len = tools_vec.len();
-            prop::collection::vec(
-                (prop::bool::ANY, arb_permission_scope()),
-                len..=len,
-            )
-            .prop_map(move |configs| {
+    prop::collection::hash_set(arb_tool_name(), 1..=size).prop_flat_map(|tools| {
+        let tools_vec: Vec<_> = tools.into_iter().collect();
+        let len = tools_vec.len();
+        prop::collection::vec((prop::bool::ANY, arb_permission_scope()), len..=len).prop_map(
+            move |configs| {
                 tools_vec
                     .iter()
                     .zip(configs.iter())
@@ -75,8 +69,9 @@ fn arb_template(size: usize) -> impl Strategy<Value = Vec<ToolPermission>> {
                         create_simple_permission(tool, *allowed, *scope)
                     })
                     .collect()
-            })
-        })
+            },
+        )
+    })
 }
 
 // ============================================================================

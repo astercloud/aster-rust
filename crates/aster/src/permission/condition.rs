@@ -55,7 +55,6 @@ pub fn get_context_field(context: &PermissionContext, field: &str) -> Option<Val
     }
 }
 
-
 /// 评估单个权限条件
 ///
 /// # Arguments
@@ -102,9 +101,7 @@ pub fn evaluate_condition(condition: &PermissionCondition, context: &PermissionC
         None => {
             // 没有指定字段时，根据条件类型选择默认字段
             match condition.condition_type {
-                ConditionType::Context => {
-                    get_context_field(context, "working_directory")
-                }
+                ConditionType::Context => get_context_field(context, "working_directory"),
                 ConditionType::Time => get_context_field(context, "timestamp"),
                 ConditionType::User => get_context_field(context, "user"),
                 ConditionType::Session => get_context_field(context, "session_id"),
@@ -124,7 +121,11 @@ pub fn evaluate_condition(condition: &PermissionCondition, context: &PermissionC
 }
 
 /// 根据运算符评估两个值
-fn evaluate_operator(operator: &ConditionOperator, field_value: &Value, condition_value: &Value) -> bool {
+fn evaluate_operator(
+    operator: &ConditionOperator,
+    field_value: &Value,
+    condition_value: &Value,
+) -> bool {
     match operator {
         ConditionOperator::Equals => values_equal(field_value, condition_value),
         ConditionOperator::NotEquals => !values_equal(field_value, condition_value),
@@ -202,7 +203,7 @@ fn regex_matches(field_value: &Value, pattern: &Value) -> bool {
 }
 
 /// 检查数值是否在范围内
-/// 
+///
 /// 期望 condition_value 是一个包含 "min" 和/或 "max" 字段的对象
 fn value_in_range(field_value: &Value, range: &Value) -> bool {
     let num = match field_value {
@@ -245,7 +246,6 @@ fn value_in_list(field_value: &Value, list: &Value) -> bool {
 
     arr.iter().any(|item| values_equal(field_value, item))
 }
-
 
 /// 检查多个条件是否全部满足（AND 逻辑）
 ///

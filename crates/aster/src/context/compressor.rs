@@ -46,9 +46,8 @@ const TAIL_RATIO: f64 = 0.4;
 const OMISSION_MARKER: &str = "\n... [content omitted] ...\n";
 
 /// Regex for detecting code blocks in markdown
-static CODE_BLOCK_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"```(\w*)\n([\s\S]*?)```").expect("Invalid code block regex")
-});
+static CODE_BLOCK_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"```(\w*)\n([\s\S]*?)```").expect("Invalid code block regex"));
 
 /// Regex for detecting file paths
 static FILE_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -140,7 +139,10 @@ impl MessageCompressor {
             .map(|cap| {
                 let full_match = cap.get(0).unwrap();
                 let language = cap.get(1).map(|m| m.as_str().to_string());
-                let code = cap.get(2).map(|m| m.as_str().to_string()).unwrap_or_default();
+                let code = cap
+                    .get(2)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
 
                 CodeBlock::new(
                     code,
@@ -155,7 +157,6 @@ impl MessageCompressor {
             })
             .collect()
     }
-
 
     /// Compress all code blocks in markdown text.
     ///
@@ -248,10 +249,7 @@ impl MessageCompressor {
                 .first()
                 .map(|b| &content[..b.start])
                 .unwrap_or("");
-            let text_after_last = code_blocks
-                .last()
-                .map(|b| &content[b.end..])
-                .unwrap_or("");
+            let text_after_last = code_blocks.last().map(|b| &content[b.end..]).unwrap_or("");
 
             let before_budget = remaining / 2;
             let after_budget = remaining.saturating_sub(before_budget);
@@ -321,7 +319,6 @@ impl MessageCompressor {
             .collect()
     }
 
-
     // ========================================================================
     // Message Compression
     // ========================================================================
@@ -387,8 +384,10 @@ impl MessageCompressor {
                     .iter()
                     .map(|c| {
                         if let RawContent::Text(text) = &c.raw {
-                            let compressed =
-                                Self::compress_tool_output(&text.text, config.tool_output_max_chars);
+                            let compressed = Self::compress_tool_output(
+                                &text.text,
+                                config.tool_output_max_chars,
+                            );
                             Content {
                                 raw: RawContent::Text(RawTextContent {
                                     text: compressed,
@@ -442,7 +441,6 @@ impl MessageCompressor {
             .map(|msg| Self::compress_message(msg, &config))
             .collect()
     }
-
 
     // ========================================================================
     // Message Truncation
@@ -499,7 +497,8 @@ impl MessageCompressor {
         }
 
         // Calculate tokens needed for last messages
-        let last_messages: Vec<&Message> = messages.iter().skip(total_messages - keep_last).collect();
+        let last_messages: Vec<&Message> =
+            messages.iter().skip(total_messages - keep_last).collect();
         let last_tokens: usize = last_messages
             .iter()
             .map(|m| TokenEstimator::estimate_message_tokens(m))
@@ -509,7 +508,11 @@ impl MessageCompressor {
         let available_for_middle = max_tokens.saturating_sub(current_tokens + last_tokens);
         let mut middle_tokens = 0;
 
-        for msg in messages.iter().skip(keep_first).take(total_messages - keep_first - keep_last) {
+        for msg in messages
+            .iter()
+            .skip(keep_first)
+            .take(total_messages - keep_first - keep_last)
+        {
             let msg_tokens = TokenEstimator::estimate_message_tokens(msg);
             if middle_tokens + msg_tokens <= available_for_middle {
                 result.push(msg.clone());
@@ -532,7 +535,7 @@ impl MessageCompressor {
     // ========================================================================
 
     /// Safely extract a substring respecting UTF-8 boundaries.
-    /// 
+    ///
     /// Returns a substring from `start` to `end` (exclusive), adjusted to valid
     /// UTF-8 character boundaries. The start is adjusted forward to the next
     /// character boundary, and the end is adjusted backward to the previous

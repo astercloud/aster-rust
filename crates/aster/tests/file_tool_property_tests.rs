@@ -7,7 +7,7 @@
 //! **Validates: Requirements 4.5, 4.6**
 
 use aster::tools::file::{
-    create_shared_history, compute_content_hash, EditTool, ReadTool, WriteTool,
+    compute_content_hash, create_shared_history, EditTool, ReadTool, WriteTool,
 };
 use aster::tools::{Tool, ToolContext};
 use proptest::prelude::*;
@@ -25,8 +25,7 @@ fn arb_file_content() -> impl Strategy<Value = String> {
 
 /// Generate arbitrary file names (valid file names)
 fn arb_file_name() -> impl Strategy<Value = String> {
-    "[a-z][a-z0-9_]{2,10}\\.(txt|rs|py|md|json)"
-        .prop_map(|s| s)
+    "[a-z][a-z0-9_]{2,10}\\.(txt|rs|py|md|json)".prop_map(|s| s)
 }
 
 // ============================================================================
@@ -62,29 +61,29 @@ proptest! {
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
             let file_path = temp_dir.path().join(&file_name);
-            
+
             // Create test file
             fs::write(&file_path, &content).unwrap();
-            
+
             let history = create_shared_history();
             let read_tool = ReadTool::new(history.clone());
             let context = create_test_context(temp_dir.path());
-            
+
             // Read the file
             let params = serde_json::json!({
                 "path": file_path.to_str().unwrap()
             });
             let result = read_tool.execute(params, &context).await;
-            
+
             prop_assert!(result.is_ok(), "Read should succeed");
-            
+
             // Verify file is in history
             let history_guard = history.read().unwrap();
             prop_assert!(
                 history_guard.has_read(&file_path),
                 "File should be recorded in read history"
             );
-            
+
             // Verify content hash is correct
             let record = history_guard.get_record(&file_path);
             prop_assert!(record.is_some(), "Record should exist");
@@ -94,7 +93,7 @@ proptest! {
                 &expected_hash,
                 "Content hash should match"
             );
-            
+
             Ok(())
         })?;
     }
@@ -116,24 +115,24 @@ proptest! {
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
             let file_path = temp_dir.path().join(&file_name);
-            
+
             // Create existing file
             fs::write(&file_path, &original_content).unwrap();
-            
+
             let history = create_shared_history();
             let write_tool = WriteTool::new(history.clone());
             let context = create_test_context(temp_dir.path());
-            
+
             // Try to write without reading first
             let params = serde_json::json!({
                 "path": file_path.to_str().unwrap(),
                 "content": new_content
             });
             let result = write_tool.execute(params, &context).await;
-            
+
             // Should fail because file wasn't read
             prop_assert!(result.is_err(), "Write should fail for unread file");
-            
+
             // Original content should be preserved
             let actual_content = fs::read_to_string(&file_path).unwrap();
             prop_assert_eq!(
@@ -141,7 +140,7 @@ proptest! {
                 original_content,
                 "Original content should be preserved"
             );
-            
+
             Ok(())
         })?;
     }
@@ -163,22 +162,22 @@ proptest! {
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
             let file_path = temp_dir.path().join(&file_name);
-            
+
             // Create existing file
             fs::write(&file_path, &original_content).unwrap();
-            
+
             let history = create_shared_history();
             let read_tool = ReadTool::new(history.clone());
             let write_tool = WriteTool::new(history.clone());
             let context = create_test_context(temp_dir.path());
-            
+
             // Read the file first
             let read_params = serde_json::json!({
                 "path": file_path.to_str().unwrap()
             });
             let read_result = read_tool.execute(read_params, &context).await;
             prop_assert!(read_result.is_ok(), "Read should succeed");
-            
+
             // Now write should succeed
             let write_params = serde_json::json!({
                 "path": file_path.to_str().unwrap(),
@@ -186,7 +185,7 @@ proptest! {
             });
             let write_result = write_tool.execute(write_params, &context).await;
             prop_assert!(write_result.is_ok(), "Write should succeed after read");
-            
+
             // Verify new content
             let actual_content = fs::read_to_string(&file_path).unwrap();
             prop_assert_eq!(
@@ -194,7 +193,7 @@ proptest! {
                 new_content,
                 "New content should be written"
             );
-            
+
             Ok(())
         })?;
     }
@@ -214,14 +213,14 @@ proptest! {
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
             let file_path = temp_dir.path().join(&file_name);
-            
+
             // Create file with content that has a unique substring
             fs::write(&file_path, &content).unwrap();
-            
+
             let history = create_shared_history();
             let edit_tool = EditTool::new(history.clone());
             let context = create_test_context(temp_dir.path());
-            
+
             // Try to edit without reading first
             // Use first 5 chars as old_str (should be unique in our generated content)
             let old_str = &content[0..5.min(content.len())];
@@ -231,10 +230,10 @@ proptest! {
                 "new_str": "REPLACED"
             });
             let result = edit_tool.execute(params, &context).await;
-            
+
             // Should fail because file wasn't read
             prop_assert!(result.is_err(), "Edit should fail for unread file");
-            
+
             // Original content should be preserved
             let actual_content = fs::read_to_string(&file_path).unwrap();
             prop_assert_eq!(
@@ -242,7 +241,7 @@ proptest! {
                 content,
                 "Original content should be preserved"
             );
-            
+
             Ok(())
         })?;
     }
@@ -263,23 +262,23 @@ proptest! {
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
             let file_path = temp_dir.path().join(&file_name);
-            
+
             // File doesn't exist yet
             prop_assert!(!file_path.exists(), "File should not exist initially");
-            
+
             let history = create_shared_history();
             let write_tool = WriteTool::new(history.clone());
             let context = create_test_context(temp_dir.path());
-            
+
             // Write to new file should succeed
             let params = serde_json::json!({
                 "path": file_path.to_str().unwrap(),
                 "content": content
             });
             let result = write_tool.execute(params, &context).await;
-            
+
             prop_assert!(result.is_ok(), "Write to new file should succeed");
-            
+
             // Verify file was created with correct content
             prop_assert!(file_path.exists(), "File should exist after write");
             let actual_content = fs::read_to_string(&file_path).unwrap();
@@ -288,7 +287,7 @@ proptest! {
                 content,
                 "Content should match"
             );
-            
+
             Ok(())
         })?;
     }
@@ -309,11 +308,11 @@ proptest! {
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
             let file_path = temp_dir.path().join(&file_name);
-            
+
             let history = create_shared_history();
             let write_tool = WriteTool::new(history.clone());
             let context = create_test_context(temp_dir.path());
-            
+
             // Write to new file
             let params = serde_json::json!({
                 "path": file_path.to_str().unwrap(),
@@ -321,14 +320,14 @@ proptest! {
             });
             let result = write_tool.execute(params, &context).await;
             prop_assert!(result.is_ok(), "Write should succeed");
-            
+
             // Verify file is in history with correct hash
             let history_guard = history.read().unwrap();
             prop_assert!(
                 history_guard.has_read(&file_path),
                 "File should be in history after write"
             );
-            
+
             let record = history_guard.get_record(&file_path);
             prop_assert!(record.is_some(), "Record should exist");
             let expected_hash = compute_content_hash(content.as_bytes());
@@ -337,7 +336,7 @@ proptest! {
                 &expected_hash,
                 "Content hash should match written content"
             );
-            
+
             Ok(())
         })?;
     }

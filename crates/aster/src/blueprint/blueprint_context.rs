@@ -8,13 +8,13 @@
 //! 2. Edit/Write 工具执行时，检查是否有活跃上下文，如有则进行边界检查
 //! 3. Worker 完成任务后，清除上下文
 
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
-use tokio::sync::RwLock;
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
+use tokio::sync::RwLock;
 
+use super::boundary_checker::{create_boundary_checker, BoundaryCheckResult, BoundaryChecker};
 use super::types::Blueprint;
-use super::boundary_checker::{BoundaryChecker, BoundaryCheckResult, create_boundary_checker};
 
 // ============================================================================
 // 任务上下文类型
@@ -122,7 +122,9 @@ impl BlueprintContextManager {
     /// 设置活跃任务（Worker 开始任务时调用）
     pub async fn set_active_task(&self, context: ActiveTaskContext) {
         let mut inner = self.inner.write().await;
-        inner.active_tasks.insert(context.worker_id.clone(), context);
+        inner
+            .active_tasks
+            .insert(context.worker_id.clone(), context);
     }
 
     /// 获取活跃任务上下文
@@ -218,9 +220,14 @@ impl BlueprintContextManager {
         operation: FileOperation,
         worker_id: Option<&str>,
     ) -> Result<(), String> {
-        let result = self.check_file_operation(file_path, operation, worker_id).await;
+        let result = self
+            .check_file_operation(file_path, operation, worker_id)
+            .await;
         if !result.allowed {
-            Err(format!("[蓝图边界检查] {}", result.reason.unwrap_or_default()))
+            Err(format!(
+                "[蓝图边界检查] {}",
+                result.reason.unwrap_or_default()
+            ))
         } else {
             Ok(())
         }
@@ -295,7 +302,9 @@ pub async fn check_file_operation(
     operation: FileOperation,
     worker_id: Option<&str>,
 ) -> BoundaryCheckResult {
-    get_blueprint_context().check_file_operation(file_path, operation, worker_id).await
+    get_blueprint_context()
+        .check_file_operation(file_path, operation, worker_id)
+        .await
 }
 
 /// 强制检查文件操作（失败时返回错误）
@@ -304,5 +313,7 @@ pub async fn enforce_file_operation(
     operation: FileOperation,
     worker_id: Option<&str>,
 ) -> Result<(), String> {
-    get_blueprint_context().enforce_file_operation(file_path, operation, worker_id).await
+    get_blueprint_context()
+        .enforce_file_operation(file_path, operation, worker_id)
+        .await
 }

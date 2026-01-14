@@ -27,7 +27,9 @@ pub use signup_openrouter::configure_openrouter;
 pub use signup_tetrate::configure_tetrate;
 
 pub use agents_md_parser::{AgentsMdInfo, AgentsMdParser, AgentsMdStats, ValidationResult};
-pub use config_command::{create_config_command, ConfigCommand, ConfigDisplayOptions, ConfigFormat};
+pub use config_command::{
+    create_config_command, ConfigCommand, ConfigDisplayOptions, ConfigFormat,
+};
 pub use config_manager::{
     ConfigKeySource, ConfigManager, ConfigManagerOptions, ConfigSource, ConfigSourceInfo,
     EnterprisePolicyConfig, PolicyMetadata,

@@ -133,19 +133,11 @@ impl HookRegistry {
     /// 比较两个配置是否匹配
     fn configs_match(a: &HookConfig, b: &HookConfig) -> bool {
         match (a, b) {
-            (HookConfig::Command(a), HookConfig::Command(b)) => {
-                a.command == b.command
-            }
+            (HookConfig::Command(a), HookConfig::Command(b)) => a.command == b.command,
             (HookConfig::Url(a), HookConfig::Url(b)) => a.url == b.url,
-            (HookConfig::Mcp(a), HookConfig::Mcp(b)) => {
-                a.server == b.server && a.tool == b.tool
-            }
-            (HookConfig::Prompt(a), HookConfig::Prompt(b)) => {
-                a.prompt == b.prompt
-            }
-            (HookConfig::Agent(a), HookConfig::Agent(b)) => {
-                a.agent_type == b.agent_type
-            }
+            (HookConfig::Mcp(a), HookConfig::Mcp(b)) => a.server == b.server && a.tool == b.tool,
+            (HookConfig::Prompt(a), HookConfig::Prompt(b)) => a.prompt == b.prompt,
+            (HookConfig::Agent(a), HookConfig::Agent(b)) => a.agent_type == b.agent_type,
             _ => false,
         }
     }

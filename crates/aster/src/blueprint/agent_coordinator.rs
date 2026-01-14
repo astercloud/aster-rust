@@ -5,14 +5,14 @@
 //! - 主 Agent（蜂王）：全局视野，负责任务分配和协调
 //! - 子 Agent（蜜蜂）：在各自的树枝上工作，执行具体任务
 
-use std::collections::HashMap;
 use chrono::Utc;
-use uuid::Uuid;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
 
-use super::types::*;
 use super::blueprint_manager::BlueprintManager;
 use super::task_tree_manager::TaskTreeManager;
+use super::types::*;
 
 // ============================================================================
 // 协调器配置
@@ -39,8 +39,8 @@ impl Default for CoordinatorConfig {
     fn default() -> Self {
         Self {
             max_concurrent_workers: 5,
-            worker_timeout: 300000,      // 5 分钟
-            main_loop_interval: 5000,    // 5 秒
+            worker_timeout: 300000,   // 5 分钟
+            main_loop_interval: 5000, // 5 秒
             auto_assign_tasks: true,
             model_strategy: ModelStrategy::Adaptive,
             default_worker_model: "haiku".to_string(),
@@ -56,7 +56,6 @@ pub enum ModelStrategy {
     Adaptive,
     RoundRobin,
 }
-
 
 // ============================================================================
 // Agent 协调器
@@ -100,7 +99,9 @@ impl AgentCoordinator {
         tree_manager: &mut TaskTreeManager,
         blueprint_id: &str,
     ) -> Result<&QueenAgent, String> {
-        let blueprint = blueprint_manager.get_blueprint(blueprint_id).await
+        let blueprint = blueprint_manager
+            .get_blueprint(blueprint_id)
+            .await
             .ok_or_else(|| format!("蓝图 {} 不存在", blueprint_id))?;
 
         if blueprint.status != BlueprintStatus::Approved
@@ -117,16 +118,24 @@ impl AgentCoordinator {
             if tree_manager.get_task_tree(tree_id).await.is_some() {
                 tree_id.clone()
             } else {
-                let tree = tree_manager.generate_from_blueprint(&blueprint).await
+                let tree = tree_manager
+                    .generate_from_blueprint(&blueprint)
+                    .await
                     .map_err(|e| e.to_string())?;
-                blueprint_manager.start_execution(blueprint_id, tree.id.clone()).await
+                blueprint_manager
+                    .start_execution(blueprint_id, tree.id.clone())
+                    .await
                     .map_err(|e| e.to_string())?;
                 tree.id
             }
         } else {
-            let tree = tree_manager.generate_from_blueprint(&blueprint).await
+            let tree = tree_manager
+                .generate_from_blueprint(&blueprint)
+                .await
                 .map_err(|e| e.to_string())?;
-            blueprint_manager.start_execution(blueprint_id, tree.id.clone()).await
+            blueprint_manager
+                .start_execution(blueprint_id, tree.id.clone())
+                .await
                 .map_err(|e| e.to_string())?;
             tree.id
         };
@@ -157,18 +166,21 @@ impl AgentCoordinator {
         Ok(self.queen.as_ref().unwrap())
     }
 
-
     // ------------------------------------------------------------------------
     // Worker 管理
     // ------------------------------------------------------------------------
 
     /// 创建 Worker Agent（蜜蜂）
     pub fn create_worker(&mut self, task_id: String) -> Result<&WorkerAgent, String> {
-        let queen = self.queen.as_ref()
+        let queen = self
+            .queen
+            .as_ref()
             .ok_or_else(|| "蜂王未初始化".to_string())?;
 
         // 检查并发限制
-        let active_count = self.workers.values()
+        let active_count = self
+            .workers
+            .values()
             .filter(|w| w.status != WorkerStatus::Idle)
             .count();
 
@@ -208,17 +220,27 @@ impl AgentCoordinator {
         worker_id: &str,
         task_id: &str,
     ) -> Result<(), String> {
-        let queen = self.queen.as_ref()
+        let queen = self
+            .queen
+            .as_ref()
             .ok_or_else(|| "蜂王未初始化".to_string())?;
 
         // 检查任务是否可以开始
-        let (can_start, blockers) = tree_manager.can_start_task(&queen.task_tree_id, task_id).await;
+        let (can_start, blockers) = tree_manager
+            .can_start_task(&queen.task_tree_id, task_id)
+            .await;
         if !can_start {
-            return Err(format!("任务 {} 无法开始: {}", task_id, blockers.join(", ")));
+            return Err(format!(
+                "任务 {} 无法开始: {}",
+                task_id,
+                blockers.join(", ")
+            ));
         }
 
         // 更新 Worker 状态
-        let worker = self.workers.get_mut(worker_id)
+        let worker = self
+            .workers
+            .get_mut(worker_id)
             .ok_or_else(|| format!("Worker {} 不存在", worker_id))?;
 
         worker.task_id = task_id.to_string();
@@ -243,7 +265,9 @@ impl AgentCoordinator {
 
     /// Worker 完成任务
     pub fn worker_complete_task(&mut self, worker_id: &str) -> Result<(), String> {
-        let worker = self.workers.get_mut(worker_id)
+        let worker = self
+            .workers
+            .get_mut(worker_id)
             .ok_or_else(|| format!("Worker {} 不存在", worker_id))?;
 
         let task_id = worker.task_id.clone();
@@ -262,7 +286,9 @@ impl AgentCoordinator {
 
     /// Worker 任务失败
     pub fn worker_fail_task(&mut self, worker_id: &str, error: &str) -> Result<(), String> {
-        let worker = self.workers.get_mut(worker_id)
+        let worker = self
+            .workers
+            .get_mut(worker_id)
             .ok_or_else(|| format!("Worker {} 不存在", worker_id))?;
 
         let task_id = worker.task_id.clone();
@@ -277,7 +303,6 @@ impl AgentCoordinator {
 
         Ok(())
     }
-
 
     // ------------------------------------------------------------------------
     // 决策和时间线
@@ -351,7 +376,9 @@ impl AgentCoordinator {
         for module in &blueprint.modules {
             lines.push(format!("### {}", module.name));
             lines.push(format!("- 类型: {:?}", module.module_type));
-            let responsibilities = module.responsibilities.iter()
+            let responsibilities = module
+                .responsibilities
+                .iter()
                 .take(3)
                 .cloned()
                 .collect::<Vec<_>>()
@@ -360,7 +387,9 @@ impl AgentCoordinator {
             if let Some(ref tech) = module.tech_stack {
                 lines.push(format!("- 技术栈: {}", tech.join(" + ")));
             }
-            let root = module.root_path.clone()
+            let root = module
+                .root_path
+                .clone()
                 .unwrap_or_else(|| format!("src/{}", module.name.to_lowercase()));
             lines.push(format!("- 根路径: {}", root));
             lines.push(String::new());
@@ -376,7 +405,6 @@ impl AgentCoordinator {
 
         lines.join("\n")
     }
-
 
     // ------------------------------------------------------------------------
     // 查询方法
@@ -399,14 +427,16 @@ impl AgentCoordinator {
 
     /// 获取空闲 Worker
     pub fn get_idle_workers(&self) -> Vec<&WorkerAgent> {
-        self.workers.values()
+        self.workers
+            .values()
             .filter(|w| w.status == WorkerStatus::Idle)
             .collect()
     }
 
     /// 获取活跃 Worker 数量
     pub fn get_active_worker_count(&self) -> usize {
-        self.workers.values()
+        self.workers
+            .values()
             .filter(|w| w.status != WorkerStatus::Idle)
             .count()
     }

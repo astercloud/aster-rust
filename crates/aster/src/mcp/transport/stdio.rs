@@ -306,12 +306,14 @@ impl Transport for StdioTransport {
         })?;
 
         // Take stdin and stdout
-        let stdin = child.stdin.take().ok_or_else(|| {
-            McpError::transport("Failed to capture stdin of child process")
-        })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
-            McpError::transport("Failed to capture stdout of child process")
-        })?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| McpError::transport("Failed to capture stdin of child process"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| McpError::transport("Failed to capture stdout of child process"))?;
 
         // Create channels
         let (message_tx, message_rx) = mpsc::channel::<String>(self.options.queue_max_size);
@@ -377,9 +379,9 @@ impl Transport for StdioTransport {
         let json = serde_json::to_string(&message)?;
 
         if let Some(tx) = self.stdin_tx.lock().await.as_ref() {
-            tx.send(json).await.map_err(|e| {
-                McpError::transport(format!("Failed to send message: {}", e))
-            })?;
+            tx.send(json)
+                .await
+                .map_err(|e| McpError::transport(format!("Failed to send message: {}", e)))?;
         } else {
             return Err(McpError::transport("Stdin channel not available"));
         }
@@ -421,9 +423,10 @@ impl Transport for StdioTransport {
         // Send the request
         let json = serde_json::to_string(&request)?;
         if let Some(stdin_tx) = self.stdin_tx.lock().await.as_ref() {
-            stdin_tx.send(json).await.map_err(|e| {
-                McpError::transport(format!("Failed to send request: {}", e))
-            })?;
+            stdin_tx
+                .send(json)
+                .await
+                .map_err(|e| McpError::transport(format!("Failed to send request: {}", e)))?;
         } else {
             // Remove pending request on failure
             self.pending_requests.lock().await.remove(&id_str);
@@ -509,10 +512,10 @@ mod tests {
             cwd: None,
         };
         let transport = StdioTransport::new(config, ConnectionOptions::default());
-        
+
         let id1 = transport.next_request_id();
         let id2 = transport.next_request_id();
-        
+
         assert_ne!(id1, id2);
         assert!(id1.starts_with("req-"));
         assert!(id2.starts_with("req-"));
@@ -562,7 +565,7 @@ mod tests {
             cwd: None,
         };
         let mut transport = StdioTransport::new(config, ConnectionOptions::default());
-        
+
         let request = McpRequest::new(serde_json::json!(1), "test/method");
         let result = transport.send(McpMessage::Request(request)).await;
         assert!(result.is_err());

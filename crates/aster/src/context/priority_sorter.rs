@@ -171,11 +171,9 @@ impl PrioritySorter {
             .collect();
 
         // Sort by priority (descending) then by timestamp (descending)
-        prioritized.sort_by(|a, b| {
-            match b.priority.cmp(&a.priority) {
-                std::cmp::Ordering::Equal => b.timestamp.cmp(&a.timestamp),
-                other => other,
-            }
+        prioritized.sort_by(|a, b| match b.priority.cmp(&a.priority) {
+            std::cmp::Ordering::Equal => b.timestamp.cmp(&a.timestamp),
+            other => other,
         });
 
         prioritized
@@ -430,10 +428,10 @@ mod tests {
     #[test]
     fn test_sort_by_priority_ordering() {
         let messages = vec![
-            create_text_message(Role::User, "First message"),      // Minimal (index 0)
+            create_text_message(Role::User, "First message"), // Minimal (index 0)
             create_text_message(Role::Assistant, "Second message"), // Low (index 1)
-            create_summary_message(),                               // Critical (summary)
-            create_text_message(Role::User, "Fourth message"),     // Medium (index 3)
+            create_summary_message(),                         // Critical (summary)
+            create_text_message(Role::User, "Fourth message"), // Medium (index 3)
             create_text_message(Role::Assistant, "Fifth message"), // High (index 4)
         ];
 
@@ -456,7 +454,8 @@ mod tests {
         ];
 
         let prioritized = PrioritySorter::sort_by_priority_default(&messages);
-        let high_and_above = PrioritySorter::filter_by_priority(&prioritized, MessagePriority::High);
+        let high_and_above =
+            PrioritySorter::filter_by_priority(&prioritized, MessagePriority::High);
 
         // Only high priority messages should remain
         for pm in &high_and_above {
@@ -483,23 +482,23 @@ mod tests {
     #[test]
     fn test_get_priority_distribution() {
         let messages = vec![
-            create_summary_message(),                               // Critical
-            create_text_message(Role::User, "First"),              // Minimal
-            create_text_message(Role::Assistant, "Second"),        // Low
-            create_text_message(Role::User, "Third"),              // Low
-            create_text_message(Role::Assistant, "Fourth"),        // Medium
-            create_text_message(Role::User, "Fifth"),              // Medium
-            create_text_message(Role::Assistant, "Sixth"),         // Medium
-            create_text_message(Role::User, "Seventh"),            // High
-            create_text_message(Role::Assistant, "Eighth"),        // High
-            create_tool_call_message(),                             // High (tool call)
+            create_summary_message(),                       // Critical
+            create_text_message(Role::User, "First"),       // Minimal
+            create_text_message(Role::Assistant, "Second"), // Low
+            create_text_message(Role::User, "Third"),       // Low
+            create_text_message(Role::Assistant, "Fourth"), // Medium
+            create_text_message(Role::User, "Fifth"),       // Medium
+            create_text_message(Role::Assistant, "Sixth"),  // Medium
+            create_text_message(Role::User, "Seventh"),     // High
+            create_text_message(Role::Assistant, "Eighth"), // High
+            create_tool_call_message(),                     // High (tool call)
         ];
 
         let (critical, high, medium, low, minimal) =
             PrioritySorter::get_priority_distribution(&messages);
 
         assert_eq!(critical, 1); // Summary message
-        assert!(high >= 1);      // At least the tool call message
+        assert!(high >= 1); // At least the tool call message
         assert!(medium >= 1);
         assert!(low >= 1);
         // Minimal might be 0 or 1 depending on exact thresholds

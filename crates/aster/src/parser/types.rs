@@ -159,7 +159,10 @@ mod tests {
 
     #[test]
     fn test_lsp_position() {
-        let pos = LspPosition { line: 10, character: 5 };
+        let pos = LspPosition {
+            line: 10,
+            character: 5,
+        };
         assert_eq!(pos.line, 10);
         assert_eq!(pos.character, 5);
     }
@@ -167,8 +170,14 @@ mod tests {
     #[test]
     fn test_lsp_range() {
         let range = LspRange {
-            start: LspPosition { line: 0, character: 0 },
-            end: LspPosition { line: 10, character: 20 },
+            start: LspPosition {
+                line: 0,
+                character: 0,
+            },
+            end: LspPosition {
+                line: 10,
+                character: 20,
+            },
         };
         assert_eq!(range.start.line, 0);
         assert_eq!(range.end.line, 10);

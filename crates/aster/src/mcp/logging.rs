@@ -50,7 +50,11 @@ pub struct McpLogEntry {
 
 impl McpLogEntry {
     /// Create a new log entry
-    pub fn new(server_name: impl Into<String>, level: McpLogLevel, message: impl Into<String>) -> Self {
+    pub fn new(
+        server_name: impl Into<String>,
+        level: McpLogLevel,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             server_name: server_name.into(),
             level,
@@ -285,11 +289,7 @@ impl McpLogger {
     /// The notification format follows the MCP logging/message specification.
     ///
     /// # Requirements: 8.4
-    pub async fn process_notification(
-        &self,
-        server_name: &str,
-        params: &serde_json::Value,
-    ) {
+    pub async fn process_notification(&self, server_name: &str, params: &serde_json::Value) {
         // Parse the notification params
         let level = params
             .get("level")
@@ -360,25 +360,44 @@ mod tests {
         let logger = McpLogger::new();
 
         // Default level should be Info
-        assert_eq!(logger.get_server_log_level("test-server").await, McpLogLevel::Info);
+        assert_eq!(
+            logger.get_server_log_level("test-server").await,
+            McpLogLevel::Info
+        );
 
         // Set specific level
-        logger.set_server_log_level("test-server", McpLogLevel::Debug).await;
-        assert_eq!(logger.get_server_log_level("test-server").await, McpLogLevel::Debug);
+        logger
+            .set_server_log_level("test-server", McpLogLevel::Debug)
+            .await;
+        assert_eq!(
+            logger.get_server_log_level("test-server").await,
+            McpLogLevel::Debug
+        );
 
         // Other servers should still use default
-        assert_eq!(logger.get_server_log_level("other-server").await, McpLogLevel::Info);
+        assert_eq!(
+            logger.get_server_log_level("other-server").await,
+            McpLogLevel::Info
+        );
     }
 
     #[tokio::test]
     async fn test_remove_server_log_level() {
         let logger = McpLogger::new();
 
-        logger.set_server_log_level("test-server", McpLogLevel::Debug).await;
-        assert_eq!(logger.get_server_log_level("test-server").await, McpLogLevel::Debug);
+        logger
+            .set_server_log_level("test-server", McpLogLevel::Debug)
+            .await;
+        assert_eq!(
+            logger.get_server_log_level("test-server").await,
+            McpLogLevel::Debug
+        );
 
         logger.remove_server_log_level("test-server").await;
-        assert_eq!(logger.get_server_log_level("test-server").await, McpLogLevel::Info);
+        assert_eq!(
+            logger.get_server_log_level("test-server").await,
+            McpLogLevel::Info
+        );
     }
 
     #[tokio::test]
@@ -400,9 +419,11 @@ mod tests {
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_clone = call_count.clone();
 
-        logger.on_log(Arc::new(move |_entry| {
-            call_count_clone.fetch_add(1, Ordering::SeqCst);
-        })).await;
+        logger
+            .on_log(Arc::new(move |_entry| {
+                call_count_clone.fetch_add(1, Ordering::SeqCst);
+            }))
+            .await;
 
         let entry = McpLogEntry::new("test-server", McpLogLevel::Info, "Test message");
         logger.log(entry).await;
@@ -416,12 +437,16 @@ mod tests {
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_clone = call_count.clone();
 
-        logger.on_log(Arc::new(move |_entry| {
-            call_count_clone.fetch_add(1, Ordering::SeqCst);
-        })).await;
+        logger
+            .on_log(Arc::new(move |_entry| {
+                call_count_clone.fetch_add(1, Ordering::SeqCst);
+            }))
+            .await;
 
         // Set server level to Warn
-        logger.set_server_log_level("test-server", McpLogLevel::Warn).await;
+        logger
+            .set_server_log_level("test-server", McpLogLevel::Warn)
+            .await;
 
         // Debug message should be filtered
         let debug_entry = McpLogEntry::new("test-server", McpLogLevel::Debug, "Debug message");
@@ -450,9 +475,11 @@ mod tests {
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_clone = call_count.clone();
 
-        logger.on_log(Arc::new(move |_entry| {
-            call_count_clone.fetch_add(1, Ordering::SeqCst);
-        })).await;
+        logger
+            .on_log(Arc::new(move |_entry| {
+                call_count_clone.fetch_add(1, Ordering::SeqCst);
+            }))
+            .await;
 
         // Disable logging
         logger.set_enabled(false).await;
@@ -472,15 +499,17 @@ mod tests {
         let call_count_clone = call_count.clone();
         let received_message_clone = received_message.clone();
 
-        logger.on_log(Arc::new(move |entry| {
-            call_count_clone.fetch_add(1, Ordering::SeqCst);
-            let msg = entry.message.clone();
-            let rm = received_message_clone.clone();
-            tokio::spawn(async move {
-                let mut m = rm.write().await;
-                *m = msg;
-            });
-        })).await;
+        logger
+            .on_log(Arc::new(move |entry| {
+                call_count_clone.fetch_add(1, Ordering::SeqCst);
+                let msg = entry.message.clone();
+                let rm = received_message_clone.clone();
+                tokio::spawn(async move {
+                    let mut m = rm.write().await;
+                    *m = msg;
+                });
+            }))
+            .await;
 
         let params = serde_json::json!({
             "level": "info",
@@ -512,8 +541,8 @@ mod tests {
 
     #[test]
     fn test_log_entry_with_logger() {
-        let entry = McpLogEntry::new("server", McpLogLevel::Info, "message")
-            .with_logger("custom-logger");
+        let entry =
+            McpLogEntry::new("server", McpLogLevel::Info, "message").with_logger("custom-logger");
         assert_eq!(entry.logger, Some("custom-logger".to_string()));
     }
 }

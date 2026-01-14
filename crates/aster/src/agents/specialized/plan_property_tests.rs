@@ -44,7 +44,6 @@ fn file_content_strategy() -> impl Strategy<Value = String> {
     "[a-zA-Z0-9 \n/]{20,200}".prop_map(|s| format!("// {}\nfn main() {{}}\n", s))
 }
 
-
 // Strategy for generating file names
 fn filename_strategy() -> impl Strategy<Value = String> {
     "[a-z]{3,8}\\.(rs|py|ts|js|go)".prop_map(|s| s.to_string())
@@ -99,7 +98,6 @@ fn verify_no_modifications(
     before.len() == after.len()
 }
 
-
 /// **Property 39: Plan Read-Only Mode**
 ///
 /// *For any* plan agent execution, no file modifications SHALL occur
@@ -119,7 +117,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create test files
             let files = vec![
                 ("main.rs".to_string(), "fn main() {}\n".to_string()),
@@ -179,7 +177,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create test files
             let files = vec![
                 ("config.rs".to_string(), "pub struct Config {}\n".to_string()),
@@ -217,7 +215,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create test files
             let files = vec![
                 ("module.rs".to_string(), "pub mod inner;\n".to_string()),
@@ -276,7 +274,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create test files
             let files = vec![
                 ("security.rs".to_string(), "pub fn auth() {}\n".to_string()),
@@ -313,7 +311,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create test files
             let files = vec![
                 ("app.rs".to_string(), "fn app() {}\n".to_string()),
@@ -351,7 +349,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create test files
             let test_file = temp_dir.path().join("tracked.rs");
             fs::write(&test_file, "fn tracked() {}\n").unwrap();
@@ -366,7 +364,7 @@ proptest! {
 
             // Verify files_read tracking works
             let files_read = agent.files_read();
-            
+
             // Should have tracked at least the existing code file
             prop_assert!(
                 !files_read.is_empty() || true, // May be empty if file doesn't exist
@@ -387,7 +385,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
-            
+
             // Create test files
             let files: Vec<(String, String)> = (0..num_files)
                 .map(|i| (format!("file{}.rs", i), format!("fn file{}() {{}}\n", i)))

@@ -33,14 +33,66 @@ const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", 
 
 /// Supported text extensions (non-exhaustive, used for hints)
 const TEXT_EXTENSIONS: &[&str] = &[
-    "txt", "md", "rs", "py", "js", "ts", "jsx", "tsx", "json", "yaml", "yml",
-    "toml", "xml", "html", "css", "scss", "less", "sql", "sh", "bash", "zsh",
-    "c", "cpp", "h", "hpp", "java", "go", "rb", "php", "swift", "kt", "scala",
-    "r", "lua", "pl", "pm", "ex", "exs", "erl", "hrl", "hs", "ml", "mli",
-    "fs", "fsx", "clj", "cljs", "lisp", "el", "vim", "conf", "ini", "cfg",
-    "env", "gitignore", "dockerignore", "makefile", "cmake", "gradle",
+    "txt",
+    "md",
+    "rs",
+    "py",
+    "js",
+    "ts",
+    "jsx",
+    "tsx",
+    "json",
+    "yaml",
+    "yml",
+    "toml",
+    "xml",
+    "html",
+    "css",
+    "scss",
+    "less",
+    "sql",
+    "sh",
+    "bash",
+    "zsh",
+    "c",
+    "cpp",
+    "h",
+    "hpp",
+    "java",
+    "go",
+    "rb",
+    "php",
+    "swift",
+    "kt",
+    "scala",
+    "r",
+    "lua",
+    "pl",
+    "pm",
+    "ex",
+    "exs",
+    "erl",
+    "hrl",
+    "hs",
+    "ml",
+    "mli",
+    "fs",
+    "fsx",
+    "clj",
+    "cljs",
+    "lisp",
+    "el",
+    "vim",
+    "conf",
+    "ini",
+    "cfg",
+    "env",
+    "gitignore",
+    "dockerignore",
+    "makefile",
+    "cmake",
+    "gradle",
 ];
-
 
 /// Line range for partial file reading
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,7 +160,6 @@ impl ReadTool {
         &self.read_history
     }
 }
-
 
 // =============================================================================
 // Text File Reading (Requirements: 4.1)
@@ -222,7 +273,6 @@ impl ReadTool {
     }
 }
 
-
 // =============================================================================
 // Image Reading (Requirements: 4.2)
 // =============================================================================
@@ -231,7 +281,11 @@ impl ReadTool {
     /// Read an image file and return base64 encoded content
     ///
     /// Requirements: 4.2
-    pub async fn read_image(&self, path: &Path, context: &ToolContext) -> Result<String, ToolError> {
+    pub async fn read_image(
+        &self,
+        path: &Path,
+        context: &ToolContext,
+    ) -> Result<String, ToolError> {
         let full_path = self.resolve_path(path, context);
 
         // Check file exists
@@ -297,7 +351,6 @@ impl ReadTool {
     }
 }
 
-
 // =============================================================================
 // PDF Reading (Requirements: 4.3)
 // =============================================================================
@@ -351,7 +404,6 @@ impl ReadTool {
             .unwrap_or(false)
     }
 }
-
 
 // =============================================================================
 // Jupyter Notebook Reading (Requirements: 4.4)
@@ -488,7 +540,6 @@ impl ReadTool {
     }
 }
 
-
 // =============================================================================
 // Tool Trait Implementation
 // =============================================================================
@@ -549,14 +600,16 @@ impl Tool for ReadTool {
         // Determine file type and read accordingly
         if Self::is_image_file(path) {
             let content = self.read_image(path, context).await?;
-            return Ok(ToolResult::success(content)
-                .with_metadata("file_type", serde_json::json!("image")));
+            return Ok(
+                ToolResult::success(content).with_metadata("file_type", serde_json::json!("image"))
+            );
         }
 
         if Self::is_pdf_file(path) {
             let content = self.read_pdf(path, context).await?;
-            return Ok(ToolResult::success(content)
-                .with_metadata("file_type", serde_json::json!("pdf")));
+            return Ok(
+                ToolResult::success(content).with_metadata("file_type", serde_json::json!("pdf"))
+            );
         }
 
         if Self::is_notebook_file(path) {
@@ -569,8 +622,7 @@ impl Tool for ReadTool {
         let range = self.extract_line_range(&params);
         let content = self.read_text(path, range, context).await?;
 
-        Ok(ToolResult::success(content)
-            .with_metadata("file_type", serde_json::json!("text")))
+        Ok(ToolResult::success(content).with_metadata("file_type", serde_json::json!("text")))
     }
 
     async fn check_permissions(
@@ -604,8 +656,14 @@ impl Tool for ReadTool {
 impl ReadTool {
     /// Extract line range from parameters
     fn extract_line_range(&self, params: &serde_json::Value) -> Option<LineRange> {
-        let start = params.get("start_line").and_then(|v| v.as_u64()).map(|v| v as usize);
-        let end = params.get("end_line").and_then(|v| v.as_u64()).map(|v| v as usize);
+        let start = params
+            .get("start_line")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let end = params
+            .get("end_line")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
 
         match (start, end) {
             (Some(s), e) => Some(LineRange::new(s, e)),
@@ -624,9 +682,9 @@ impl ReadTool {
                 // Otherwise, default to true (assume text)
                 if TEXT_EXTENSIONS.contains(&ext_lower.as_str()) {
                     true
-                } else if IMAGE_EXTENSIONS.contains(&ext_lower.as_str()) 
-                    || ext_lower == "pdf" 
-                    || ext_lower == "ipynb" 
+                } else if IMAGE_EXTENSIONS.contains(&ext_lower.as_str())
+                    || ext_lower == "pdf"
+                    || ext_lower == "ipynb"
                 {
                     false
                 } else {
@@ -637,7 +695,6 @@ impl ReadTool {
         }
     }
 }
-
 
 // =============================================================================
 // Unit Tests
@@ -753,7 +810,10 @@ mod tests {
         let context = create_test_context(temp_dir.path());
 
         let range = LineRange::new(3, Some(5));
-        let result = tool.read_text(&file_path, Some(range), &context).await.unwrap();
+        let result = tool
+            .read_text(&file_path, Some(range), &context)
+            .await
+            .unwrap();
 
         assert!(result.contains("3 | Line 3"));
         assert!(result.contains("4 | Line 4"));
@@ -783,12 +843,10 @@ mod tests {
         let png_data: Vec<u8> = vec![
             0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
             0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-            0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-            0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, // IDAT chunk
-            0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-            0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-            0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, // IEND chunk
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
+            0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, // IDAT chunk
+            0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D,
+            0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, // IEND chunk
             0x42, 0x60, 0x82,
         ];
         fs::write(&file_path, &png_data).unwrap();
@@ -853,7 +911,10 @@ mod tests {
 
         assert!(result.is_success());
         assert!(result.output.unwrap().contains("Hello, World!"));
-        assert_eq!(result.metadata.get("file_type"), Some(&serde_json::json!("text")));
+        assert_eq!(
+            result.metadata.get("file_type"),
+            Some(&serde_json::json!("text"))
+        );
     }
 
     #[tokio::test]

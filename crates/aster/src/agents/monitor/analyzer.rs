@@ -54,7 +54,6 @@ impl std::fmt::Display for PerformanceRating {
     }
 }
 
-
 /// Bottleneck category
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -106,7 +105,11 @@ pub struct Bottleneck {
 
 impl Bottleneck {
     /// Create a new bottleneck
-    pub fn new(category: BottleneckCategory, severity: f32, description: impl Into<String>) -> Self {
+    pub fn new(
+        category: BottleneckCategory,
+        severity: f32,
+        description: impl Into<String>,
+    ) -> Self {
         Self {
             category,
             severity: severity.clamp(0.0, 100.0),
@@ -135,7 +138,6 @@ impl Bottleneck {
         self
     }
 }
-
 
 /// Suggestion priority
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -194,7 +196,6 @@ impl Suggestion {
     }
 }
 
-
 /// Performance scores across dimensions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -222,7 +223,7 @@ impl PerformanceScores {
             self.cost_efficiency_score,
             self.tool_efficiency_score,
         ];
-        
+
         let weighted_sum: f32 = scores.iter().zip(weights.iter()).map(|(s, w)| s * w).sum();
         weighted_sum.clamp(0.0, 100.0)
     }
@@ -273,7 +274,6 @@ impl PerformanceReport {
         self.suggestions.push(suggestion);
     }
 }
-
 
 /// Thresholds for performance analysis
 #[derive(Debug, Clone)]
@@ -352,22 +352,21 @@ impl PerformanceAnalyzer {
     pub fn analyze_agent(&self, metrics: &FullAgentMetrics) -> PerformanceReport {
         let scores = self.calculate_scores(metrics);
         let mut report = PerformanceReport::new(&metrics.agent_id, scores);
-        
+
         // Identify bottlenecks
         let bottlenecks = self.identify_bottlenecks(metrics);
         for bottleneck in bottlenecks {
             report.add_bottleneck(bottleneck);
         }
-        
+
         // Generate suggestions
         let suggestions = self.suggest_optimizations(metrics);
         for suggestion in suggestions {
             report.add_suggestion(suggestion);
         }
-        
+
         report
     }
-
 
     /// Calculate performance scores
     fn calculate_scores(&self, metrics: &FullAgentMetrics) -> PerformanceScores {
@@ -492,7 +491,6 @@ impl PerformanceAnalyzer {
         }
     }
 
-
     /// Identify performance bottlenecks
     pub fn identify_bottlenecks(&self, metrics: &FullAgentMetrics) -> Vec<Bottleneck> {
         let mut bottlenecks = Vec::new();
@@ -501,7 +499,8 @@ impl PerformanceAnalyzer {
         if let Some(avg_latency) = metrics.performance.avg_api_latency {
             let latency_ms = avg_latency.as_millis() as u64;
             if latency_ms > self.thresholds.poor_latency_ms {
-                let severity = ((latency_ms as f32 / self.thresholds.poor_latency_ms as f32) * 50.0)
+                let severity = ((latency_ms as f32 / self.thresholds.poor_latency_ms as f32)
+                    * 50.0)
                     .min(100.0);
                 bottlenecks.push(
                     Bottleneck::new(
@@ -522,7 +521,7 @@ impl PerformanceAnalyzer {
                 let severity =
                     ((duration_ms as f32 / self.thresholds.poor_tool_duration_ms as f32) * 50.0)
                         .min(100.0);
-                
+
                 // Find the slowest tool
                 let slowest_tool = metrics
                     .tool_calls
@@ -533,7 +532,10 @@ impl PerformanceAnalyzer {
                 let mut bottleneck = Bottleneck::new(
                     BottleneckCategory::SlowTools,
                     severity,
-                    format!("Average tool duration is {}ms, exceeding threshold", duration_ms),
+                    format!(
+                        "Average tool duration is {}ms, exceeding threshold",
+                        duration_ms
+                    ),
                 )
                 .with_current_value(format!("{}ms", duration_ms))
                 .with_threshold(format!("{}ms", self.thresholds.poor_tool_duration_ms));
@@ -554,7 +556,10 @@ impl PerformanceAnalyzer {
                 Bottleneck::new(
                     BottleneckCategory::HighErrorRate,
                     severity,
-                    format!("Error rate is {:.1}%, exceeding threshold", error_rate * 100.0),
+                    format!(
+                        "Error rate is {:.1}%, exceeding threshold",
+                        error_rate * 100.0
+                    ),
                 )
                 .with_current_value(format!("{:.1}%", error_rate * 100.0))
                 .with_threshold(format!("{:.1}%", self.thresholds.poor_error_rate * 100.0)),
@@ -566,13 +571,16 @@ impl PerformanceAnalyzer {
         if total_tokens > 0 {
             let cost_per_1k = (metrics.cost / total_tokens as f64) * 1000.0;
             if cost_per_1k > self.thresholds.poor_cost_per_1k_tokens {
-                let severity =
-                    ((cost_per_1k / self.thresholds.poor_cost_per_1k_tokens) * 50.0).min(100.0) as f32;
+                let severity = ((cost_per_1k / self.thresholds.poor_cost_per_1k_tokens) * 50.0)
+                    .min(100.0) as f32;
                 bottlenecks.push(
                     Bottleneck::new(
                         BottleneckCategory::HighCost,
                         severity,
-                        format!("Cost per 1K tokens is ${:.4}, exceeding threshold", cost_per_1k),
+                        format!(
+                            "Cost per 1K tokens is ${:.4}, exceeding threshold",
+                            cost_per_1k
+                        ),
                     )
                     .with_current_value(format!("${:.4}", cost_per_1k))
                     .with_threshold(format!("${:.4}", self.thresholds.poor_cost_per_1k_tokens)),
@@ -582,10 +590,10 @@ impl PerformanceAnalyzer {
 
         // Check throughput
         if let Some(tokens_per_second) = metrics.performance.tokens_per_second {
-            if tokens_per_second < self.thresholds.poor_tokens_per_second && tokens_per_second > 0.0 {
-                let severity =
-                    ((self.thresholds.poor_tokens_per_second / tokens_per_second) * 25.0).min(100.0)
-                        as f32;
+            if tokens_per_second < self.thresholds.poor_tokens_per_second && tokens_per_second > 0.0
+            {
+                let severity = ((self.thresholds.poor_tokens_per_second / tokens_per_second) * 25.0)
+                    .min(100.0) as f32;
                 bottlenecks.push(
                     Bottleneck::new(
                         BottleneckCategory::LowThroughput,
@@ -596,7 +604,10 @@ impl PerformanceAnalyzer {
                         ),
                     )
                     .with_current_value(format!("{:.1} tokens/sec", tokens_per_second))
-                    .with_threshold(format!("{:.1} tokens/sec", self.thresholds.poor_tokens_per_second)),
+                    .with_threshold(format!(
+                        "{:.1} tokens/sec",
+                        self.thresholds.poor_tokens_per_second
+                    )),
                 );
             }
         }
@@ -622,11 +633,14 @@ impl PerformanceAnalyzer {
         }
 
         // Sort by severity (highest first)
-        bottlenecks.sort_by(|a, b| b.severity.partial_cmp(&a.severity).unwrap_or(std::cmp::Ordering::Equal));
+        bottlenecks.sort_by(|a, b| {
+            b.severity
+                .partial_cmp(&a.severity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         bottlenecks
     }
-
 
     /// Generate optimization suggestions
     pub fn suggest_optimizations(&self, metrics: &FullAgentMetrics) -> Vec<Suggestion> {
@@ -735,7 +749,8 @@ impl PerformanceAnalyzer {
 
         // Throughput suggestions
         if let Some(tokens_per_second) = metrics.performance.tokens_per_second {
-            if tokens_per_second < self.thresholds.good_tokens_per_second && tokens_per_second > 0.0 {
+            if tokens_per_second < self.thresholds.good_tokens_per_second && tokens_per_second > 0.0
+            {
                 let priority = if tokens_per_second < self.thresholds.poor_tokens_per_second {
                     SuggestionPriority::High
                 } else {
@@ -795,7 +810,6 @@ impl PerformanceAnalyzer {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -807,8 +821,14 @@ mod tests {
 
     #[test]
     fn test_performance_rating_from_score() {
-        assert_eq!(PerformanceRating::from_score(100.0), PerformanceRating::Excellent);
-        assert_eq!(PerformanceRating::from_score(80.0), PerformanceRating::Excellent);
+        assert_eq!(
+            PerformanceRating::from_score(100.0),
+            PerformanceRating::Excellent
+        );
+        assert_eq!(
+            PerformanceRating::from_score(80.0),
+            PerformanceRating::Excellent
+        );
         assert_eq!(PerformanceRating::from_score(79.9), PerformanceRating::Good);
         assert_eq!(PerformanceRating::from_score(60.0), PerformanceRating::Good);
         assert_eq!(PerformanceRating::from_score(59.9), PerformanceRating::Fair);
@@ -837,17 +857,16 @@ mod tests {
 
     #[test]
     fn test_suggestion_creation() {
-        let suggestion = Suggestion::new(
-            SuggestionPriority::High,
-            "Reduce latency",
-            "Use caching",
-        )
-        .with_improvement("30% improvement")
-        .with_related_to(BottleneckCategory::HighLatency);
+        let suggestion = Suggestion::new(SuggestionPriority::High, "Reduce latency", "Use caching")
+            .with_improvement("30% improvement")
+            .with_related_to(BottleneckCategory::HighLatency);
 
         assert_eq!(suggestion.priority, SuggestionPriority::High);
         assert_eq!(suggestion.title, "Reduce latency");
-        assert_eq!(suggestion.expected_improvement, Some("30% improvement".to_string()));
+        assert_eq!(
+            suggestion.expected_improvement,
+            Some("30% improvement".to_string())
+        );
         assert_eq!(suggestion.related_to, Some(BottleneckCategory::HighLatency));
     }
 
@@ -912,7 +931,9 @@ mod tests {
         let bottlenecks = analyzer.identify_bottlenecks(&metrics);
 
         assert!(!bottlenecks.is_empty());
-        assert!(bottlenecks.iter().any(|b| b.category == BottleneckCategory::HighErrorRate));
+        assert!(bottlenecks
+            .iter()
+            .any(|b| b.category == BottleneckCategory::HighErrorRate));
     }
 
     #[test]
@@ -925,7 +946,9 @@ mod tests {
         let bottlenecks = analyzer.identify_bottlenecks(&metrics);
 
         assert!(!bottlenecks.is_empty());
-        assert!(bottlenecks.iter().any(|b| b.category == BottleneckCategory::HighCost));
+        assert!(bottlenecks
+            .iter()
+            .any(|b| b.category == BottleneckCategory::HighCost));
     }
 
     #[test]

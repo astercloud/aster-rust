@@ -84,7 +84,6 @@ impl Complexity {
     }
 }
 
-
 /// Risk severity level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -208,7 +207,6 @@ impl Risk {
         self
     }
 }
-
 
 /// A critical file identified for implementation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -369,7 +367,6 @@ impl PlanStep {
     }
 }
 
-
 /// An alternative implementation approach
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -518,7 +515,6 @@ impl ArchitecturalDecision {
     }
 }
 
-
 /// Requirements analysis result
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -620,7 +616,6 @@ impl ScopeDefinition {
         self
     }
 }
-
 
 /// Options for plan operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -828,13 +823,9 @@ impl PlanResultData {
 
     /// Calculate total estimated hours from steps
     pub fn calculate_total_hours(&self) -> f32 {
-        self.steps
-            .iter()
-            .filter_map(|s| s.estimated_hours)
-            .sum()
+        self.steps.iter().filter_map(|s| s.estimated_hours).sum()
     }
 }
-
 
 /// Plan Agent for implementation planning
 ///
@@ -1016,12 +1007,18 @@ impl PlanAgent {
         let task_lower = task.to_lowercase();
 
         // Check for performance requirements
-        if task_lower.contains("fast") || task_lower.contains("performance") || task_lower.contains("efficient") {
+        if task_lower.contains("fast")
+            || task_lower.contains("performance")
+            || task_lower.contains("efficient")
+        {
             requirements.push("Ensure optimal performance".to_string());
         }
 
         // Check for security requirements
-        if task_lower.contains("secure") || task_lower.contains("security") || task_lower.contains("auth") {
+        if task_lower.contains("secure")
+            || task_lower.contains("security")
+            || task_lower.contains("auth")
+        {
             requirements.push("Implement security best practices".to_string());
         }
 
@@ -1121,7 +1118,6 @@ impl PlanAgent {
     }
 }
 
-
 impl PlanAgent {
     /// Identify critical files for implementation
     pub async fn identify_files(&self) -> PlanResult<Vec<CriticalFile>> {
@@ -1190,14 +1186,13 @@ impl PlanAgent {
     /// Extract keywords from task description
     fn extract_keywords(&self, task: &str) -> Vec<String> {
         let stop_words = [
-            "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-            "have", "has", "had", "do", "does", "did", "will", "would", "could",
-            "should", "may", "might", "must", "shall", "can", "need", "to", "of",
-            "in", "for", "on", "with", "at", "by", "from", "as", "into", "through",
-            "and", "or", "but", "if", "then", "else", "when", "where", "why", "how",
-            "all", "each", "every", "both", "few", "more", "most", "other", "some",
-            "such", "no", "not", "only", "own", "same", "so", "than", "too", "very",
-            "just", "also", "now", "here", "there", "this", "that", "these", "those",
+            "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has",
+            "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "must",
+            "shall", "can", "need", "to", "of", "in", "for", "on", "with", "at", "by", "from",
+            "as", "into", "through", "and", "or", "but", "if", "then", "else", "when", "where",
+            "why", "how", "all", "each", "every", "both", "few", "more", "most", "other", "some",
+            "such", "no", "not", "only", "own", "same", "so", "than", "too", "very", "just",
+            "also", "now", "here", "there", "this", "that", "these", "those",
         ];
 
         task.split_whitespace()
@@ -1233,7 +1228,10 @@ impl PlanAgent {
         }
 
         // Security risks
-        if task_lower.contains("auth") || task_lower.contains("security") || task_lower.contains("password") {
+        if task_lower.contains("auth")
+            || task_lower.contains("security")
+            || task_lower.contains("password")
+        {
             risks.push(
                 Risk::new(
                     "R002",
@@ -1252,7 +1250,10 @@ impl PlanAgent {
         }
 
         // Performance risks
-        if task_lower.contains("performance") || task_lower.contains("optimize") || task_lower.contains("scale") {
+        if task_lower.contains("performance")
+            || task_lower.contains("optimize")
+            || task_lower.contains("scale")
+        {
             risks.push(
                 Risk::new(
                     "R003",
@@ -1271,7 +1272,10 @@ impl PlanAgent {
         }
 
         // Compatibility risks
-        if task_lower.contains("api") || task_lower.contains("interface") || task_lower.contains("breaking") {
+        if task_lower.contains("api")
+            || task_lower.contains("interface")
+            || task_lower.contains("breaking")
+        {
             risks.push(
                 Risk::new(
                     "R004",
@@ -1290,7 +1294,10 @@ impl PlanAgent {
         }
 
         // Dependency risks
-        if task_lower.contains("dependency") || task_lower.contains("upgrade") || task_lower.contains("library") {
+        if task_lower.contains("dependency")
+            || task_lower.contains("upgrade")
+            || task_lower.contains("library")
+        {
             risks.push(
                 Risk::new(
                     "R005",
@@ -1360,7 +1367,6 @@ impl PlanAgent {
     }
 }
 
-
 impl PlanAgent {
     /// Generate alternative implementation approaches
     pub async fn generate_alternatives(&self) -> PlanResult<Vec<Alternative>> {
@@ -1388,7 +1394,10 @@ impl PlanAgent {
         alternatives.push(standard);
 
         // Incremental approach
-        if task_lower.contains("refactor") || task_lower.contains("migrate") || task_lower.contains("upgrade") {
+        if task_lower.contains("refactor")
+            || task_lower.contains("migrate")
+            || task_lower.contains("upgrade")
+        {
             let incremental = Alternative::new(
                 "ALT002",
                 "Incremental Migration",
@@ -1409,7 +1418,10 @@ impl PlanAgent {
         }
 
         // Performance-focused approach
-        if task_lower.contains("performance") || task_lower.contains("optimize") || task_lower.contains("fast") {
+        if task_lower.contains("performance")
+            || task_lower.contains("optimize")
+            || task_lower.contains("fast")
+        {
             let performance = Alternative::new(
                 "ALT003",
                 "Performance-Optimized",
@@ -1544,7 +1556,10 @@ impl PlanAgent {
                 PlanStep::new(
                     step_number,
                     "Risk Mitigation",
-                    format!("Address identified high-severity risks:\n{}", mitigation_desc),
+                    format!(
+                        "Address identified high-severity risks:\n{}",
+                        mitigation_desc
+                    ),
                 )
                 .with_dependencies(vec![3])
                 .with_estimated_hours(2.0)
@@ -1675,7 +1690,10 @@ impl PlanAgent {
                     ArchitecturalDecision::new(
                         "AD002",
                         "Constraint Handling",
-                        format!("Design to accommodate constraints: {}", constraints.join(", ")),
+                        format!(
+                            "Design to accommodate constraints: {}",
+                            constraints.join(", ")
+                        ),
                     )
                     .with_context("Implementation must work within specified constraints")
                     .with_rationale("Constraints define the boundaries of acceptable solutions"),
@@ -1737,7 +1755,10 @@ impl PlanAgent {
         let mut recommendations = Vec::new();
 
         // Risk-based recommendations
-        for risk in risks.iter().filter(|r| matches!(r.severity, RiskSeverity::High | RiskSeverity::Critical)) {
+        for risk in risks
+            .iter()
+            .filter(|r| matches!(r.severity, RiskSeverity::High | RiskSeverity::Critical))
+        {
             recommendations.push(format!(
                 "Address {} before proceeding: {}",
                 risk.id, risk.description
@@ -1759,7 +1780,6 @@ impl PlanAgent {
         recommendations
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1808,13 +1828,9 @@ mod tests {
 
     #[test]
     fn test_critical_file_creation() {
-        let file = CriticalFile::new(
-            "src/main.rs",
-            "Main entry point",
-            ModificationType::Modify,
-        )
-        .with_priority(9)
-        .with_estimated_changes(50);
+        let file = CriticalFile::new("src/main.rs", "Main entry point", ModificationType::Modify)
+            .with_priority(9)
+            .with_estimated_changes(50);
 
         assert_eq!(file.path, PathBuf::from("src/main.rs"));
         assert_eq!(file.reason, "Main entry point");
@@ -1824,8 +1840,7 @@ mod tests {
 
     #[test]
     fn test_critical_file_priority_clamping() {
-        let file = CriticalFile::new("test.rs", "Test", ModificationType::Create)
-            .with_priority(15);
+        let file = CriticalFile::new("test.rs", "Test", ModificationType::Create).with_priority(15);
         assert_eq!(file.priority, 10);
     }
 
@@ -1952,9 +1967,13 @@ mod tests {
         let agent = PlanAgent::new(options);
 
         let keywords = agent.extract_keywords("Implement user authentication with JWT tokens");
-        
+
         assert!(!keywords.is_empty());
-        assert!(keywords.iter().any(|k| k == "implement" || k == "user" || k == "authentication" || k == "jwt" || k == "tokens"));
+        assert!(keywords.iter().any(|k| k == "implement"
+            || k == "user"
+            || k == "authentication"
+            || k == "jwt"
+            || k == "tokens"));
     }
 
     #[tokio::test]
@@ -1978,7 +1997,9 @@ mod tests {
         let risks = agent.assess_risks().await.unwrap();
 
         assert!(!risks.is_empty());
-        assert!(risks.iter().any(|r| matches!(r.category, RiskCategory::Security)));
+        assert!(risks
+            .iter()
+            .any(|r| matches!(r.category, RiskCategory::Security)));
     }
 
     #[tokio::test]
@@ -1988,7 +2009,9 @@ mod tests {
         let risks = agent.assess_risks().await.unwrap();
 
         assert!(!risks.is_empty());
-        assert!(risks.iter().any(|r| matches!(r.category, RiskCategory::Performance)));
+        assert!(risks
+            .iter()
+            .any(|r| matches!(r.category, RiskCategory::Performance)));
     }
 
     #[tokio::test]
@@ -2044,7 +2067,9 @@ mod tests {
         let files = agent.identify_files().await.unwrap();
 
         assert!(!files.is_empty());
-        assert!(files.iter().any(|f| f.path.to_string_lossy().contains("test.rs")));
+        assert!(files
+            .iter()
+            .any(|f| f.path.to_string_lossy().contains("test.rs")));
     }
 
     #[tokio::test]
@@ -2072,13 +2097,14 @@ mod tests {
 
     #[test]
     fn test_estimate_complexity_low() {
-        let options = PlanOptions::new("Simple task")
-            .with_thoroughness(ThoroughnessLevel::Quick);
+        let options = PlanOptions::new("Simple task").with_thoroughness(ThoroughnessLevel::Quick);
         let agent = PlanAgent::new(options);
 
-        let files = vec![
-            CriticalFile::new("file1.rs", "Test", ModificationType::Modify),
-        ];
+        let files = vec![CriticalFile::new(
+            "file1.rs",
+            "Test",
+            ModificationType::Modify,
+        )];
         let risks = vec![];
 
         let complexity = agent.estimate_complexity(&files, &risks);
@@ -2087,8 +2113,8 @@ mod tests {
 
     #[test]
     fn test_estimate_complexity_high() {
-        let options = PlanOptions::new("Complex task")
-            .with_thoroughness(ThoroughnessLevel::VeryThorough);
+        let options =
+            PlanOptions::new("Complex task").with_thoroughness(ThoroughnessLevel::VeryThorough);
         let agent = PlanAgent::new(options);
 
         let files: Vec<CriticalFile> = (0..15)
@@ -2096,12 +2122,20 @@ mod tests {
             .collect();
 
         let risks = vec![
-            Risk::new("R1", "Risk 1", RiskCategory::Security, RiskSeverity::Critical),
+            Risk::new(
+                "R1",
+                "Risk 1",
+                RiskCategory::Security,
+                RiskSeverity::Critical,
+            ),
             Risk::new("R2", "Risk 2", RiskCategory::Technical, RiskSeverity::High),
         ];
 
         let complexity = agent.estimate_complexity(&files, &risks);
-        assert!(matches!(complexity, Complexity::High | Complexity::VeryHigh));
+        assert!(matches!(
+            complexity,
+            Complexity::High | Complexity::VeryHigh
+        ));
     }
 
     #[test]
@@ -2109,12 +2143,17 @@ mod tests {
         let options = PlanOptions::new("Test task");
         let agent = PlanAgent::new(options);
 
-        let files = vec![
-            CriticalFile::new("file1.rs", "Test", ModificationType::Modify),
-        ];
-        let risks = vec![
-            Risk::new("R1", "High risk", RiskCategory::Security, RiskSeverity::High),
-        ];
+        let files = vec![CriticalFile::new(
+            "file1.rs",
+            "Test",
+            ModificationType::Modify,
+        )];
+        let risks = vec![Risk::new(
+            "R1",
+            "High risk",
+            RiskCategory::Security,
+            RiskSeverity::High,
+        )];
 
         let steps = agent.generate_steps(&files, &risks);
 

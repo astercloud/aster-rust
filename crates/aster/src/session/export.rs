@@ -55,10 +55,7 @@ impl ExportOptions {
 }
 
 /// Export a session to the specified format
-pub async fn export_session(
-    session_id: &str,
-    options: ExportOptions,
-) -> Result<String> {
+pub async fn export_session(session_id: &str, options: ExportOptions) -> Result<String> {
     let session = SessionManager::get_session(session_id, options.include_messages).await?;
 
     match options.format {
@@ -187,7 +184,10 @@ fn export_to_html(session: &Session, options: &ExportOptions) -> Result<String> 
     html.push_str("<head>\n");
     html.push_str("  <meta charset=\"UTF-8\">\n");
     html.push_str("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
-    html.push_str(&format!("  <title>{}</title>\n", escape_html(&session.name)));
+    html.push_str(&format!(
+        "  <title>{}</title>\n",
+        escape_html(&session.name)
+    ));
     html.push_str("  <style>\n");
     html.push_str(HTML_STYLES);
     html.push_str("  </style>\n");
@@ -202,17 +202,32 @@ fn export_to_html(session: &Session, options: &ExportOptions) -> Result<String> 
         html.push_str("  <div class=\"metadata\">\n");
         html.push_str("    <h2>Session Information</h2>\n");
         html.push_str("    <ul>\n");
-        html.push_str(&format!("      <li><strong>ID:</strong> {}</li>\n", escape_html(&session.id)));
-        html.push_str(&format!("      <li><strong>Created:</strong> {}</li>\n", session.created_at));
-        html.push_str(&format!("      <li><strong>Updated:</strong> {}</li>\n", session.updated_at));
+        html.push_str(&format!(
+            "      <li><strong>ID:</strong> {}</li>\n",
+            escape_html(&session.id)
+        ));
+        html.push_str(&format!(
+            "      <li><strong>Created:</strong> {}</li>\n",
+            session.created_at
+        ));
+        html.push_str(&format!(
+            "      <li><strong>Updated:</strong> {}</li>\n",
+            session.updated_at
+        ));
         html.push_str(&format!(
             "      <li><strong>Working Directory:</strong> <code>{}</code></li>\n",
             escape_html(&session.working_dir.to_string_lossy())
         ));
-        html.push_str(&format!("      <li><strong>Messages:</strong> {}</li>\n", session.message_count));
+        html.push_str(&format!(
+            "      <li><strong>Messages:</strong> {}</li>\n",
+            session.message_count
+        ));
 
         if let Some(tokens) = session.total_tokens {
-            html.push_str(&format!("      <li><strong>Total Tokens:</strong> {}</li>\n", tokens));
+            html.push_str(&format!(
+                "      <li><strong>Total Tokens:</strong> {}</li>\n",
+                tokens
+            ));
         }
 
         html.push_str("    </ul>\n");

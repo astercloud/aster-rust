@@ -17,7 +17,6 @@ pub enum CheckStatus {
     Fail,
 }
 
-
 /// 诊断检查结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosticCheck {
@@ -56,7 +55,6 @@ impl DiagnosticCheck {
         }
     }
 
-
     /// 创建失败的检查结果
     pub fn fail(name: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
@@ -83,7 +81,6 @@ impl DiagnosticCheck {
 
 /// 诊断检查器
 pub struct DiagnosticChecker;
-
 
 impl DiagnosticChecker {
     /// 检查 Git 可用性
@@ -115,7 +112,6 @@ impl DiagnosticChecker {
                 .with_fix("安装 ripgrep: https://github.com/BurntSushi/ripgrep"),
         }
     }
-
 
     /// 检查磁盘空间
     pub fn check_disk_space(path: &Path) -> DiagnosticCheck {
@@ -158,7 +154,6 @@ impl DiagnosticChecker {
         }
     }
 
-
     /// 检查内存使用
     pub fn check_memory_usage() -> DiagnosticCheck {
         #[cfg(target_os = "macos")]
@@ -184,22 +179,33 @@ impl DiagnosticChecker {
                 let mut available_kb = 0u64;
                 for line in content.lines() {
                     if line.starts_with("MemTotal:") {
-                        total_kb = line.split_whitespace().nth(1)
-                            .and_then(|s| s.parse().ok()).unwrap_or(0);
+                        total_kb = line
+                            .split_whitespace()
+                            .nth(1)
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(0);
                     } else if line.starts_with("MemAvailable:") {
-                        available_kb = line.split_whitespace().nth(1)
-                            .and_then(|s| s.parse().ok()).unwrap_or(0);
+                        available_kb = line
+                            .split_whitespace()
+                            .nth(1)
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(0);
                     }
                 }
                 let total_gb = total_kb as f64 / (1024.0 * 1024.0);
                 let used_percent = if total_kb > 0 {
                     ((total_kb - available_kb) as f64 / total_kb as f64) * 100.0
-                } else { 0.0 };
+                } else {
+                    0.0
+                };
 
                 if used_percent >= 90.0 {
                     DiagnosticCheck::warn("内存", format!("内存使用率高: {:.1}%", used_percent))
                 } else {
-                    DiagnosticCheck::pass("内存", format!("{:.1}% ({:.1} GB)", used_percent, total_gb))
+                    DiagnosticCheck::pass(
+                        "内存",
+                        format!("{:.1}% ({:.1} GB)", used_percent, total_gb),
+                    )
                 }
             } else {
                 DiagnosticCheck::warn("内存", "无法检查内存")
@@ -210,7 +216,6 @@ impl DiagnosticChecker {
             DiagnosticCheck::pass("内存", "内存检查跳过")
         }
     }
-
 
     /// 检查网络连接
     pub async fn check_network() -> DiagnosticCheck {
@@ -236,7 +241,13 @@ impl DiagnosticChecker {
             DiagnosticCheck::pass("环境变量", "使用默认配置")
         } else {
             DiagnosticCheck::pass("环境变量", format!("已设置 {} 个变量", set_vars.len()))
-                .with_details(set_vars.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", "))
+                .with_details(
+                    set_vars
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
         }
     }
 
@@ -249,7 +260,6 @@ impl DiagnosticChecker {
         Self::check_file_permissions(&config_dir)
     }
 }
-
 
 /// 运行所有诊断检查
 pub fn run_diagnostics() -> Vec<DiagnosticCheck> {
@@ -372,7 +382,9 @@ mod tests {
         let checks = run_diagnostics();
         assert!(!checks.is_empty());
         // 至少应该有环境检查
-        assert!(checks.iter().any(|c| c.name == "Git" || c.name == "Ripgrep"));
+        assert!(checks
+            .iter()
+            .any(|c| c.name == "Git" || c.name == "Ripgrep"));
     }
 
     #[test]

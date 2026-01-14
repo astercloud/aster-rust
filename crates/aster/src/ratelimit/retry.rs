@@ -33,7 +33,6 @@ impl Default for RetryPolicy {
     }
 }
 
-
 /// 计算重试延迟
 fn calculate_delay(policy: &RetryPolicy, attempt: u32) -> Duration {
     let mut delay = policy.base_delay_ms as f64 * policy.exponential_base.powi(attempt as i32);
@@ -51,10 +50,7 @@ fn calculate_delay(policy: &RetryPolicy, attempt: u32) -> Duration {
 }
 
 /// 带指数退避的重试
-pub async fn retry_with_backoff<T, E, F, Fut>(
-    mut f: F,
-    policy: RetryPolicy,
-) -> Result<T, E>
+pub async fn retry_with_backoff<T, E, F, Fut>(mut f: F, policy: RetryPolicy) -> Result<T, E>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, E>>,
@@ -78,7 +74,6 @@ where
 
     Err(last_error.unwrap())
 }
-
 
 /// 默认可重试状态码
 const DEFAULT_RETRYABLE_STATUS_CODES: &[u16] = &[429, 500, 502, 503, 504];
@@ -117,7 +112,6 @@ pub fn is_retryable_error(error: &str, status_codes: Option<&[u16]>) -> bool {
 
     false
 }
-
 
 /// 解析 Retry-After 头
 pub fn parse_retry_after(header: &str) -> Option<u64> {

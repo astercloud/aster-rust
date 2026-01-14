@@ -42,7 +42,7 @@ proptest! {
         for _ in 0..count {
             let id = counter.fetch_add(1, Ordering::SeqCst);
             let call_id = format!("call-{}-{}", Uuid::new_v4(), id);
-            
+
             // Each ID should be unique
             prop_assert!(ids.insert(call_id.clone()), "Duplicate call ID generated: {}", call_id);
         }
@@ -152,7 +152,7 @@ proptest! {
         let result = validate_args_standalone(&tool, &args);
 
         // Check type compatibility
-        let types_match = expected_type == value_type || 
+        let types_match = expected_type == value_type ||
             (expected_type == "number" && value_type == "number");
 
         if types_match {
@@ -289,7 +289,7 @@ proptest! {
         for (i, call) in calls.iter().enumerate() {
             prop_assert_eq!(&call.server_name, &format!("server_{}", i));
             prop_assert_eq!(&call.tool_name, &format!("tool_{}", i));
-            
+
             let index = call.args.get("index")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0) as usize;
@@ -303,11 +303,15 @@ proptest! {
 // ============================================================================
 
 /// Standalone argument validation (mirrors McpToolManager::validate_args)
-fn validate_args_standalone(tool: &McpTool, args: &serde_json::Map<String, serde_json::Value>) -> ArgValidationResult {
+fn validate_args_standalone(
+    tool: &McpTool,
+    args: &serde_json::Map<String, serde_json::Value>,
+) -> ArgValidationResult {
     let schema = &tool.input_schema;
 
     // If no schema or empty schema, accept any args
-    if schema.is_null() || (schema.is_object() && schema.as_object().map_or(true, |o| o.is_empty())) {
+    if schema.is_null() || (schema.is_object() && schema.as_object().map_or(true, |o| o.is_empty()))
+    {
         return ArgValidationResult::valid();
     }
 
@@ -379,10 +383,8 @@ fn types_compatible_standalone(expected: &str, actual: &str) -> bool {
 fn convert_result_standalone(result: serde_json::Value) -> Result<ToolCallResult, String> {
     // Check if result has content array
     if let Some(content) = result.get("content") {
-        let content_items: Vec<ToolResultContent> =
-            serde_json::from_value(content.clone()).map_err(|e| {
-                format!("Failed to parse tool result content: {}", e)
-            })?;
+        let content_items: Vec<ToolResultContent> = serde_json::from_value(content.clone())
+            .map_err(|e| format!("Failed to parse tool result content: {}", e))?;
 
         let is_error = result
             .get("isError")
@@ -416,7 +418,7 @@ mod unit_tests {
     fn test_call_info_elapsed() {
         let args = serde_json::Map::new();
         let info = CallInfo::new("call-1", "server", "tool", args);
-        
+
         // Elapsed time should be very small (just created)
         let elapsed = info.elapsed();
         assert!(elapsed.num_milliseconds() < 1000);
@@ -441,17 +443,15 @@ mod unit_tests {
             ToolResultContent::text("hello"),
             ToolResultContent::text("world"),
         ]);
-        
+
         // Should return the first text content
         assert_eq!(result.first_text(), Some("hello"));
     }
 
     #[test]
     fn test_tool_result_first_text_no_text() {
-        let result = ToolCallResult::success(vec![
-            ToolResultContent::image("data", "image/png"),
-        ]);
-        
+        let result = ToolCallResult::success(vec![ToolResultContent::image("data", "image/png")]);
+
         assert_eq!(result.first_text(), None);
     }
 
@@ -459,7 +459,12 @@ mod unit_tests {
     fn test_resource_content() {
         let content = ToolResultContent::resource("file:///path/to/file");
         match content {
-            ToolResultContent::Resource { uri, text, data, mime_type } => {
+            ToolResultContent::Resource {
+                uri,
+                text,
+                data,
+                mime_type,
+            } => {
                 assert_eq!(uri, "file:///path/to/file");
                 assert!(text.is_none());
                 assert!(data.is_none());
@@ -473,7 +478,7 @@ mod unit_tests {
     fn test_validation_empty_schema() {
         let tool = McpTool::new("test", "server", serde_json::json!({}));
         let args = serde_json::Map::new();
-        
+
         let result = validate_args_standalone(&tool, &args);
         assert!(result.valid);
     }
@@ -482,7 +487,7 @@ mod unit_tests {
     fn test_validation_null_schema() {
         let tool = McpTool::new("test", "server", serde_json::Value::Null);
         let args = serde_json::Map::new();
-        
+
         let result = validate_args_standalone(&tool, &args);
         assert!(result.valid);
     }
@@ -491,7 +496,7 @@ mod unit_tests {
     fn test_convert_result_legacy_string() {
         let result = convert_result_standalone(serde_json::json!("simple text"));
         assert!(result.is_ok());
-        
+
         let tool_result = result.unwrap();
         assert_eq!(tool_result.first_text(), Some("simple text"));
     }
@@ -500,7 +505,7 @@ mod unit_tests {
     fn test_convert_result_json_object() {
         let result = convert_result_standalone(serde_json::json!({"key": "value"}));
         assert!(result.is_ok());
-        
+
         let tool_result = result.unwrap();
         assert!(tool_result.first_text().is_some());
     }

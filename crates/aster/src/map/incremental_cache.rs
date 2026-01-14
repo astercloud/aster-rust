@@ -32,26 +32,23 @@ impl IncrementalCache {
         }
 
         match std::fs::read_to_string(&self.cache_file) {
-            Ok(content) => {
-                match serde_json::from_str(&content) {
-                    Ok(data) => {
-                        self.cache = Some(data);
-                        self.dirty = false;
-                        true
-                    }
-                    Err(_) => {
-                        self.cache = None;
-                        false
-                    }
+            Ok(content) => match serde_json::from_str(&content) {
+                Ok(data) => {
+                    self.cache = Some(data);
+                    self.dirty = false;
+                    true
                 }
-            }
+                Err(_) => {
+                    self.cache = None;
+                    false
+                }
+            },
             Err(_) => {
                 self.cache = None;
                 false
             }
         }
     }
-
 
     /// 保存缓存
     pub fn save(&mut self) -> bool {
@@ -94,8 +91,13 @@ impl IncrementalCache {
 
         match std::fs::metadata(file_path) {
             Ok(meta) => {
-                let mtime = meta.modified()
-                    .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64)
+                let mtime = meta
+                    .modified()
+                    .map(|t| {
+                        t.duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as u64
+                    })
                     .unwrap_or(0);
                 if entry.mtime != mtime {
                     if let Ok(content) = std::fs::read_to_string(file_path) {
@@ -108,7 +110,6 @@ impl IncrementalCache {
             Err(_) => true,
         }
     }
-
 
     /// 批量检查文件
     pub fn check_files(&self, file_paths: &[PathBuf]) -> FileCheckResult {
@@ -137,7 +138,11 @@ impl IncrementalCache {
             }
         }
 
-        FileCheckResult { changed, unchanged, removed }
+        FileCheckResult {
+            changed,
+            unchanged,
+            removed,
+        }
     }
 
     /// 获取缓存的模块
@@ -152,7 +157,9 @@ impl IncrementalCache {
         if self.cache.is_none() {
             self.cache = Some(CacheData {
                 version: "1.0.0".to_string(),
-                root_path: self.cache_file.parent()
+                root_path: self
+                    .cache_file
+                    .parent()
                     .and_then(|p| p.parent())
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_default(),
@@ -164,19 +171,30 @@ impl IncrementalCache {
         if let Ok(meta) = std::fs::metadata(file_path) {
             if let Ok(content) = std::fs::read_to_string(file_path) {
                 let hash = self.calculate_hash(&content);
-                let mtime = meta.modified()
-                    .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64)
+                let mtime = meta
+                    .modified()
+                    .map(|t| {
+                        t.duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as u64
+                    })
                     .unwrap_or(0);
 
                 let relative = self.get_relative_path(file_path);
                 if let Some(cache) = self.cache.as_mut() {
-                    cache.entries.insert(relative, CacheEntry { hash, mtime, module });
+                    cache.entries.insert(
+                        relative,
+                        CacheEntry {
+                            hash,
+                            mtime,
+                            module,
+                        },
+                    );
                     self.dirty = true;
                 }
             }
         }
     }
-
 
     /// 删除缓存条目
     pub fn remove_entry(&mut self, file_path: &Path) {

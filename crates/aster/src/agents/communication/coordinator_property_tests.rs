@@ -44,8 +44,12 @@ mod property_tests {
 
     // Strategy for generating a list of capabilities
     fn capabilities_list_strategy() -> impl Strategy<Value = Vec<String>> {
-        prop::collection::vec(capability_strategy(), 0..5)
-            .prop_map(|caps| caps.into_iter().collect::<HashSet<_>>().into_iter().collect())
+        prop::collection::vec(capability_strategy(), 0..5).prop_map(|caps| {
+            caps.into_iter()
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect()
+        })
     }
 
     // Strategy for generating agent capabilities
@@ -65,15 +69,13 @@ mod property_tests {
 
     // Strategy for generating unique agent capabilities
     fn unique_agents_strategy(count: usize) -> impl Strategy<Value = Vec<AgentCapabilities>> {
-        prop::collection::vec(agent_capabilities_strategy(), count..count + 1).prop_map(
-            |agents| {
-                let mut seen = HashSet::new();
-                agents
-                    .into_iter()
-                    .filter(|a| seen.insert(a.agent_id.clone()))
-                    .collect()
-            },
-        )
+        prop::collection::vec(agent_capabilities_strategy(), count..count + 1).prop_map(|agents| {
+            let mut seen = HashSet::new();
+            agents
+                .into_iter()
+                .filter(|a| seen.insert(a.agent_id.clone()))
+                .collect()
+        })
     }
 
     // Strategy for generating task types

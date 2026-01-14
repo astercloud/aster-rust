@@ -78,22 +78,22 @@ mod property_tests {
     // Strategy for generating connection options
     fn connection_options_strategy() -> impl Strategy<Value = ConnectionOptions> {
         (
-            1u64..120u64,    // timeout in seconds
-            0u32..10u32,     // max_retries
-            5u64..120u64,    // heartbeat_interval in seconds
-            100u64..5000u64, // reconnect_delay_base in ms
+            1u64..120u64,      // timeout in seconds
+            0u32..10u32,       // max_retries
+            5u64..120u64,      // heartbeat_interval in seconds
+            100u64..5000u64,   // reconnect_delay_base in ms
             1000u64..60000u64, // reconnect_delay_max in ms
         )
-            .prop_map(
-                |(timeout, max_retries, heartbeat, delay_base, delay_max)| ConnectionOptions {
+            .prop_map(|(timeout, max_retries, heartbeat, delay_base, delay_max)| {
+                ConnectionOptions {
                     timeout: Duration::from_secs(timeout),
                     max_retries,
                     heartbeat_interval: Duration::from_secs(heartbeat),
                     reconnect_delay_base: Duration::from_millis(delay_base),
                     reconnect_delay_max: Duration::from_millis(delay_max.max(delay_base + 1)),
                     queue_max_size: 100,
-                },
-            )
+                }
+            })
     }
 
     /// **Property 1: Transport Type Support**

@@ -42,7 +42,6 @@ pub struct ValidationResult {
     pub warnings: Vec<String>,
 }
 
-
 /// AGENTS.md 解析器
 pub struct AgentsMdParser {
     /// AGENTS.md 文件路径
@@ -105,7 +104,6 @@ impl AgentsMdParser {
         }
     }
 
-
     /// 注入到系统提示
     ///
     /// 核心功能：将 AGENTS.md 的内容添加到系统提示中
@@ -153,14 +151,16 @@ IMPORTANT: this context may or may not be relevant to your tasks. You should not
         &self.agents_md_path
     }
 
-
     /// 监听 AGENTS.md 变化
     pub fn watch<F>(&self, callback: F) -> Result<(), notify::Error>
     where
         F: Fn(String) + Send + Sync + 'static,
     {
         if !self.exists() {
-            tracing::warn!("AGENTS.md 不存在，无法监听: {}", self.agents_md_path.display());
+            tracing::warn!(
+                "AGENTS.md 不存在，无法监听: {}",
+                self.agents_md_path.display()
+            );
             return Ok(());
         }
 
@@ -197,7 +197,6 @@ IMPORTANT: this context may or may not be relevant to your tasks. You should not
         *watcher_guard = None;
         self.change_callbacks.write().clear();
     }
-
 
     /// 创建默认的 AGENTS.md 模板
     pub fn create_template(project_name: &str, project_type: Option<&str>) -> String {
@@ -262,7 +261,6 @@ This file provides guidance to AI Agent when working with code in this repositor
         fs::write(&self.agents_md_path, template)
     }
 
-
     /// 更新 AGENTS.md
     pub fn update(&self, content: &str) -> Result<(), std::io::Error> {
         fs::write(&self.agents_md_path, content)
@@ -326,7 +324,6 @@ impl Default for AgentsMdParser {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -377,7 +374,6 @@ mod tests {
         assert!(result.contains("agentsMd"));
         assert!(result.contains("Do this"));
     }
-
 
     #[test]
     fn test_get_content() {
@@ -437,7 +433,6 @@ mod tests {
         let content = parser.get_content().unwrap();
         assert_eq!(content, "new content");
     }
-
 
     #[test]
     fn test_validate_no_file() {

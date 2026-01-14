@@ -116,10 +116,7 @@ pub fn load_hooks_from_file(config_path: &Path) -> Result<(), String> {
                         register_hook(event, config);
                     }
                     Err(e) => {
-                        warn!(
-                            "Invalid hook config for event {}: {}",
-                            event_name, e
-                        );
+                        warn!("Invalid hook config for event {}: {}", event_name, e);
                     }
                 }
             }

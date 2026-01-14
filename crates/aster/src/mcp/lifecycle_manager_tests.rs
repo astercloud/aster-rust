@@ -28,7 +28,14 @@ mod property_tests {
             1u32..10u32,     // max_consecutive_failures
         )
             .prop_map(
-                |(startup, shutdown, max_restarts, restart_delay, health_interval, max_failures)| {
+                |(
+                    startup,
+                    shutdown,
+                    max_restarts,
+                    restart_delay,
+                    health_interval,
+                    max_failures,
+                )| {
                     LifecycleOptions {
                         startup_timeout: Duration::from_secs(startup),
                         shutdown_timeout: Duration::from_secs(shutdown),

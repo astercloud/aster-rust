@@ -81,7 +81,6 @@ pub fn find_settings_files(start_dir: Option<&Path>) -> Vec<PathBuf> {
     found
 }
 
-
 /// 解析 AGENTS.md 文件
 pub fn parse_agents_md(file_path: &Path) -> Vec<AgentsMdSection> {
     let content = match fs::read_to_string(file_path) {
@@ -168,7 +167,6 @@ pub fn extract_rules(sections: &[AgentsMdSection]) -> ProjectRules {
 
     rules
 }
-
 
 /// 从内容中解析列表项
 fn parse_list_from_content(content: &str) -> Vec<String> {

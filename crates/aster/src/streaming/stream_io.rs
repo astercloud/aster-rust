@@ -241,7 +241,10 @@ impl StreamJsonReader {
     }
 
     /// Read from a BufRead source
-    pub fn read_from<R: BufRead>(&mut self, reader: &mut R) -> std::io::Result<Option<AnyStreamMessage>> {
+    pub fn read_from<R: BufRead>(
+        &mut self,
+        reader: &mut R,
+    ) -> std::io::Result<Option<AnyStreamMessage>> {
         let mut line = String::new();
         let bytes = reader.read_line(&mut line)?;
 
@@ -284,7 +287,11 @@ impl<W: Write> StreamJsonWriter<W> {
     }
 
     /// Write user message
-    pub fn write_user_message(&mut self, content: &str, attachments: Option<Vec<Attachment>>) -> std::io::Result<()> {
+    pub fn write_user_message(
+        &mut self,
+        content: &str,
+        attachments: Option<Vec<Attachment>>,
+    ) -> std::io::Result<()> {
         let msg = UserStreamMessage {
             r#type: StreamMessageType::UserMessage,
             timestamp: current_timestamp(),
@@ -296,7 +303,12 @@ impl<W: Write> StreamJsonWriter<W> {
     }
 
     /// Write assistant message
-    pub fn write_assistant_message(&mut self, content: &str, model: Option<&str>, stop_reason: Option<&str>) -> std::io::Result<()> {
+    pub fn write_assistant_message(
+        &mut self,
+        content: &str,
+        model: Option<&str>,
+        stop_reason: Option<&str>,
+    ) -> std::io::Result<()> {
         let msg = AssistantStreamMessage {
             r#type: StreamMessageType::AssistantMessage,
             timestamp: current_timestamp(),
@@ -309,7 +321,12 @@ impl<W: Write> StreamJsonWriter<W> {
     }
 
     /// Write tool use
-    pub fn write_tool_use(&mut self, tool_id: &str, tool_name: &str, input: serde_json::Value) -> std::io::Result<()> {
+    pub fn write_tool_use(
+        &mut self,
+        tool_id: &str,
+        tool_name: &str,
+        input: serde_json::Value,
+    ) -> std::io::Result<()> {
         let msg = ToolUseStreamMessage {
             r#type: StreamMessageType::ToolUse,
             timestamp: current_timestamp(),
@@ -322,7 +339,13 @@ impl<W: Write> StreamJsonWriter<W> {
     }
 
     /// Write tool result
-    pub fn write_tool_result(&mut self, tool_id: &str, success: bool, output: Option<&str>, error: Option<&str>) -> std::io::Result<()> {
+    pub fn write_tool_result(
+        &mut self,
+        tool_id: &str,
+        success: bool,
+        output: Option<&str>,
+        error: Option<&str>,
+    ) -> std::io::Result<()> {
         let msg = ToolResultStreamMessage {
             r#type: StreamMessageType::ToolResult,
             timestamp: current_timestamp(),
@@ -349,7 +372,12 @@ impl<W: Write> StreamJsonWriter<W> {
     }
 
     /// Write error
-    pub fn write_error(&mut self, code: &str, message: &str, details: Option<serde_json::Value>) -> std::io::Result<()> {
+    pub fn write_error(
+        &mut self,
+        code: &str,
+        message: &str,
+        details: Option<serde_json::Value>,
+    ) -> std::io::Result<()> {
         let msg = ErrorStreamMessage {
             r#type: StreamMessageType::Error,
             timestamp: current_timestamp(),
@@ -373,7 +401,11 @@ impl<W: Write> StreamJsonWriter<W> {
     }
 
     /// Write system event
-    pub fn write_system(&mut self, event: &str, data: Option<serde_json::Value>) -> std::io::Result<()> {
+    pub fn write_system(
+        &mut self,
+        event: &str,
+        data: Option<serde_json::Value>,
+    ) -> std::io::Result<()> {
         let msg = SystemStreamMessage {
             r#type: StreamMessageType::System,
             timestamp: current_timestamp(),
@@ -427,7 +459,6 @@ impl<R: BufRead, W: Write> StreamSession<R, W> {
         self.writer.write_done(None)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

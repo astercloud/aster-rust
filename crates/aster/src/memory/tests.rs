@@ -74,7 +74,6 @@ fn test_memory_link_serialize() {
     assert_eq!(parsed.id, "link-1");
 }
 
-
 #[test]
 fn test_user_profile_default() {
     let profile = UserProfile::default();
@@ -174,7 +173,6 @@ fn test_compressor_empty_error() {
     assert!(result.is_err());
 }
 
-
 #[test]
 fn test_compressor_evaluate_importance() {
     let compressor = MemoryCompressor::default();
@@ -185,7 +183,13 @@ fn test_compressor_evaluate_importance() {
         session_id: "s1".to_string(),
         summary: "Important".to_string(),
         topics: vec!["a".to_string(), "b".to_string(), "c".to_string()],
-        files_discussed: vec!["1".to_string(), "2".to_string(), "3".to_string(), "4".to_string(), "5".to_string()],
+        files_discussed: vec![
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string(),
+            "5".to_string(),
+        ],
         symbols_discussed: vec![],
         emotion: MemoryEmotion::Meaningful,
         importance: MemoryImportance::Medium,

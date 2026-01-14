@@ -33,7 +33,6 @@ pub struct ChunkedMeta {
     pub updated_at: Option<String>,
 }
 
-
 /// 全局依赖图节点
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalDependencyNode {
@@ -84,7 +83,6 @@ pub struct LayerWithChunks {
     pub module_count: usize,
 }
 
-
 /// Chunk 数据文件
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChunkData {
@@ -129,8 +127,9 @@ pub struct ChunkedGenerateOptions {
     pub output_dir: Option<String>,
 }
 
-fn default_true() -> bool { true }
-
+fn default_true() -> bool {
+    true
+}
 
 /// 模块实现状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -177,7 +176,6 @@ pub enum PlannedStatus {
     Planned,
     InProgress,
 }
-
 
 /// 重构任务类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

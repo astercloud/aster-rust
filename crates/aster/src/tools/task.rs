@@ -219,7 +219,11 @@ impl TaskManager {
     }
 
     /// Create a TaskManager with custom settings
-    pub fn with_config(max_concurrent: usize, max_runtime: Duration, output_directory: PathBuf) -> Self {
+    pub fn with_config(
+        max_concurrent: usize,
+        max_runtime: Duration,
+        output_directory: PathBuf,
+    ) -> Self {
         Self {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             completed_tasks: Arc::new(RwLock::new(HashMap::new())),
@@ -307,7 +311,6 @@ mod option_instant_serde {
     }
 }
 
-
 // =============================================================================
 // Task Start Implementation (Requirements: 10.1, 10.4)
 // =============================================================================
@@ -344,9 +347,9 @@ impl TaskManager {
         let mut cmd = self.build_command(command, context);
 
         // Create output file for writing
-        let output_file_handle = tokio::fs::File::create(&output_file)
-            .await
-            .map_err(|e| ToolError::execution_failed(format!("Failed to create output file: {}", e)))?;
+        let output_file_handle = tokio::fs::File::create(&output_file).await.map_err(|e| {
+            ToolError::execution_failed(format!("Failed to create output file: {}", e))
+        })?;
 
         // Spawn the process
         let child = cmd
@@ -468,7 +471,9 @@ impl TaskManager {
                 let mut reader = BufReader::new(stderr).lines();
                 while let Ok(Some(line)) = reader.next_line().await {
                     let mut file = output_file_stderr.lock().await;
-                    let _ = file.write_all(format!("[stderr] {}\n", line).as_bytes()).await;
+                    let _ = file
+                        .write_all(format!("[stderr] {}\n", line).as_bytes())
+                        .await;
                 }
             }
         };
@@ -516,7 +521,6 @@ impl TaskManager {
     }
 }
 
-
 // =============================================================================
 // Task Query Implementation (Requirements: 10.2, 10.6)
 // =============================================================================
@@ -553,7 +557,11 @@ impl TaskManager {
     /// Optionally limits to the last N lines.
     ///
     /// Requirements: 10.6
-    pub async fn get_output(&self, task_id: &str, lines: Option<usize>) -> Result<String, ToolError> {
+    pub async fn get_output(
+        &self,
+        task_id: &str,
+        lines: Option<usize>,
+    ) -> Result<String, ToolError> {
         // Find the output file path
         let output_file = {
             // Check running tasks
@@ -572,9 +580,9 @@ impl TaskManager {
         };
 
         // Read the output file
-        let content = tokio::fs::read_to_string(&output_file)
-            .await
-            .map_err(|e| ToolError::execution_failed(format!("Failed to read output file: {}", e)))?;
+        let content = tokio::fs::read_to_string(&output_file).await.map_err(|e| {
+            ToolError::execution_failed(format!("Failed to read output file: {}", e))
+        })?;
 
         // Apply line limit if specified
         match lines {
@@ -622,7 +630,6 @@ impl TaskManager {
     }
 }
 
-
 // =============================================================================
 // Task Termination Implementation (Requirements: 10.3)
 // =============================================================================
@@ -647,7 +654,10 @@ impl TaskManager {
                 Ok(Ok(status)) => {
                     // Process already finished
                     let exit_code = status.code().unwrap_or(-1);
-                    debug!("Task {} already finished with exit code {}", task_id, exit_code);
+                    debug!(
+                        "Task {} already finished with exit code {}",
+                        task_id, exit_code
+                    );
                     handle.state.mark_completed(exit_code);
                 }
                 _ => {
@@ -697,7 +707,6 @@ impl TaskManager {
     }
 }
 
-
 // =============================================================================
 // Timeout Cleanup Implementation (Requirements: 10.5)
 // =============================================================================
@@ -722,19 +731,19 @@ impl TaskManager {
         let mut cleaned = 0;
         for task_id in timed_out_ids {
             warn!("Cleaning up timed-out task: {}", task_id);
-            
+
             let mut tasks = self.tasks.write().await;
             if let Some(mut handle) = tasks.remove(&task_id) {
                 // Kill the process
                 let _ = handle.child.kill().await;
-                
+
                 // Update state
                 handle.state.mark_timed_out();
-                
+
                 // Move to completed tasks
                 let mut completed = self.completed_tasks.write().await;
                 completed.insert(task_id, handle.state);
-                
+
                 cleaned += 1;
             }
         }
@@ -751,9 +760,7 @@ impl TaskManager {
             let completed = self.completed_tasks.read().await;
             completed
                 .iter()
-                .filter(|(_, state)| {
-                    state.end_time.map_or(false, |end| end.elapsed() > max_age)
-                })
+                .filter(|(_, state)| state.end_time.map_or(false, |end| end.elapsed() > max_age))
                 .map(|(id, _)| id.clone())
                 .collect()
         };
@@ -787,7 +794,6 @@ impl TaskManager {
         })
     }
 }
-
 
 // =============================================================================
 // Unit Tests
@@ -924,7 +930,10 @@ mod tests {
     fn test_task_manager_default() {
         let manager = TaskManager::new();
         assert_eq!(manager.max_concurrent(), DEFAULT_MAX_CONCURRENT);
-        assert_eq!(manager.max_runtime(), Duration::from_secs(DEFAULT_MAX_RUNTIME_SECS));
+        assert_eq!(
+            manager.max_runtime(),
+            Duration::from_secs(DEFAULT_MAX_RUNTIME_SECS)
+        );
     }
 
     #[test]

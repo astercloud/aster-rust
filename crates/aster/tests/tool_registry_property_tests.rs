@@ -221,7 +221,7 @@ proptest! {
             .chain(native_only_names.iter())
             .chain(mcp_only_names.iter())
             .collect();
-        
+
         if all_names.len() != shared_names.len() + native_only_names.len() + mcp_only_names.len() {
             // Names overlap between sets, skip this test case
             return Ok(());
@@ -287,7 +287,7 @@ proptest! {
         for name in &tool_names {
             let mcp_tool = McpToolWrapper::new(name, "MCP version", serde_json::json!({}), "server");
             registry.register_mcp(name.clone(), mcp_tool);
-            
+
             let native_tool = ConfigurableTestTool::new(name)
                 .with_description("Native version");
             registry.register(Box::new(native_tool));
@@ -333,7 +333,7 @@ proptest! {
         context in arb_tool_context()
     ) {
         let mut registry = ToolRegistry::new();
-        
+
         let tool = ConfigurableTestTool::new(&tool_name)
             .with_permission(PermissionBehavior::Deny);
         registry.register(Box::new(tool));
@@ -344,7 +344,7 @@ proptest! {
             let result = registry.execute(&tool_name, params, &context, None).await;
 
             prop_assert!(result.is_err(), "Execution should fail when permission denied");
-            
+
             match result.unwrap_err() {
                 ToolError::PermissionDenied(reason) => {
                     prop_assert!(
@@ -374,7 +374,7 @@ proptest! {
         context in arb_tool_context()
     ) {
         let mut registry = ToolRegistry::new();
-        
+
         let tool = ConfigurableTestTool::new(&tool_name)
             .with_permission(PermissionBehavior::Allow);
         registry.register(Box::new(tool));
@@ -385,7 +385,7 @@ proptest! {
             let result = registry.execute(&tool_name, params, &context, None).await;
 
             prop_assert!(result.is_ok(), "Execution should succeed when permission allowed");
-            
+
             let tool_result = result.unwrap();
             prop_assert!(tool_result.is_success(), "Tool result should indicate success");
 
@@ -406,7 +406,7 @@ proptest! {
         context in arb_tool_context()
     ) {
         let mut registry = ToolRegistry::new();
-        
+
         let tool = ConfigurableTestTool::new(&tool_name)
             .with_permission(PermissionBehavior::Ask);
         registry.register(Box::new(tool));
@@ -440,7 +440,7 @@ proptest! {
         context in arb_tool_context()
     ) {
         let mut registry = ToolRegistry::new();
-        
+
         // Tool that would fail during execution, but has denied permission
         let tool = ConfigurableTestTool::new(&tool_name)
             .with_permission(PermissionBehavior::Deny)
@@ -453,7 +453,7 @@ proptest! {
             let result = registry.execute(&tool_name, params, &context, None).await;
 
             prop_assert!(result.is_err(), "Should fail");
-            
+
             // Should be PermissionDenied, NOT ExecutionFailed
             // This proves permission check happened before execution
             match result.unwrap_err() {
@@ -533,42 +533,45 @@ mod edge_case_tests {
     #[tokio::test]
     async fn test_ask_permission_with_approving_callback() {
         let mut registry = ToolRegistry::new();
-        
-        let tool = ConfigurableTestTool::new("ask_tool")
-            .with_permission(PermissionBehavior::Ask);
+
+        let tool = ConfigurableTestTool::new("ask_tool").with_permission(PermissionBehavior::Ask);
         registry.register(Box::new(tool));
 
         let context = ToolContext::new(PathBuf::from("/tmp"));
         let params = serde_json::json!({"input": "test"});
 
         // Callback that approves
-        let callback: aster::tools::PermissionRequestCallback = Box::new(|_name, _msg| {
-            Box::pin(async { true })
-        });
+        let callback: aster::tools::PermissionRequestCallback =
+            Box::new(|_name, _msg| Box::pin(async { true }));
 
-        let result = registry.execute("ask_tool", params, &context, Some(callback)).await;
+        let result = registry
+            .execute("ask_tool", params, &context, Some(callback))
+            .await;
         assert!(result.is_ok(), "Should succeed with approving callback");
     }
 
     #[tokio::test]
     async fn test_ask_permission_with_denying_callback() {
         let mut registry = ToolRegistry::new();
-        
-        let tool = ConfigurableTestTool::new("ask_tool")
-            .with_permission(PermissionBehavior::Ask);
+
+        let tool = ConfigurableTestTool::new("ask_tool").with_permission(PermissionBehavior::Ask);
         registry.register(Box::new(tool));
 
         let context = ToolContext::new(PathBuf::from("/tmp"));
         let params = serde_json::json!({"input": "test"});
 
         // Callback that denies
-        let callback: aster::tools::PermissionRequestCallback = Box::new(|_name, _msg| {
-            Box::pin(async { false })
-        });
+        let callback: aster::tools::PermissionRequestCallback =
+            Box::new(|_name, _msg| Box::pin(async { false }));
 
-        let result = registry.execute("ask_tool", params, &context, Some(callback)).await;
+        let result = registry
+            .execute("ask_tool", params, &context, Some(callback))
+            .await;
         assert!(result.is_err(), "Should fail with denying callback");
-        assert!(matches!(result.unwrap_err(), ToolError::PermissionDenied(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ToolError::PermissionDenied(_)
+        ));
     }
 
     #[test]
@@ -576,16 +579,19 @@ mod edge_case_tests {
         let mut registry = ToolRegistry::new();
 
         // Register MCP first
-        let mcp_tool = McpToolWrapper::new("shared", "MCP version", serde_json::json!({}), "server");
+        let mcp_tool =
+            McpToolWrapper::new("shared", "MCP version", serde_json::json!({}), "server");
         registry.register_mcp("shared".to_string(), mcp_tool);
 
         // Register native
-        let native_tool = ConfigurableTestTool::new("shared")
-            .with_description("Native version");
+        let native_tool = ConfigurableTestTool::new("shared").with_description("Native version");
         registry.register(Box::new(native_tool));
 
         // Native should have priority
-        assert_eq!(registry.get("shared").unwrap().description(), "Native version");
+        assert_eq!(
+            registry.get("shared").unwrap().description(),
+            "Native version"
+        );
 
         // Unregister native
         registry.unregister("shared");
@@ -598,7 +604,7 @@ mod edge_case_tests {
     #[test]
     fn test_tool_definitions_match_tools() {
         let mut registry = ToolRegistry::new();
-        
+
         registry.register(Box::new(ConfigurableTestTool::new("tool1")));
         registry.register(Box::new(ConfigurableTestTool::new("tool2")));
 
@@ -625,7 +631,7 @@ mod edge_case_tests {
         assert_eq!(wrapper.name(), "test_mcp");
         assert_eq!(wrapper.description(), "Test MCP tool description");
         assert_eq!(wrapper.server_name(), "my_server");
-        
+
         let schema = wrapper.input_schema();
         assert_eq!(schema["type"], "object");
         assert!(schema["properties"]["x"].is_object());

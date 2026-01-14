@@ -199,7 +199,10 @@ fn merge_permissions_combine(
     // Combine conditions (avoiding duplicates)
     let mut combined_conditions = existing.conditions.clone();
     for cond in &new_perm.conditions {
-        if !combined_conditions.iter().any(|c| conditions_equal(c, cond)) {
+        if !combined_conditions
+            .iter()
+            .any(|c| conditions_equal(c, cond))
+        {
             combined_conditions.push(cond.clone());
         }
     }
@@ -233,10 +236,7 @@ fn merge_permissions_combine(
 ///
 /// Similar to merge, but preserves all conditions and restrictions from both
 /// without deduplication based on content.
-fn merge_permissions_union(
-    existing: &ToolPermission,
-    new_perm: &ToolPermission,
-) -> ToolPermission {
+fn merge_permissions_union(existing: &ToolPermission, new_perm: &ToolPermission) -> ToolPermission {
     let mut merged = new_perm.clone();
 
     // Union all conditions
@@ -322,7 +322,9 @@ mod tests {
 
     #[test]
     fn test_scope_priority_ordering() {
-        assert!(scope_priority(PermissionScope::Session) > scope_priority(PermissionScope::Project));
+        assert!(
+            scope_priority(PermissionScope::Session) > scope_priority(PermissionScope::Project)
+        );
         assert!(scope_priority(PermissionScope::Project) > scope_priority(PermissionScope::Global));
     }
 
@@ -603,8 +605,12 @@ mod tests {
             description: None,
         };
 
-        let existing =
-            create_permission_with_condition("bash", true, PermissionScope::Global, condition.clone());
+        let existing = create_permission_with_condition(
+            "bash",
+            true,
+            PermissionScope::Global,
+            condition.clone(),
+        );
         let new_perm =
             create_permission_with_condition("bash", false, PermissionScope::Project, condition);
 

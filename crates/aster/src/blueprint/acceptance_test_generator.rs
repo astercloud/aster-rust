@@ -4,14 +4,13 @@
 //! 验收测试一旦生成，子 Agent 不能修改，只能编写代码使其通过。
 //!
 
+use chrono::Utc;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use chrono::Utc;
 use uuid::Uuid;
 
 use super::types::{
-    AcceptanceTest, AcceptanceCriterion, AcceptanceCheckType,
-    TaskNode, SystemModule, Blueprint,
+    AcceptanceCheckType, AcceptanceCriterion, AcceptanceTest, Blueprint, SystemModule, TaskNode,
 };
 
 // ============================================================================
@@ -41,7 +40,6 @@ impl Default for AcceptanceTestGeneratorConfig {
         }
     }
 }
-
 
 // ============================================================================
 // 生成上下文
@@ -92,7 +90,6 @@ impl AcceptanceTestContext {
         self
     }
 }
-
 
 // ============================================================================
 // 生成结果
@@ -155,7 +152,6 @@ impl AcceptanceTestGenerator {
         AcceptanceTestResult::success(tests)
     }
 
-
     /// 构建生成验收测试的 prompt
     fn build_prompt(&self, context: &AcceptanceTestContext) -> String {
         let task = &context.task;
@@ -173,8 +169,7 @@ impl AcceptanceTestGenerator {
 - **项目名称**: {}
 - **项目描述**: {}
 "#,
-            task.name, task.description, task.priority,
-            blueprint.name, blueprint.description
+            task.name, task.description, task.priority, blueprint.name, blueprint.description
         );
 
         if let Some(ref module) = context.module {
@@ -227,7 +222,6 @@ impl AcceptanceTestGenerator {
 
         prompt
     }
-
 
     /// 生成模拟测试（用于开发阶段）
     fn generate_mock_tests(&self, context: &AcceptanceTestContext) -> Vec<AcceptanceTest> {
@@ -303,7 +297,6 @@ mod acceptance_tests {{
         )
     }
 
-
     /// 写入验收测试文件到磁盘
     pub fn write_test_files(&self, tests: &[AcceptanceTest]) -> HashMap<String, bool> {
         let mut results = HashMap::new();
@@ -346,7 +339,6 @@ impl Default for AcceptanceTestGenerator {
     }
 }
 
-
 // ============================================================================
 // 工厂函数
 // ============================================================================
@@ -374,8 +366,8 @@ mod tests {
         let task = TaskNode::new("测试任务".to_string(), "描述".to_string(), 0);
         let blueprint = Blueprint::new("测试项目".to_string(), "项目描述".to_string());
 
-        let context = AcceptanceTestContext::new(task.clone(), blueprint)
-            .with_related_code(HashMap::from([
+        let context =
+            AcceptanceTestContext::new(task.clone(), blueprint).with_related_code(HashMap::from([
                 ("src/lib.rs".to_string(), "// code".to_string()),
             ]));
 

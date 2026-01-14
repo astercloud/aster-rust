@@ -91,10 +91,7 @@ pub fn schedule_cleanup(period_days: u32) {
         let stats = cleanup_expired_data(period_days);
 
         if stats.has_changes() {
-            info!(
-                "Cleanup complete: {} summaries removed",
-                stats.summaries
-            );
+            info!("Cleanup complete: {} summaries removed", stats.summaries);
         }
 
         if stats.errors > 0 {

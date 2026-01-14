@@ -6,9 +6,7 @@
 //!
 //! **Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5**
 
-use aster::permission::{
-    ConditionOperator, ConditionType, PermissionCondition, PermissionContext,
-};
+use aster::permission::{ConditionOperator, ConditionType, PermissionCondition, PermissionContext};
 use proptest::prelude::*;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -28,17 +26,19 @@ fn arb_permission_context() -> impl Strategy<Value = PermissionContext> {
         prop::option::of("[a-z]{3,10}"),            // user
         prop::collection::hash_map("[A-Z_]{3,10}", "[a-zA-Z0-9/:-]{1,20}", 0..3), // environment
     )
-        .prop_map(|(path_segments, session_id, timestamp, user, environment)| {
-            let working_directory = PathBuf::from(format!("/{}", path_segments.join("/")));
-            PermissionContext {
-                working_directory,
-                session_id,
-                timestamp,
-                user,
-                environment,
-                metadata: HashMap::new(),
-            }
-        })
+        .prop_map(
+            |(path_segments, session_id, timestamp, user, environment)| {
+                let working_directory = PathBuf::from(format!("/{}", path_segments.join("/")));
+                PermissionContext {
+                    working_directory,
+                    session_id,
+                    timestamp,
+                    user,
+                    environment,
+                    metadata: HashMap::new(),
+                }
+            },
+        )
 }
 
 /// Generate a condition that will always pass for the given context

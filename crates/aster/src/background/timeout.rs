@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{Duration, sleep};
+use tokio::time::{sleep, Duration};
 
 use super::types::TimeoutStats;
 
@@ -22,12 +22,11 @@ pub struct TimeoutConfig {
     pub graceful_shutdown_timeout_ms: u64,
 }
 
-
 impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {
-            default_timeout_ms: 120_000,  // 2 分钟
-            max_timeout_ms: 600_000,      // 10 分钟
+            default_timeout_ms: 120_000,         // 2 分钟
+            max_timeout_ms: 600_000,             // 10 分钟
             graceful_shutdown_timeout_ms: 5_000, // 5 秒
         }
     }
@@ -48,7 +47,6 @@ pub struct TimeoutManager {
     config: TimeoutConfig,
     on_timeout: Option<Arc<dyn Fn(&str) + Send + Sync>>,
 }
-
 
 impl TimeoutManager {
     /// 创建新的超时管理器
@@ -92,8 +90,10 @@ impl TimeoutManager {
             cancelled: false,
         };
 
-        self.timeouts.write().await.insert(id.to_string(), handle.clone());
-
+        self.timeouts
+            .write()
+            .await
+            .insert(id.to_string(), handle.clone());
 
         // 启动超时任务
         let timeouts = Arc::clone(&self.timeouts);
@@ -102,7 +102,7 @@ impl TimeoutManager {
 
         tokio::spawn(async move {
             sleep(Duration::from_millis(actual_duration)).await;
-            
+
             let mut guard = timeouts.write().await;
             if let Some(h) = guard.get(&id_clone) {
                 if !h.cancelled {
@@ -129,7 +129,6 @@ impl TimeoutManager {
             false
         }
     }
-
 
     /// 获取剩余时间
     pub async fn get_remaining_time(&self, id: &str) -> Option<u64> {
@@ -169,7 +168,6 @@ impl TimeoutManager {
             false
         }
     }
-
 
     /// 获取所有超时信息
     pub async fn get_all_timeouts(&self) -> Vec<TimeoutHandle> {
@@ -213,7 +211,6 @@ where
     }
 }
 
-
 /// 可取消的延迟
 pub struct CancellableDelay {
     duration_ms: u64,
@@ -233,7 +230,7 @@ impl CancellableDelay {
     pub async fn start(&self) -> Result<(), ()> {
         let cancelled = Arc::clone(&self.cancelled);
         let duration = Duration::from_millis(self.duration_ms);
-        
+
         tokio::select! {
             _ = sleep(duration) => {
                 if *cancelled.read().await {

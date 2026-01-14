@@ -53,7 +53,6 @@ You are running in don't-ask mode. Permissions are determined by configured rule
 Follow the rules defined in the configuration without prompting the user."#;
 }
 
-
 /// 输出风格指令
 pub const OUTPUT_STYLE: &str = r#"# Tone and style
 - Only use emojis if the user explicitly requests it.
@@ -103,7 +102,6 @@ pub fn get_permission_mode_description(mode: &str) -> &'static str {
         _ => permission_modes::DEFAULT,
     }
 }
-
 
 /// 环境信息
 pub struct EnvironmentInfo<'a> {
@@ -161,7 +159,6 @@ pub fn get_ide_info(
     lines.join("\n")
 }
 
-
 /// 获取诊断信息文本
 pub fn get_diagnostics_info(diagnostics: &[DiagnosticInfo]) -> Option<String> {
     if diagnostics.is_empty() {
@@ -191,7 +188,10 @@ pub fn get_git_status_info(status: &GitStatusInfo) -> String {
     ];
 
     if status.ahead > 0 || status.behind > 0 {
-        lines.push(format!("Ahead: {}, Behind: {}", status.ahead, status.behind));
+        lines.push(format!(
+            "Ahead: {}, Behind: {}",
+            status.ahead, status.behind
+        ));
     }
 
     if !status.staged.is_empty() {

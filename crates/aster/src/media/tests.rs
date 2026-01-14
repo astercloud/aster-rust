@@ -25,12 +25,10 @@ fn test_get_mime_type_gif() {
     assert_eq!(get_mime_type_sync(gif_header), Some("image/gif"));
 }
 
-
 #[test]
 fn test_get_mime_type_webp() {
     let webp_header: &[u8] = &[
-        0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00,
-        0x57, 0x45, 0x42, 0x50,
+        0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
     ];
     assert_eq!(get_mime_type_sync(webp_header), Some("image/webp"));
 }
@@ -56,13 +54,15 @@ fn test_get_media_category() {
     assert_eq!(get_media_category("text/plain"), MediaCategory::Unknown);
 }
 
-
 #[test]
 fn test_get_mime_type_from_extension() {
     assert_eq!(get_mime_type_from_extension("png"), "image/png");
     assert_eq!(get_mime_type_from_extension("jpg"), "image/jpeg");
     assert_eq!(get_mime_type_from_extension("pdf"), "application/pdf");
-    assert_eq!(get_mime_type_from_extension("unknown"), "application/octet-stream");
+    assert_eq!(
+        get_mime_type_from_extension("unknown"),
+        "application/octet-stream"
+    );
 }
 
 // ============ Image Tests ============
@@ -85,7 +85,6 @@ fn test_estimate_image_tokens() {
     let tokens = estimate_image_tokens(&base64);
     assert_eq!(tokens, 125); // ceil(1000 * 0.125)
 }
-
 
 #[test]
 fn test_validate_image_file_not_exists() {
@@ -120,7 +119,6 @@ fn test_is_pdf_supported() {
     // 默认应该支持
     assert!(is_pdf_supported());
 }
-
 
 #[test]
 fn test_read_pdf_file() {
@@ -157,7 +155,6 @@ fn test_validate_pdf_file() {
     let result = validate_pdf_file(&file_path);
     assert!(result.is_ok());
 }
-
 
 #[test]
 fn test_validate_pdf_file_invalid_header() {
@@ -196,7 +193,6 @@ fn test_validate_svg_file_invalid() {
     let result = validate_svg_file(&file_path);
     assert!(result.is_err());
 }
-
 
 #[test]
 fn test_get_svg_dimensions() {

@@ -29,7 +29,6 @@ pub const IMAGE_COMPRESSION_CONFIG: ImageCompressionConfig = ImageCompressionCon
     quality: 20,
 };
 
-
 /// 图片尺寸信息
 #[derive(Debug, Clone, Default)]
 pub struct ImageDimensions {
@@ -59,18 +58,16 @@ pub fn estimate_image_tokens(base64: &str) -> u64 {
     (base64.len() as f64 * 0.125).ceil() as u64
 }
 
-
 /// 读取图片文件（同步版本，不压缩）
 pub fn read_image_file_sync(file_path: &Path) -> Result<ImageResult, String> {
-    let metadata = fs::metadata(file_path)
-        .map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    let metadata =
+        fs::metadata(file_path).map_err(|e| format!("Failed to read file metadata: {}", e))?;
 
     if metadata.len() == 0 {
         return Err(format!("Image file is empty: {}", file_path.display()));
     }
 
-    let buffer = fs::read(file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let buffer = fs::read(file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     let ext = file_path
         .extension()
@@ -91,24 +88,20 @@ pub fn read_image_file_sync(file_path: &Path) -> Result<ImageResult, String> {
     })
 }
 
-
 /// 验证图片文件
 pub fn validate_image_file(file_path: &Path) -> Result<(), String> {
     if !file_path.exists() {
         return Err("File does not exist".to_string());
     }
 
-    let metadata = fs::metadata(file_path)
-        .map_err(|e| format!("Failed to read metadata: {}", e))?;
+    let metadata =
+        fs::metadata(file_path).map_err(|e| format!("Failed to read metadata: {}", e))?;
 
     if metadata.len() == 0 {
         return Err("Image file is empty".to_string());
     }
 
-    let ext = file_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
     if !is_supported_image_format(ext) {
         return Err(format!(

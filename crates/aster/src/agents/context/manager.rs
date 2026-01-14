@@ -254,7 +254,8 @@ impl AgentContextManager {
         // Strategy 3: Summarize older messages (keep last 10)
         if context.conversation_history.len() > 10 {
             let to_summarize = context.conversation_history.len() - 10;
-            let older_messages: Vec<_> = context.conversation_history.drain(..to_summarize).collect();
+            let older_messages: Vec<_> =
+                context.conversation_history.drain(..to_summarize).collect();
 
             // Create a simple summary of older messages
             let summary = self.create_message_summary(&older_messages);
@@ -264,7 +265,8 @@ impl AgentContextManager {
 
         let compressed_tokens = self.estimate_token_count(context);
         context.metadata.is_compressed = true;
-        context.metadata.compression_ratio = Some(original_tokens as f64 / compressed_tokens as f64);
+        context.metadata.compression_ratio =
+            Some(original_tokens as f64 / compressed_tokens as f64);
         context.metadata.touch();
 
         Ok(CompressionResult {
@@ -288,25 +290,26 @@ impl AgentContextManager {
             .map(|k| k.to_uppercase())
             .collect();
 
-        filtered.environment.retain(|key, _| {
-            !excluded_keys.contains(&key.to_uppercase())
-        });
+        filtered
+            .environment
+            .retain(|key, _| !excluded_keys.contains(&key.to_uppercase()));
 
         // Filter file contexts based on patterns
         if !filter.excluded_file_patterns.is_empty() {
             filtered.file_context.retain(|fc| {
                 let path_str = fc.path.to_string_lossy();
-                !filter.excluded_file_patterns.iter().any(|pattern| {
-                    glob_match(pattern, &path_str)
-                })
+                !filter
+                    .excluded_file_patterns
+                    .iter()
+                    .any(|pattern| glob_match(pattern, &path_str))
             });
         }
 
         // Filter tool results
         if !filter.excluded_tools.is_empty() {
-            filtered.tool_results.retain(|tr| {
-                !filter.excluded_tools.contains(&tr.tool_name)
-            });
+            filtered
+                .tool_results
+                .retain(|tr| !filter.excluded_tools.contains(&tr.tool_name));
         }
 
         // Filter sensitive patterns from text content
@@ -336,7 +339,9 @@ impl AgentContextManager {
 
         for ctx in contexts {
             // Merge conversation history (append)
-            merged.conversation_history.extend(ctx.conversation_history.clone());
+            merged
+                .conversation_history
+                .extend(ctx.conversation_history.clone());
 
             // Merge file contexts (deduplicate by path)
             for fc in &ctx.file_context {
@@ -438,7 +443,7 @@ impl AgentContextManager {
             let ctx = self.contexts.get(context_id).unwrap();
             self.estimate_token_count(ctx)
         };
-        
+
         if let Some(ctx_mut) = self.contexts.get_mut(context_id) {
             ctx_mut.metadata.token_count = token_count;
         }
@@ -456,7 +461,9 @@ impl AgentContextManager {
         // Ensure storage directory exists
         fs::create_dir_all(&self.storage_dir).await?;
 
-        let file_path = self.storage_dir.join(format!("{}.json", context.context_id));
+        let file_path = self
+            .storage_dir
+            .join(format!("{}.json", context.context_id));
 
         let json = serde_json::to_string_pretty(context)
             .map_err(|e| AgentContextError::SerializationError(e.to_string()))?;
@@ -485,7 +492,8 @@ impl AgentContextManager {
             .map_err(|e| AgentContextError::SerializationError(e.to_string()))?;
 
         // Store in memory
-        self.contexts.insert(context_id.to_string(), context.clone());
+        self.contexts
+            .insert(context_id.to_string(), context.clone());
 
         Ok(Some(context))
     }
@@ -592,7 +600,6 @@ fn mask_sensitive_content(content: &str, patterns: &[Regex]) -> String {
     result
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -622,7 +629,10 @@ mod tests {
         let child = manager.create_context(Some(&parent), Some(config));
 
         assert!(child.parent_context_id.is_some());
-        assert_eq!(child.parent_context_id.as_ref().unwrap(), &parent.context_id);
+        assert_eq!(
+            child.parent_context_id.as_ref().unwrap(),
+            &parent.context_id
+        );
         assert_eq!(child.conversation_history.len(), 1);
         assert_eq!(child.get_env("TEST_VAR"), Some(&"test_value".to_string()));
     }
@@ -741,7 +751,10 @@ mod tests {
         let filtered = manager.filter(&context, &filter);
 
         assert!(filtered.get_env("API_KEY").is_none());
-        assert_eq!(filtered.get_env("NORMAL_VAR"), Some(&"normal_value".to_string()));
+        assert_eq!(
+            filtered.get_env("NORMAL_VAR"),
+            Some(&"normal_value".to_string())
+        );
     }
 
     #[test]
@@ -867,7 +880,10 @@ mod tests {
 
         for _ in 0..100 {
             let context = manager.create_context(None, None);
-            assert!(ids.insert(context.context_id.clone()), "Duplicate ID generated");
+            assert!(
+                ids.insert(context.context_id.clone()),
+                "Duplicate ID generated"
+            );
         }
     }
 
@@ -908,7 +924,6 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod property_tests {
     use super::*;
@@ -940,9 +955,19 @@ mod property_tests {
         )
             .prop_map(|(tool_name, content, success)| {
                 if success {
-                    ToolExecutionResult::success(&tool_name, uuid::Uuid::new_v4().to_string(), content, 100)
+                    ToolExecutionResult::success(
+                        &tool_name,
+                        uuid::Uuid::new_v4().to_string(),
+                        content,
+                        100,
+                    )
                 } else {
-                    ToolExecutionResult::failure(&tool_name, uuid::Uuid::new_v4().to_string(), "error", 100)
+                    ToolExecutionResult::failure(
+                        &tool_name,
+                        uuid::Uuid::new_v4().to_string(),
+                        "error",
+                        100,
+                    )
                 }
             })
     }
@@ -1181,7 +1206,7 @@ mod property_tests {
                 // Compression should attempt to reduce content when over target
                 // The compression algorithm applies strategies in order and may return early
                 // if target is reached, so not all strategies may be applied
-                
+
                 // If tool results were removed, check the limit
                 if result.tool_results_removed > 0 {
                     prop_assert!(
@@ -1206,16 +1231,16 @@ mod property_tests {
                         remaining_count <= original_message_count,
                         "Message count should not increase after compression"
                     );
-                    
+
                     // Metadata should reflect compression when messages are summarized
                     prop_assert!(context.metadata.is_compressed);
                 }
 
                 // Verify that compression actually did something
-                let something_removed = result.tool_results_removed > 0 
-                    || result.files_removed > 0 
+                let something_removed = result.tool_results_removed > 0
+                    || result.files_removed > 0
                     || result.messages_summarized > 0;
-                    
+
                 // If original exceeded target, compression should have attempted something
                 // unless the content was already minimal
                 if original_tool_count > 5 || original_file_count > 3 || original_message_count > 10 {

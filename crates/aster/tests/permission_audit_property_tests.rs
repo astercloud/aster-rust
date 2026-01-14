@@ -41,38 +41,40 @@ fn arb_permission_context() -> impl Strategy<Value = PermissionContext> {
         prop::option::of("[a-z]{3,10}"),            // user
         prop::collection::hash_map("[A-Z_]{3,10}", "[a-zA-Z0-9/:-]{1,20}", 0..3), // environment
     )
-        .prop_map(|(path_segments, session_id, timestamp, user, environment)| {
-            let working_directory = PathBuf::from(format!("/{}", path_segments.join("/")));
-            PermissionContext {
-                working_directory,
-                session_id,
-                timestamp,
-                user,
-                environment,
-                metadata: HashMap::new(),
-            }
-        })
+        .prop_map(
+            |(path_segments, session_id, timestamp, user, environment)| {
+                let working_directory = PathBuf::from(format!("/{}", path_segments.join("/")));
+                PermissionContext {
+                    working_directory,
+                    session_id,
+                    timestamp,
+                    user,
+                    environment,
+                    metadata: HashMap::new(),
+                }
+            },
+        )
 }
 
 /// Generate arbitrary PermissionResult
 fn arb_permission_result() -> impl Strategy<Value = PermissionResult> {
     (
-        prop::bool::ANY,                                    // allowed
-        prop::option::of("[a-zA-Z ]{5,30}"),                // reason
-        prop::bool::ANY,                                    // restricted
-        prop::collection::vec("[a-zA-Z ]{5,20}", 0..3),     // suggestions
-        prop::collection::vec("[a-zA-Z ]{5,20}", 0..3),     // violations
+        prop::bool::ANY,                                // allowed
+        prop::option::of("[a-zA-Z ]{5,30}"),            // reason
+        prop::bool::ANY,                                // restricted
+        prop::collection::vec("[a-zA-Z ]{5,20}", 0..3), // suggestions
+        prop::collection::vec("[a-zA-Z ]{5,20}", 0..3), // violations
     )
-        .prop_map(|(allowed, reason, restricted, suggestions, violations)| {
-            PermissionResult {
+        .prop_map(
+            |(allowed, reason, restricted, suggestions, violations)| PermissionResult {
                 allowed,
                 reason,
                 restricted,
                 suggestions,
                 matched_rule: None,
                 violations,
-            }
-        })
+            },
+        )
 }
 
 /// Generate arbitrary tool name

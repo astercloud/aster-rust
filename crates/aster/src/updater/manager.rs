@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use super::checker::{UpdateCheckResult, compare_versions};
-use super::installer::{Installer, InstallOptions};
+use super::checker::{compare_versions, UpdateCheckResult};
+use super::installer::{InstallOptions, Installer};
 
 /// 更新配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,7 +23,6 @@ pub struct UpdateConfig {
     pub registry_url: String,
     pub package_name: String,
 }
-
 
 impl Default for UpdateConfig {
     fn default() -> Self {
@@ -40,12 +39,23 @@ impl Default for UpdateConfig {
 
 /// 更新通道
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum UpdateChannel { Stable, Beta, Canary }
+pub enum UpdateChannel {
+    Stable,
+    Beta,
+    Canary,
+}
 
 /// 更新状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum UpdateStatus { Idle, Checking, Available, Downloading, Ready, Installing, Error }
-
+pub enum UpdateStatus {
+    Idle,
+    Checking,
+    Available,
+    Downloading,
+    Ready,
+    Installing,
+    Error,
+}
 
 /// 更新选项
 #[derive(Debug, Clone, Default)]
@@ -74,7 +84,6 @@ pub enum UpdateEvent {
     RollbackComplete { version: String },
 }
 
-
 /// 更新管理器
 pub struct UpdateManager {
     config: UpdateConfig,
@@ -102,16 +111,21 @@ impl UpdateManager {
         self
     }
 
-
     async fn emit(&self, event: UpdateEvent) {
         if let Some(sender) = &self.event_sender {
             let _ = sender.send(event).await;
         }
     }
 
-    pub async fn get_status(&self) -> UpdateStatus { *self.status.read().await }
-    pub fn get_current_version(&self) -> &str { &self.current_version }
-    pub fn get_config(&self) -> &UpdateConfig { &self.config }
+    pub async fn get_status(&self) -> UpdateStatus {
+        *self.status.read().await
+    }
+    pub fn get_current_version(&self) -> &str {
+        &self.current_version
+    }
+    pub fn get_config(&self) -> &UpdateConfig {
+        &self.config
+    }
 
     pub async fn check_for_updates(&self) -> Result<UpdateCheckResult, String> {
         *self.status.write().await = UpdateStatus::Checking;
@@ -127,7 +141,8 @@ impl UpdateManager {
             self.emit(UpdateEvent::UpdateAvailable {
                 current: self.current_version.clone(),
                 latest: latest_version.clone(),
-            }).await;
+            })
+            .await;
         } else {
             *self.status.write().await = UpdateStatus::Idle;
             self.emit(UpdateEvent::UpdateNotAvailable).await;
@@ -146,21 +161,29 @@ impl UpdateManager {
         Ok(self.current_version.clone())
     }
 
-
-    pub async fn download(&self, version: Option<&str>, options: &UpdateOptions) -> Result<(), String> {
+    pub async fn download(
+        &self,
+        version: Option<&str>,
+        options: &UpdateOptions,
+    ) -> Result<(), String> {
         let target_version = version.unwrap_or(&self.current_version);
-        
+
         if options.dry_run {
             tracing::info!("[DRY-RUN] 将下载版本 {}", target_version);
             return Ok(());
         }
 
         *self.status.write().await = UpdateStatus::Downloading;
-        self.emit(UpdateEvent::Downloading { version: target_version.to_string() }).await;
+        self.emit(UpdateEvent::Downloading {
+            version: target_version.to_string(),
+        })
+        .await;
 
         let download_url = format!(
             "{}/download/v{}/aster-{}.tar.gz",
-            self.config.registry_url, target_version, std::env::consts::OS
+            self.config.registry_url,
+            target_version,
+            std::env::consts::OS
         );
 
         let install_options = InstallOptions {
@@ -170,24 +193,35 @@ impl UpdateManager {
             ..Default::default()
         };
 
-        self.installer.download(&download_url, &install_options).await?;
+        self.installer
+            .download(&download_url, &install_options)
+            .await?;
 
         *self.status.write().await = UpdateStatus::Ready;
-        self.emit(UpdateEvent::Downloaded { version: target_version.to_string() }).await;
+        self.emit(UpdateEvent::Downloaded {
+            version: target_version.to_string(),
+        })
+        .await;
         Ok(())
     }
 
-
-    pub async fn install(&self, version: Option<&str>, options: &UpdateOptions) -> Result<(), String> {
+    pub async fn install(
+        &self,
+        version: Option<&str>,
+        options: &UpdateOptions,
+    ) -> Result<(), String> {
         let target_version = version.unwrap_or("latest");
-        
+
         if options.dry_run {
             tracing::info!("[DRY-RUN] 将安装版本 {}", target_version);
             return Ok(());
         }
 
         *self.status.write().await = UpdateStatus::Installing;
-        self.emit(UpdateEvent::Installing { version: target_version.to_string() }).await;
+        self.emit(UpdateEvent::Installing {
+            version: target_version.to_string(),
+        })
+        .await;
 
         let install_options = InstallOptions {
             version: Some(target_version.to_string()),
@@ -202,17 +236,24 @@ impl UpdateManager {
             .join("aster/downloads")
             .join(format!("aster-{}.tar.gz", std::env::consts::OS));
 
-        self.installer.install(&package_path, &install_options).await?;
+        self.installer
+            .install(&package_path, &install_options)
+            .await?;
 
-        self.emit(UpdateEvent::Installed { version: target_version.to_string() }).await;
+        self.emit(UpdateEvent::Installed {
+            version: target_version.to_string(),
+        })
+        .await;
         *self.status.write().await = UpdateStatus::Idle;
         Ok(())
     }
 
-
     pub async fn rollback(&self, version: &str, options: &UpdateOptions) -> Result<(), String> {
         *self.status.write().await = UpdateStatus::Installing;
-        self.emit(UpdateEvent::RollbackStarted { version: version.to_string() }).await;
+        self.emit(UpdateEvent::RollbackStarted {
+            version: version.to_string(),
+        })
+        .await;
 
         if options.dry_run {
             tracing::info!("[DRY-RUN] 将回滚到版本 {}", version);
@@ -232,19 +273,27 @@ impl UpdateManager {
 
         self.installer.rollback(version, &install_options).await?;
 
-        self.emit(UpdateEvent::RollbackComplete { version: version.to_string() }).await;
+        self.emit(UpdateEvent::RollbackComplete {
+            version: version.to_string(),
+        })
+        .await;
         *self.status.write().await = UpdateStatus::Idle;
         Ok(())
     }
 
-    pub fn list_available_versions(&self) -> Vec<String> { self.installer.list_backups() }
-    pub fn cleanup(&self, keep_versions: usize) -> Result<(), String> { self.installer.cleanup(keep_versions) }
+    pub fn list_available_versions(&self) -> Vec<String> {
+        self.installer.list_backups()
+    }
+    pub fn cleanup(&self, keep_versions: usize) -> Result<(), String> {
+        self.installer.cleanup(keep_versions)
+    }
 }
 
 impl Default for UpdateManager {
-    fn default() -> Self { Self::new(UpdateConfig::default()) }
+    fn default() -> Self {
+        Self::new(UpdateConfig::default())
+    }
 }
-
 
 // ============ 便捷函数 ============
 
@@ -254,19 +303,32 @@ pub async fn check_for_updates(config: Option<UpdateConfig>) -> Result<UpdateChe
 }
 
 pub async fn perform_update(options: UpdateOptions) -> Result<bool, String> {
-    let channel = if options.beta { UpdateChannel::Beta }
-        else if options.canary { UpdateChannel::Canary }
-        else { UpdateChannel::Stable };
+    let channel = if options.beta {
+        UpdateChannel::Beta
+    } else if options.canary {
+        UpdateChannel::Canary
+    } else {
+        UpdateChannel::Stable
+    };
 
-    let config = UpdateConfig { channel, ..Default::default() };
+    let config = UpdateConfig {
+        channel,
+        ..Default::default()
+    };
     let manager = UpdateManager::new(config);
 
     let result = manager.check_for_updates().await?;
-    if !result.has_update { return Ok(true); }
+    if !result.has_update {
+        return Ok(true);
+    }
 
-    manager.download(options.version.as_deref(), &options).await?;
+    manager
+        .download(options.version.as_deref(), &options)
+        .await?;
     if !options.dry_run {
-        manager.install(options.version.as_deref(), &options).await?;
+        manager
+            .install(options.version.as_deref(), &options)
+            .await?;
     }
     Ok(true)
 }
@@ -280,7 +342,6 @@ pub async fn rollback_version(version: &str, options: UpdateOptions) -> Result<b
 pub fn list_versions() -> Vec<String> {
     UpdateManager::new(UpdateConfig::default()).list_available_versions()
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -414,16 +475,36 @@ mod tests {
     fn test_update_event_variants() {
         let events = vec![
             UpdateEvent::Checking,
-            UpdateEvent::UpdateAvailable { current: "1.0".to_string(), latest: "1.1".to_string() },
+            UpdateEvent::UpdateAvailable {
+                current: "1.0".to_string(),
+                latest: "1.1".to_string(),
+            },
             UpdateEvent::UpdateNotAvailable,
-            UpdateEvent::Downloading { version: "1.1".to_string() },
-            UpdateEvent::Downloaded { version: "1.1".to_string() },
-            UpdateEvent::Installing { version: "1.1".to_string() },
-            UpdateEvent::Installed { version: "1.1".to_string() },
-            UpdateEvent::Progress { phase: "download".to_string(), percent: 50 },
-            UpdateEvent::Error { message: "error".to_string() },
-            UpdateEvent::RollbackStarted { version: "1.0".to_string() },
-            UpdateEvent::RollbackComplete { version: "1.0".to_string() },
+            UpdateEvent::Downloading {
+                version: "1.1".to_string(),
+            },
+            UpdateEvent::Downloaded {
+                version: "1.1".to_string(),
+            },
+            UpdateEvent::Installing {
+                version: "1.1".to_string(),
+            },
+            UpdateEvent::Installed {
+                version: "1.1".to_string(),
+            },
+            UpdateEvent::Progress {
+                phase: "download".to_string(),
+                percent: 50,
+            },
+            UpdateEvent::Error {
+                message: "error".to_string(),
+            },
+            UpdateEvent::RollbackStarted {
+                version: "1.0".to_string(),
+            },
+            UpdateEvent::RollbackComplete {
+                version: "1.0".to_string(),
+            },
         ];
         assert_eq!(events.len(), 11);
     }

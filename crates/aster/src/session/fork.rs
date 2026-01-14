@@ -120,9 +120,9 @@ pub async fn fork_session(source_session_id: &str, options: ForkOptions) -> Resu
     let source_session = SessionManager::get_session(source_session_id, true).await?;
 
     let from_index = options.from_message_index.unwrap_or(0);
-    let new_name = options.name.unwrap_or_else(|| {
-        format!("{} (fork)", source_session.name)
-    });
+    let new_name = options
+        .name
+        .unwrap_or_else(|| format!("{} (fork)", source_session.name));
 
     // Create new session
     let new_session = SessionManager::create_session(
@@ -136,9 +136,17 @@ pub async fn fork_session(source_session_id: &str, options: ForkOptions) -> Resu
     if let Some(conversation) = &source_session.conversation {
         let messages = conversation.messages();
         let messages_to_copy = if options.include_future_messages {
-            messages.iter().skip(from_index).cloned().collect::<Vec<_>>()
+            messages
+                .iter()
+                .skip(from_index)
+                .cloned()
+                .collect::<Vec<_>>()
         } else {
-            messages.iter().take(from_index).cloned().collect::<Vec<_>>()
+            messages
+                .iter()
+                .take(from_index)
+                .cloned()
+                .collect::<Vec<_>>()
         };
 
         if !messages_to_copy.is_empty() {
@@ -165,8 +173,7 @@ pub async fn fork_session(source_session_id: &str, options: ForkOptions) -> Resu
         .await?;
 
     // Update source session's branches list
-    let mut source_fork_metadata =
-        ForkMetadata::from_session(&source_session).unwrap_or_default();
+    let mut source_fork_metadata = ForkMetadata::from_session(&source_session).unwrap_or_default();
     source_fork_metadata.branches.push(new_session.id.clone());
 
     let mut source_extension_data = source_session.extension_data.clone();
@@ -260,7 +267,9 @@ pub async fn merge_sessions(
 
     // Record merge in fork metadata
     let mut fork_metadata = ForkMetadata::from_session(&target_session).unwrap_or_default();
-    fork_metadata.merged_from.push(source_session_id.to_string());
+    fork_metadata
+        .merged_from
+        .push(source_session_id.to_string());
 
     let mut extension_data = target_session.extension_data.clone();
     fork_metadata.to_extension_data(&mut extension_data)?;
@@ -274,9 +283,7 @@ pub async fn merge_sessions(
 }
 
 /// Get the branch tree for a session
-pub async fn get_session_branch_tree(
-    session_id: &str,
-) -> Result<SessionBranchTree> {
+pub async fn get_session_branch_tree(session_id: &str) -> Result<SessionBranchTree> {
     let session = SessionManager::get_session(session_id, false).await?;
     let fork_metadata = ForkMetadata::from_session(&session).unwrap_or_default();
 

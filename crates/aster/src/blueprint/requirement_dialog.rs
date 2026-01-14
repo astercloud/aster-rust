@@ -7,16 +7,15 @@
 //! 4. 非功能要求 - 性能、安全、可用性
 //! 5. 确认汇总 - 生成蓝图草案供用户确认
 
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 
-use super::types::{
-    Blueprint, BusinessProcess, ProcessStep, ProcessType,
-    SystemModule, ModuleType,
-    NonFunctionalRequirement, NfrCategory, MoscowPriority,
-};
 use super::blueprint_manager::BlueprintManager;
+use super::types::{
+    Blueprint, BusinessProcess, ModuleType, MoscowPriority, NfrCategory, NonFunctionalRequirement,
+    ProcessStep, ProcessType, SystemModule,
+};
 
 // ============================================================================
 // 类型定义
@@ -200,10 +199,20 @@ impl From<NFRDraftPriority> for MoscowPriority {
 /// 对话事件
 #[derive(Debug, Clone)]
 pub enum DialogEvent {
-    Started { session_id: String },
-    Message { session_id: String, message: DialogMessage },
-    PhaseChanged { session_id: String, phase: DialogPhase },
-    Ended { session_id: String },
+    Started {
+        session_id: String,
+    },
+    Message {
+        session_id: String,
+        message: DialogMessage,
+    },
+    PhaseChanged {
+        session_id: String,
+        phase: DialogPhase,
+    },
+    Ended {
+        session_id: String,
+    },
 }
 
 // ============================================================================
@@ -213,7 +222,8 @@ pub enum DialogEvent {
 /// 获取阶段提示词
 fn get_phase_prompt(phase: DialogPhase) -> &'static str {
     match phase {
-        DialogPhase::Welcome => r#"你好！我是你的项目需求分析助手。
+        DialogPhase::Welcome => {
+            r#"你好！我是你的项目需求分析助手。
 
 在开始构建项目蓝图之前，我需要了解一些关于你项目的信息。这个过程分为几个步骤：
 
@@ -225,9 +235,11 @@ fn get_phase_prompt(phase: DialogPhase) -> &'static str {
 
 让我们开始吧！首先，请告诉我：
 
-**你的项目叫什么名字？想要解决什么问题？**"#,
+**你的项目叫什么名字？想要解决什么问题？**"#
+        }
 
-        DialogPhase::ProjectBackground => r#"很好！现在让我更深入地了解你的项目背景。
+        DialogPhase::ProjectBackground => {
+            r#"很好！现在让我更深入地了解你的项目背景。
 
 请回答以下问题：
 
@@ -236,9 +248,11 @@ fn get_phase_prompt(phase: DialogPhase) -> &'static str {
 3. **你的解决方案有什么独特之处？**
 4. **项目的预期规模是怎样的？** （用户量、数据量等）
 
-你可以一次回答所有问题，也可以逐个回答。"#,
+你可以一次回答所有问题，也可以逐个回答。"#
+        }
 
-        DialogPhase::BusinessProcess => r#"太棒了！现在让我们来梳理业务流程。
+        DialogPhase::BusinessProcess => {
+            r#"太棒了！现在让我们来梳理业务流程。
 
 一个好的业务流程设计能帮助我们更清晰地理解系统需求。请思考：
 
@@ -249,9 +263,11 @@ fn get_phase_prompt(phase: DialogPhase) -> &'static str {
 请描述你项目的主要业务流程，包括：
 - 流程名称
 - 流程类型（核心/支撑/管理）
-- 主要步骤"#,
+- 主要步骤"#
+        }
 
-        DialogPhase::SystemModule => r#"非常好！现在让我们来划分系统模块。
+        DialogPhase::SystemModule => {
+            r#"非常好！现在让我们来划分系统模块。
 
 每个模块需要包含：
 - 模块名称
@@ -262,9 +278,11 @@ fn get_phase_prompt(phase: DialogPhase) -> &'static str {
 
 请告诉我：
 1. 你认为需要哪些模块？
-2. 你对技术栈有什么偏好？"#,
+2. 你对技术栈有什么偏好？"#
+        }
 
-        DialogPhase::NFR => r#"模块设计很清晰！现在让我们讨论非功能性要求。
+        DialogPhase::NFR => {
+            r#"模块设计很清晰！现在让我们讨论非功能性要求。
 
 非功能性要求包括：
 
@@ -274,9 +292,11 @@ fn get_phase_prompt(phase: DialogPhase) -> &'static str {
 4. **可扩展性** - 水平扩展、垂直扩展
 5. **可维护性** - 代码质量、文档、监控
 
-请告诉我你对这些方面的要求。"#,
+请告诉我你对这些方面的要求。"#
+        }
 
-        DialogPhase::Summary => r#"太棒了！我已经收集了所有需求信息。
+        DialogPhase::Summary => {
+            r#"太棒了！我已经收集了所有需求信息。
 
 请仔细检查并确认蓝图草案。
 
@@ -285,16 +305,19 @@ fn get_phase_prompt(phase: DialogPhase) -> &'static str {
 2. **修改** - 告诉我需要修改的内容
 3. **重来** - 重新开始需求收集
 
-请输入"确认"、"修改 [内容]"或"重来"。"#,
+请输入"确认"、"修改 [内容]"或"重来"。"#
+        }
 
-        DialogPhase::Complete => r#"蓝图已创建完成！
+        DialogPhase::Complete => {
+            r#"蓝图已创建完成！
 
 你可以：
 1. 查看完整蓝图
 2. 提交审核
 3. 确认签字后开始执行
 
-祝你的项目顺利！"#,
+祝你的项目顺利！"#
+        }
     }
 }
 
@@ -350,7 +373,10 @@ impl RequirementDialogManager {
         });
 
         self.sessions.insert(state.id.clone(), state.clone());
-        self.emit(DialogEvent::Started { session_id: state.id.clone() }).await;
+        self.emit(DialogEvent::Started {
+            session_id: state.id.clone(),
+        })
+        .await;
 
         state
     }
@@ -363,7 +389,9 @@ impl RequirementDialogManager {
     ) -> Result<DialogMessage, String> {
         // 先获取状态的副本和当前阶段
         let (current_phase, mut state_clone) = {
-            let state = self.sessions.get(session_id)
+            let state = self
+                .sessions
+                .get(session_id)
                 .ok_or_else(|| format!("对话会话 {} 不存在", session_id))?;
             (state.phase, state.clone())
         };
@@ -383,31 +411,42 @@ impl RequirementDialogManager {
         let (response, next_phase) = match current_phase {
             DialogPhase::Welcome => {
                 Self::process_welcome_input_static(&mut state_clone, input);
-                (Self::format_welcome_response_static(&state_clone), DialogPhase::ProjectBackground)
+                (
+                    Self::format_welcome_response_static(&state_clone),
+                    DialogPhase::ProjectBackground,
+                )
             }
             DialogPhase::ProjectBackground => {
                 Self::process_background_input_static(&mut state_clone, input);
-                (Self::format_background_response_static(&state_clone), DialogPhase::BusinessProcess)
+                (
+                    Self::format_background_response_static(&state_clone),
+                    DialogPhase::BusinessProcess,
+                )
             }
             DialogPhase::BusinessProcess => {
                 Self::process_business_process_input_static(&mut state_clone, input);
-                (Self::format_business_process_response_static(&state_clone), DialogPhase::SystemModule)
+                (
+                    Self::format_business_process_response_static(&state_clone),
+                    DialogPhase::SystemModule,
+                )
             }
             DialogPhase::SystemModule => {
                 Self::process_module_input_static(&mut state_clone, input);
-                (Self::format_module_response_static(&state_clone), DialogPhase::NFR)
+                (
+                    Self::format_module_response_static(&state_clone),
+                    DialogPhase::NFR,
+                )
             }
             DialogPhase::NFR => {
                 Self::process_nfr_input_static(&mut state_clone, input);
                 let summary = Self::generate_summary_static(&state_clone);
-                (format!("{}\n\n{}", summary, get_phase_prompt(DialogPhase::Summary)), DialogPhase::Summary)
+                (
+                    format!("{}\n\n{}", summary, get_phase_prompt(DialogPhase::Summary)),
+                    DialogPhase::Summary,
+                )
             }
-            DialogPhase::Summary => {
-                Self::process_summary_input_static(&mut state_clone, input)
-            }
-            DialogPhase::Complete => {
-                ("对话已完成。".to_string(), DialogPhase::Complete)
-            }
+            DialogPhase::Summary => Self::process_summary_input_static(&mut state_clone, input),
+            DialogPhase::Complete => ("对话已完成。".to_string(), DialogPhase::Complete),
         };
 
         // 更新阶段
@@ -429,7 +468,8 @@ impl RequirementDialogManager {
         self.emit(DialogEvent::Message {
             session_id: session_id.to_string(),
             message: assistant_message.clone(),
-        }).await;
+        })
+        .await;
 
         Ok(assistant_message)
     }
@@ -446,7 +486,11 @@ impl RequirementDialogManager {
         format!(
             "很好！我了解了：\n\n**项目名称**：{}\n**项目目标**：{}\n\n{}",
             state.project_name,
-            state.project_description.chars().take(200).collect::<String>(),
+            state
+                .project_description
+                .chars()
+                .take(200)
+                .collect::<String>(),
             get_phase_prompt(DialogPhase::ProjectBackground)
         )
     }
@@ -472,8 +516,21 @@ impl RequirementDialogManager {
     fn format_background_response_static(state: &DialogState) -> String {
         format!(
             "太棒了！我已经记录了这些背景信息：\n\n**目标用户**：{}\n**要解决的问题**：\n{}\n\n{}",
-            if state.target_users.is_empty() { "待确定".to_string() } else { state.target_users.join("、") },
-            if state.problems_to_solve.is_empty() { "- 待确定".to_string() } else { state.problems_to_solve.iter().map(|p| format!("- {}", p)).collect::<Vec<_>>().join("\n") },
+            if state.target_users.is_empty() {
+                "待确定".to_string()
+            } else {
+                state.target_users.join("、")
+            },
+            if state.problems_to_solve.is_empty() {
+                "- 待确定".to_string()
+            } else {
+                state
+                    .problems_to_solve
+                    .iter()
+                    .map(|p| format!("- {}", p))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            },
             get_phase_prompt(DialogPhase::BusinessProcess)
         )
     }
@@ -510,7 +567,10 @@ impl RequirementDialogManager {
                 });
             } else if let Some(ref mut p) = current_process {
                 if line.starts_with('-') || line.starts_with('•') || line.starts_with("步骤") {
-                    p.steps.push(line.trim_start_matches(|c| c == '-' || c == '•' || c == ' ').to_string());
+                    p.steps.push(
+                        line.trim_start_matches(|c| c == '-' || c == '•' || c == ' ')
+                            .to_string(),
+                    );
                 } else {
                     p.description.push_str(line);
                     p.description.push(' ');
@@ -527,15 +587,28 @@ impl RequirementDialogManager {
                 name: "主要业务流程".to_string(),
                 description: input.to_string(),
                 process_type: ProcessDraftType::Core,
-                steps: input.lines().filter(|l| !l.trim().is_empty()).map(|l| l.to_string()).collect(),
+                steps: input
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .map(|l| l.to_string())
+                    .collect(),
             });
         }
     }
 
     /// 格式化业务流程响应（静态版本）
     fn format_business_process_response_static(state: &DialogState) -> String {
-        let processes_str = state.business_processes.iter()
-            .map(|p| format!("- **{}** ({:?}): {} 个步骤", p.name, p.process_type, p.steps.len()))
+        let processes_str = state
+            .business_processes
+            .iter()
+            .map(|p| {
+                format!(
+                    "- **{}** ({:?}): {} 个步骤",
+                    p.name,
+                    p.process_type,
+                    p.steps.len()
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -556,11 +629,15 @@ impl RequirementDialogManager {
                 continue;
             }
 
-            let module_type = if line.contains("前端") || line.contains("frontend") || line.contains("UI") {
+            let module_type = if line.contains("前端")
+                || line.contains("frontend")
+                || line.contains("UI")
+            {
                 Some(ModuleDraftType::Frontend)
             } else if line.contains("后端") || line.contains("backend") || line.contains("API") {
                 Some(ModuleDraftType::Backend)
-            } else if line.contains("数据") || line.contains("database") || line.contains("存储") {
+            } else if line.contains("数据") || line.contains("database") || line.contains("存储")
+            {
                 Some(ModuleDraftType::Database)
             } else if line.contains("服务") || line.contains("service") {
                 Some(ModuleDraftType::Service)
@@ -582,7 +659,10 @@ impl RequirementDialogManager {
                 });
             } else if let Some(ref mut m) = current_module {
                 if line.starts_with('-') || line.starts_with('•') {
-                    m.responsibilities.push(line.trim_start_matches(|c| c == '-' || c == '•' || c == ' ').to_string());
+                    m.responsibilities.push(
+                        line.trim_start_matches(|c| c == '-' || c == '•' || c == ' ')
+                            .to_string(),
+                    );
                 } else {
                     m.description.push_str(line);
                     m.description.push(' ');
@@ -599,7 +679,11 @@ impl RequirementDialogManager {
                 name: "主模块".to_string(),
                 description: input.to_string(),
                 module_type: ModuleDraftType::Backend,
-                responsibilities: input.lines().filter(|l| !l.trim().is_empty()).map(|l| l.to_string()).collect(),
+                responsibilities: input
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .map(|l| l.to_string())
+                    .collect(),
                 tech_stack: vec![],
                 dependencies: vec![],
             });
@@ -608,8 +692,17 @@ impl RequirementDialogManager {
 
     /// 格式化模块响应（静态版本）
     fn format_module_response_static(state: &DialogState) -> String {
-        let modules_str = state.modules.iter()
-            .map(|m| format!("- **{}** ({:?}): {} 项职责", m.name, m.module_type, m.responsibilities.len()))
+        let modules_str = state
+            .modules
+            .iter()
+            .map(|m| {
+                format!(
+                    "- **{}** ({:?}): {} 项职责",
+                    m.name,
+                    m.module_type,
+                    m.responsibilities.len()
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -686,21 +779,40 @@ impl RequirementDialogManager {
 
         summary.push_str("## 非功能性要求\n");
         for n in &state.nfrs {
-            summary.push_str(&format!("- **{}** ({:?}, {:?})\n", n.name, n.category, n.priority));
+            summary.push_str(&format!(
+                "- **{}** ({:?}, {:?})\n",
+                n.name, n.category, n.priority
+            ));
         }
 
         summary
     }
 
     /// 处理摘要阶段输入（静态版本）
-    fn process_summary_input_static(_state: &mut DialogState, input: &str) -> (String, DialogPhase) {
+    fn process_summary_input_static(
+        _state: &mut DialogState,
+        input: &str,
+    ) -> (String, DialogPhase) {
         let input_lower = input.to_lowercase();
-        if input_lower.contains("确认") || input_lower.contains("ok") || input_lower.contains("好") || input_lower.contains("yes") {
-            ("太好了！蓝图已确认。现在可以生成正式蓝图了。".to_string(), DialogPhase::Complete)
+        if input_lower.contains("确认")
+            || input_lower.contains("ok")
+            || input_lower.contains("好")
+            || input_lower.contains("yes")
+        {
+            (
+                "太好了！蓝图已确认。现在可以生成正式蓝图了。".to_string(),
+                DialogPhase::Complete,
+            )
         } else if input_lower.contains("修改") || input_lower.contains("改") {
-            ("好的，请告诉我需要修改的内容。".to_string(), DialogPhase::Summary)
+            (
+                "好的，请告诉我需要修改的内容。".to_string(),
+                DialogPhase::Summary,
+            )
         } else {
-            ("请确认蓝图内容是否正确，或告诉我需要修改的地方。".to_string(), DialogPhase::Summary)
+            (
+                "请确认蓝图内容是否正确，或告诉我需要修改的地方。".to_string(),
+                DialogPhase::Summary,
+            )
         }
     }
 
@@ -753,7 +865,9 @@ impl RequirementDialogManager {
         let mut modules = Vec::new();
 
         // 根据业务流程推断需要的模块
-        let has_user_flow = state.business_processes.iter()
+        let has_user_flow = state
+            .business_processes
+            .iter()
             .any(|p| p.name.contains("用户") || p.name.contains("登录") || p.name.contains("注册"));
 
         // 前端模块
@@ -807,7 +921,10 @@ impl RequirementDialogManager {
         let input_lower = input.to_lowercase();
 
         // 性能要求
-        if input_lower.contains("性能") || input_lower.contains("响应") || input_lower.contains("ms") {
+        if input_lower.contains("性能")
+            || input_lower.contains("响应")
+            || input_lower.contains("ms")
+        {
             state.nfrs.push(NFRDraft {
                 category: NFRDraftCategory::Performance,
                 name: "API 响应时间".to_string(),
@@ -818,7 +935,10 @@ impl RequirementDialogManager {
         }
 
         // 安全要求
-        if input_lower.contains("安全") || input_lower.contains("认证") || input_lower.contains("加密") {
+        if input_lower.contains("安全")
+            || input_lower.contains("认证")
+            || input_lower.contains("加密")
+        {
             state.nfrs.push(NFRDraft {
                 category: NFRDraftCategory::Security,
                 name: "用户认证".to_string(),
@@ -874,7 +994,9 @@ impl RequirementDialogManager {
 
     /// 生成摘要
     fn generate_summary(&self, state: &DialogState) -> String {
-        let processes_str = state.business_processes.iter()
+        let processes_str = state
+            .business_processes
+            .iter()
             .map(|p| {
                 let type_str = match p.process_type {
                     ProcessDraftType::Core => "核心",
@@ -886,7 +1008,9 @@ impl RequirementDialogManager {
             .collect::<Vec<_>>()
             .join("\n");
 
-        let modules_str = state.modules.iter()
+        let modules_str = state
+            .modules
+            .iter()
             .map(|m| {
                 let type_str = match m.module_type {
                     ModuleDraftType::Frontend => "前端",
@@ -895,22 +1019,34 @@ impl RequirementDialogManager {
                     ModuleDraftType::Service => "服务",
                     ModuleDraftType::Infrastructure => "基础设施",
                 };
-                format!("- **{}**（{}）：{}", m.name, type_str, m.responsibilities.join("、"))
+                format!(
+                    "- **{}**（{}）：{}",
+                    m.name,
+                    type_str,
+                    m.responsibilities.join("、")
+                )
             })
             .collect::<Vec<_>>()
             .join("\n");
 
-        let nfrs_str = state.nfrs.iter()
+        let nfrs_str = state
+            .nfrs
+            .iter()
             .map(|n| {
                 let priority_str = match n.priority {
                     NFRDraftPriority::Must => "MUST",
                     NFRDraftPriority::Should => "SHOULD",
                     NFRDraftPriority::Could => "COULD",
                 };
-                let metrics_str = n.metrics.as_ref()
+                let metrics_str = n
+                    .metrics
+                    .as_ref()
                     .map(|m| format!("（{}）", m))
                     .unwrap_or_default();
-                format!("- [{}] {}：{}{}", priority_str, n.name, n.description, metrics_str)
+                format!(
+                    "- [{}] {}：{}{}",
+                    priority_str, n.name, n.description, metrics_str
+                )
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -935,7 +1071,11 @@ impl RequirementDialogManager {
 ---"#,
             state.project_name,
             state.project_description,
-            if state.target_users.is_empty() { "待定".to_string() } else { state.target_users.join("、") },
+            if state.target_users.is_empty() {
+                "待定".to_string()
+            } else {
+                state.target_users.join("、")
+            },
             state.business_processes.len(),
             processes_str,
             state.modules.len(),
@@ -951,7 +1091,10 @@ impl RequirementDialogManager {
 
         if normalized == "确认" || normalized == "confirm" || normalized == "yes" {
             // 确认，进入完成阶段
-            (get_phase_prompt(DialogPhase::Complete).to_string(), DialogPhase::Complete)
+            (
+                get_phase_prompt(DialogPhase::Complete).to_string(),
+                DialogPhase::Complete,
+            )
         } else if normalized == "重来" || normalized == "restart" {
             // 重置状态
             state.phase = DialogPhase::Welcome;
@@ -962,7 +1105,13 @@ impl RequirementDialogManager {
             state.business_processes.clear();
             state.modules.clear();
             state.nfrs.clear();
-            (format!("好的，让我们重新开始。\n\n{}", get_phase_prompt(DialogPhase::Welcome)), DialogPhase::Welcome)
+            (
+                format!(
+                    "好的，让我们重新开始。\n\n{}",
+                    get_phase_prompt(DialogPhase::Welcome)
+                ),
+                DialogPhase::Welcome,
+            )
         } else {
             // 当作修改请求处理
             let summary = self.generate_summary(state);
@@ -977,10 +1126,13 @@ impl RequirementDialogManager {
         blueprint_manager: &mut BlueprintManager,
     ) -> Result<Blueprint, String> {
         // 创建蓝图
-        let blueprint = blueprint_manager.create_blueprint(
-            state.project_name.clone(),
-            state.project_description.clone(),
-        ).await.map_err(|e| e.to_string())?;
+        let blueprint = blueprint_manager
+            .create_blueprint(
+                state.project_name.clone(),
+                state.project_description.clone(),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
 
         // 添加业务流程
         for process in &state.business_processes {
@@ -989,22 +1141,30 @@ impl RequirementDialogManager {
                 name: process.name.clone(),
                 description: process.description.clone(),
                 process_type: ProcessType::ToBe,
-                steps: process.steps.iter().enumerate().map(|(i, step)| ProcessStep {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    order: i as u32 + 1,
-                    name: step.clone(),
-                    description: step.clone(),
-                    actor: "user".to_string(),
-                    system_action: None,
-                    user_action: Some(step.clone()),
-                    conditions: vec![],
-                    outcomes: vec![],
-                }).collect(),
+                steps: process
+                    .steps
+                    .iter()
+                    .enumerate()
+                    .map(|(i, step)| ProcessStep {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        order: i as u32 + 1,
+                        name: step.clone(),
+                        description: step.clone(),
+                        actor: "user".to_string(),
+                        system_action: None,
+                        user_action: Some(step.clone()),
+                        conditions: vec![],
+                        outcomes: vec![],
+                    })
+                    .collect(),
                 actors: vec!["user".to_string()],
                 inputs: vec![],
                 outputs: vec![],
             };
-            blueprint_manager.add_business_process(&blueprint.id, bp).await.map_err(|e| e.to_string())?;
+            blueprint_manager
+                .add_business_process(&blueprint.id, bp)
+                .await
+                .map_err(|e| e.to_string())?;
         }
 
         // 添加系统模块
@@ -1023,7 +1183,10 @@ impl RequirementDialogManager {
                 root_path: None,
             };
             module_id_map.insert(module.name.clone(), sys_module.id.clone());
-            blueprint_manager.add_module(&blueprint.id, sys_module).await.map_err(|e| e.to_string())?;
+            blueprint_manager
+                .add_module(&blueprint.id, sys_module)
+                .await
+                .map_err(|e| e.to_string())?;
         }
 
         // 添加非功能要求
@@ -1036,11 +1199,16 @@ impl RequirementDialogManager {
                 priority: nfr.priority.into(),
                 metric: nfr.metrics.clone(),
             };
-            blueprint_manager.add_nfr(&blueprint.id, requirement).await.map_err(|e| e.to_string())?;
+            blueprint_manager
+                .add_nfr(&blueprint.id, requirement)
+                .await
+                .map_err(|e| e.to_string())?;
         }
 
         // 获取更新后的蓝图
-        let blueprint = blueprint_manager.get_blueprint(&blueprint.id).await
+        let blueprint = blueprint_manager
+            .get_blueprint(&blueprint.id)
+            .await
             .ok_or_else(|| "无法获取创建的蓝图".to_string())?;
 
         Ok(blueprint)
@@ -1053,7 +1221,8 @@ impl RequirementDialogManager {
 
     /// 获取当前阶段的提示
     pub fn get_current_phase_prompt(&self, session_id: &str) -> String {
-        self.sessions.get(session_id)
+        self.sessions
+            .get(session_id)
             .map(|s| get_phase_prompt(s.phase).to_string())
             .unwrap_or_default()
     }
@@ -1061,7 +1230,10 @@ impl RequirementDialogManager {
     /// 结束对话
     pub async fn end_dialog(&mut self, session_id: &str) {
         self.sessions.remove(session_id);
-        self.emit(DialogEvent::Ended { session_id: session_id.to_string() }).await;
+        self.emit(DialogEvent::Ended {
+            session_id: session_id.to_string(),
+        })
+        .await;
     }
 }
 

@@ -27,7 +27,7 @@ fn get_signatures_file() -> PathBuf {
 }
 
 /// 签名缓存
-static SIGNATURE_CACHE: Lazy<RwLock<HashMap<String, CodeSignature>>> = 
+static SIGNATURE_CACHE: Lazy<RwLock<HashMap<String, CodeSignature>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// 初始化签名系统
@@ -46,17 +46,16 @@ pub fn init_signing() {
 /// 保存密钥
 pub fn save_key(key: &SigningKey) -> Result<(), String> {
     init_signing();
-    
+
     let mut keys = load_keys();
     keys.retain(|k| k.id != key.id);
     keys.push(key.clone());
-    
+
     let json = serde_json::to_string_pretty(&keys)
         .map_err(|e| format!("Failed to serialize keys: {}", e))?;
-    
-    std::fs::write(get_keys_file(), json)
-        .map_err(|e| format!("Failed to write keys: {}", e))?;
-    
+
+    std::fs::write(get_keys_file(), json).map_err(|e| format!("Failed to write keys: {}", e))?;
+
     Ok(())
 }
 
@@ -66,7 +65,7 @@ pub fn load_keys() -> Vec<SigningKey> {
     if !file.exists() {
         return Vec::new();
     }
-    
+
     std::fs::read_to_string(&file)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
@@ -88,22 +87,22 @@ pub fn get_cached_signature(path: &str) -> Option<CodeSignature> {
             return Some(sig.clone());
         }
     }
-    
+
     // 从文件加载
     load_signatures();
-    
+
     SIGNATURE_CACHE.read().ok()?.get(path).cloned()
 }
 
 /// 保存签名到文件
 pub fn save_signatures() {
     init_signing();
-    
+
     let signatures: HashMap<String, CodeSignature> = SIGNATURE_CACHE
         .read()
         .map(|c| c.clone())
         .unwrap_or_default();
-    
+
     if let Ok(json) = serde_json::to_string_pretty(&signatures) {
         let _ = std::fs::write(get_signatures_file(), json);
     }
@@ -115,7 +114,7 @@ pub fn load_signatures() {
     if !file.exists() {
         return;
     }
-    
+
     if let Ok(content) = std::fs::read_to_string(&file) {
         if let Ok(sigs) = serde_json::from_str::<HashMap<String, CodeSignature>>(&content) {
             if let Ok(mut cache) = SIGNATURE_CACHE.write() {
@@ -130,12 +129,12 @@ pub fn load_signatures() {
 /// 清除文件签名
 pub fn clear_signature(file_path: &str) {
     use std::path::Path;
-    
+
     let absolute_path = Path::new(file_path)
         .canonicalize()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| file_path.to_string());
-    
+
     if let Ok(mut cache) = SIGNATURE_CACHE.write() {
         cache.remove(&absolute_path);
     }
@@ -145,7 +144,7 @@ pub fn clear_signature(file_path: &str) {
 /// 获取所有已签名文件
 pub fn get_signed_files() -> Vec<(String, CodeSignature)> {
     load_signatures();
-    
+
     SIGNATURE_CACHE
         .read()
         .map(|c| c.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
@@ -155,14 +154,14 @@ pub fn get_signed_files() -> Vec<(String, CodeSignature)> {
 /// 检查文件是否已签名
 pub fn is_signed(file_path: &str) -> bool {
     use std::path::Path;
-    
+
     let absolute_path = Path::new(file_path)
         .canonicalize()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| file_path.to_string());
-    
+
     load_signatures();
-    
+
     SIGNATURE_CACHE
         .read()
         .map(|c| c.contains_key(&absolute_path))

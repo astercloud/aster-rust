@@ -26,7 +26,6 @@ pub struct ExecutorResult {
     pub duration: Option<u64>,
 }
 
-
 /// 执行选项
 #[derive(Debug, Clone)]
 pub struct ExecutorOptions {
@@ -113,7 +112,6 @@ pub async fn execute_in_sandbox(
     })
 }
 
-
 /// 无沙箱执行
 async fn execute_unsandboxed(
     command: &str,
@@ -121,9 +119,7 @@ async fn execute_unsandboxed(
     config: &SandboxConfig,
 ) -> anyhow::Result<ExecutorResult> {
     let mut cmd = Command::new(command);
-    cmd.args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
 
     // 设置环境变量
     for (key, value) in &config.environment_variables {
@@ -203,7 +199,6 @@ async fn execute_in_docker(
     })
 }
 
-
 /// Bubblewrap 沙箱执行 (Linux)
 #[cfg(target_os = "linux")]
 async fn execute_in_bubblewrap(
@@ -279,10 +274,10 @@ async fn execute_in_seatbelt(
 ) -> anyhow::Result<ExecutorResult> {
     // 构建 sandbox profile
     let mut profile = String::from("(version 1)\n(deny default)\n");
-    
+
     // 允许执行
     profile.push_str("(allow process-exec)\n");
-    
+
     // 只读路径
     for path in &config.read_only_paths {
         profile.push_str(&format!(
@@ -321,7 +316,6 @@ async fn execute_in_seatbelt(
         duration: None,
     })
 }
-
 
 /// Firejail 沙箱执行 (Linux)
 #[cfg(target_os = "linux")]
@@ -444,7 +438,6 @@ pub fn get_sandbox_capabilities() -> SandboxCapabilities {
 
     caps
 }
-
 
 /// 沙箱执行器
 pub struct SandboxExecutor {

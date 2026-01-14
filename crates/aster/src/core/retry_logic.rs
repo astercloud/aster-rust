@@ -43,19 +43,16 @@ pub enum OverflowRecoveryError {
 ///
 /// 错误格式示例：
 /// "input length and `max_tokens` exceed context limit: 195000 + 8192 > 200000"
-pub fn parse_context_overflow_error(
-    status: u16,
-    message: &str,
-) -> Option<ContextOverflowError> {
+pub fn parse_context_overflow_error(status: u16, message: &str) -> Option<ContextOverflowError> {
     // 检查是否为 400 错误
     if status != 400 {
         return None;
     }
 
     // 匹配错误消息模式
-    let pattern = Regex::new(
-        r"input length and `max_tokens` exceed context limit: (\d+) \+ (\d+) > (\d+)"
-    ).ok()?;
+    let pattern =
+        Regex::new(r"input length and `max_tokens` exceed context limit: (\d+) \+ (\d+) > (\d+)")
+            .ok()?;
 
     let captures = pattern.captures(message)?;
 
@@ -108,11 +105,12 @@ pub fn handle_context_overflow(
     let overflow = parse_context_overflow_error(status, message)
         .ok_or(OverflowRecoveryError::NotOverflowError)?;
 
-    let adjusted = calculate_adjusted_max_tokens(&overflow, max_thinking_tokens)
-        .ok_or(OverflowRecoveryError::CannotRecover {
+    let adjusted = calculate_adjusted_max_tokens(&overflow, max_thinking_tokens).ok_or(
+        OverflowRecoveryError::CannotRecover {
             input_tokens: overflow.input_tokens,
             context_limit: overflow.context_limit,
-        })?;
+        },
+    )?;
 
     tracing::warn!(
         "Context overflow detected. Adjusting max_tokens from {} to {}",
@@ -175,32 +173,32 @@ where
             Err(error) => {
                 let req_error: RequestError = error.into();
 
-                let overflow = match parse_context_overflow_error(req_error.status, &req_error.message) {
-                    Some(o) => o,
-                    None => {
-                        return Err(OverflowRecoveryError::RequestFailed(req_error.message));
-                    }
-                };
+                let overflow =
+                    match parse_context_overflow_error(req_error.status, &req_error.message) {
+                        Some(o) => o,
+                        None => {
+                            return Err(OverflowRecoveryError::RequestFailed(req_error.message));
+                        }
+                    };
 
                 if attempt >= options.max_retries {
                     tracing::error!(
                         "Context overflow recovery failed after {} attempts",
                         options.max_retries
                     );
-                    return Err(OverflowRecoveryError::MaxRetriesExceeded {
-                        attempts: attempt,
-                    });
+                    return Err(OverflowRecoveryError::MaxRetriesExceeded { attempts: attempt });
                 }
 
-                let adjusted = match calculate_adjusted_max_tokens(&overflow, options.max_thinking_tokens) {
-                    Some(a) => a,
-                    None => {
-                        return Err(OverflowRecoveryError::CannotRecover {
-                            input_tokens: overflow.input_tokens,
-                            context_limit: overflow.context_limit,
-                        });
-                    }
-                };
+                let adjusted =
+                    match calculate_adjusted_max_tokens(&overflow, options.max_thinking_tokens) {
+                        Some(a) => a,
+                        None => {
+                            return Err(OverflowRecoveryError::CannotRecover {
+                                input_tokens: overflow.input_tokens,
+                                context_limit: overflow.context_limit,
+                            });
+                        }
+                    };
 
                 tracing::warn!(
                     "[Retry {}/{}] Context overflow detected. Adjusting max_tokens from {:?} to {}",

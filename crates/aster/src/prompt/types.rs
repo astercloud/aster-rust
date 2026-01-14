@@ -36,7 +36,6 @@ pub struct Attachment {
     pub compute_time_ms: Option<u64>,
 }
 
-
 /// 权限模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -71,7 +70,6 @@ pub enum DiagnosticSeverity {
     Info,
     Hint,
 }
-
 
 /// 任务项
 #[derive(Debug, Clone, Serialize, Deserialize)]

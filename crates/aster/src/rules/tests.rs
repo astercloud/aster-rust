@@ -64,7 +64,6 @@ This is the main instruction.
     let _ = std::fs::remove_file(&temp_file);
 }
 
-
 #[test]
 fn test_extract_rules_from_sections() {
     let sections = vec![
@@ -170,7 +169,6 @@ fn test_apply_rules_allow() {
     assert!(result.warnings.is_empty());
     assert_eq!(result.result, content);
 }
-
 
 #[test]
 fn test_generate_system_prompt_addition() {

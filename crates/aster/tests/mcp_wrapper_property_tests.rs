@@ -86,7 +86,6 @@ fn arb_unique_tool_names(count: usize) -> impl Strategy<Value = Vec<String>> {
         .prop_map(|set| set.into_iter().collect())
 }
 
-
 // ============================================================================
 // Property Tests - Property 8: MCP Tool Compatibility
 // ============================================================================

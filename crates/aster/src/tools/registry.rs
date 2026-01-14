@@ -29,9 +29,8 @@ use crate::permission::{
 ///
 /// When a tool's permission check returns `Ask`, this callback is invoked
 /// to get user confirmation before proceeding with execution.
-pub type PermissionRequestCallback = Box<
-    dyn Fn(String, String) -> Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync,
->;
+pub type PermissionRequestCallback =
+    Box<dyn Fn(String, String) -> Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync>;
 
 /// MCP Tool Wrapper
 ///
@@ -169,7 +168,6 @@ impl ToolRegistry {
     }
 }
 
-
 // =============================================================================
 // Registration Methods (Requirements: 2.1, 11.4)
 // =============================================================================
@@ -259,14 +257,14 @@ impl ToolRegistry {
     /// Get the total number of registered tools
     pub fn tool_count(&self) -> usize {
         // Count unique tool names (native tools shadow MCP tools)
-        let mut names: std::collections::HashSet<&str> = self.native_tools.keys().map(|s| s.as_str()).collect();
+        let mut names: std::collections::HashSet<&str> =
+            self.native_tools.keys().map(|s| s.as_str()).collect();
         for name in self.mcp_tools.keys() {
             names.insert(name.as_str());
         }
         names.len()
     }
 }
-
 
 // =============================================================================
 // Query Methods (Requirements: 2.2, 2.3, 2.4)
@@ -332,7 +330,10 @@ impl ToolRegistry {
     ///
     /// Requirements: 2.4
     pub fn get_definitions(&self) -> Vec<ToolDefinition> {
-        self.get_all().iter().map(|tool| tool.get_definition()).collect()
+        self.get_all()
+            .iter()
+            .map(|tool| tool.get_definition())
+            .collect()
     }
 
     /// Get all native tool names
@@ -347,7 +348,8 @@ impl ToolRegistry {
 
     /// Get all tool names (unique, native tools shadow MCP tools)
     pub fn tool_names(&self) -> Vec<&str> {
-        let mut names: std::collections::HashSet<&str> = self.native_tools.keys().map(|s| s.as_str()).collect();
+        let mut names: std::collections::HashSet<&str> =
+            self.native_tools.keys().map(|s| s.as_str()).collect();
         for name in self.mcp_tools.keys() {
             names.insert(name.as_str());
         }
@@ -364,7 +366,6 @@ impl ToolRegistry {
         !self.native_tools.contains_key(name) && self.mcp_tools.contains_key(name)
     }
 }
-
 
 // =============================================================================
 // Execution Methods (Requirements: 2.5, 2.6, 8.1, 8.2)
@@ -412,29 +413,42 @@ impl ToolRegistry {
                 let reason = permission_result
                     .message
                     .unwrap_or_else(|| format!("Permission denied for tool '{}'", name));
-                
+
                 // Log permission denial
                 self.log_permission_denied(name, &params, context, &reason, start_time.elapsed());
-                
+
                 return Err(ToolError::permission_denied(reason));
             }
             PermissionBehavior::Ask => {
                 // Handle user confirmation request
                 if let Some(callback) = on_permission_request {
-                    let message = permission_result
-                        .message
-                        .unwrap_or_else(|| format!("Tool '{}' requires permission to execute", name));
-                    
+                    let message = permission_result.message.unwrap_or_else(|| {
+                        format!("Tool '{}' requires permission to execute", name)
+                    });
+
                     let approved = callback(name.to_string(), message.clone()).await;
-                    
+
                     if !approved {
-                        self.log_permission_denied(name, &params, context, "User denied permission", start_time.elapsed());
+                        self.log_permission_denied(
+                            name,
+                            &params,
+                            context,
+                            "User denied permission",
+                            start_time.elapsed(),
+                        );
                         return Err(ToolError::permission_denied("User denied permission"));
                     }
                 } else {
                     // No callback provided, deny by default
-                    let reason = "Permission request requires user confirmation but no callback provided";
-                    self.log_permission_denied(name, &params, context, reason, start_time.elapsed());
+                    let reason =
+                        "Permission request requires user confirmation but no callback provided";
+                    self.log_permission_denied(
+                        name,
+                        &params,
+                        context,
+                        reason,
+                        start_time.elapsed(),
+                    );
                     return Err(ToolError::permission_denied(reason));
                 }
             }
@@ -453,9 +467,9 @@ impl ToolRegistry {
                 let reason = perm_result
                     .reason
                     .unwrap_or_else(|| format!("Permission denied for tool '{}'", name));
-                
+
                 self.log_permission_denied(name, &params, context, &reason, start_time.elapsed());
-                
+
                 return Err(ToolError::permission_denied(reason));
             }
         }
@@ -494,9 +508,7 @@ impl ToolRegistry {
     fn params_to_hashmap(&self, params: &serde_json::Value) -> HashMap<String, serde_json::Value> {
         match params {
             serde_json::Value::Object(map) => {
-                map.iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect()
+                map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
             }
             _ => HashMap::new(),
         }
@@ -518,7 +530,7 @@ impl ToolRegistry {
                 .with_context(self.create_permission_context(context))
                 .with_duration_ms(duration.as_millis() as u64)
                 .add_metadata("reason", serde_json::json!(reason));
-            
+
             logger.log(entry);
         }
     }
@@ -545,8 +557,11 @@ impl ToolRegistry {
                 .with_context(self.create_permission_context(context))
                 .with_duration_ms(duration.as_millis() as u64)
                 .add_metadata("success", serde_json::json!(result.is_success()))
-                .add_metadata("output_size", serde_json::json!(result.output.as_ref().map(|s| s.len()).unwrap_or(0)));
-            
+                .add_metadata(
+                    "output_size",
+                    serde_json::json!(result.output.as_ref().map(|s| s.len()).unwrap_or(0)),
+                );
+
             logger.log_tool_execution(entry);
         }
     }
@@ -567,12 +582,11 @@ impl ToolRegistry {
                 .with_context(self.create_permission_context(context))
                 .with_duration_ms(duration.as_millis() as u64)
                 .add_metadata("error", serde_json::json!(error.to_string()));
-            
+
             logger.log_tool_execution(entry);
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -708,7 +722,7 @@ mod tests {
     #[test]
     fn test_registry_native_priority_over_mcp() {
         let mut registry = ToolRegistry::new();
-        
+
         // Register MCP tool first
         let mcp_tool = McpToolWrapper::new(
             "shared_tool",
@@ -739,7 +753,7 @@ mod tests {
         let mut registry = ToolRegistry::new();
         registry.register(Box::new(TestTool::new("tool1")));
         registry.register(Box::new(TestTool::new("tool2")));
-        
+
         let mcp_tool = McpToolWrapper::new(
             "mcp_tool",
             "An MCP tool",
@@ -755,7 +769,7 @@ mod tests {
     #[test]
     fn test_registry_get_all_with_shadowing() {
         let mut registry = ToolRegistry::new();
-        
+
         // Register MCP tool
         let mcp_tool = McpToolWrapper::new(
             "shared_tool",
@@ -782,7 +796,7 @@ mod tests {
 
         let definitions = registry.get_definitions();
         assert_eq!(definitions.len(), 2);
-        
+
         let names: Vec<&str> = definitions.iter().map(|d| d.name.as_str()).collect();
         assert!(names.contains(&"tool1"));
         assert!(names.contains(&"tool2"));
@@ -792,9 +806,9 @@ mod tests {
     fn test_registry_unregister() {
         let mut registry = ToolRegistry::new();
         registry.register(Box::new(TestTool::new("test_tool")));
-        
+
         assert!(registry.contains("test_tool"));
-        
+
         let removed = registry.unregister("test_tool");
         assert!(removed.is_some());
         assert!(!registry.contains("test_tool"));
@@ -810,9 +824,9 @@ mod tests {
             "test_server",
         );
         registry.register_mcp("mcp_tool".to_string(), mcp_tool);
-        
+
         assert!(registry.contains("mcp_tool"));
-        
+
         let removed = registry.unregister_mcp("mcp_tool");
         assert!(removed.is_some());
         assert!(!registry.contains("mcp_tool"));
@@ -823,13 +837,9 @@ mod tests {
         let mut registry = ToolRegistry::new();
         registry.register(Box::new(TestTool::new("native1")));
         registry.register(Box::new(TestTool::new("native2")));
-        
-        let mcp_tool = McpToolWrapper::new(
-            "mcp1",
-            "An MCP tool",
-            serde_json::json!({}),
-            "test_server",
-        );
+
+        let mcp_tool =
+            McpToolWrapper::new("mcp1", "An MCP tool", serde_json::json!({}), "test_server");
         registry.register_mcp("mcp1".to_string(), mcp_tool);
 
         let native_names = registry.native_tool_names();
@@ -852,7 +862,7 @@ mod tests {
 
         let result = registry.execute("test_tool", params, &context, None).await;
         assert!(result.is_ok());
-        
+
         let tool_result = result.unwrap();
         assert!(tool_result.is_success());
         assert_eq!(tool_result.output, Some("Processed: hello".to_string()));
@@ -864,7 +874,9 @@ mod tests {
         let context = create_test_context();
         let params = serde_json::json!({});
 
-        let result = registry.execute("nonexistent", params, &context, None).await;
+        let result = registry
+            .execute("nonexistent", params, &context, None)
+            .await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ToolError::NotFound(_)));
     }
@@ -877,7 +889,9 @@ mod tests {
         let context = create_test_context();
         let params = serde_json::json!({"input": "hello"});
 
-        let result = registry.execute("failing_tool", params, &context, None).await;
+        let result = registry
+            .execute("failing_tool", params, &context, None)
+            .await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ToolError::ExecutionFailed(_)));
     }
@@ -885,55 +899,77 @@ mod tests {
     #[tokio::test]
     async fn test_registry_execute_permission_denied() {
         let mut registry = ToolRegistry::new();
-        registry.register(Box::new(TestTool::with_permission("denied_tool", PermissionBehavior::Deny)));
+        registry.register(Box::new(TestTool::with_permission(
+            "denied_tool",
+            PermissionBehavior::Deny,
+        )));
 
         let context = create_test_context();
         let params = serde_json::json!({"input": "hello"});
 
-        let result = registry.execute("denied_tool", params, &context, None).await;
+        let result = registry
+            .execute("denied_tool", params, &context, None)
+            .await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ToolError::PermissionDenied(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ToolError::PermissionDenied(_)
+        ));
     }
 
     #[tokio::test]
     async fn test_registry_execute_permission_ask_approved() {
         let mut registry = ToolRegistry::new();
-        registry.register(Box::new(TestTool::with_permission("ask_tool", PermissionBehavior::Ask)));
+        registry.register(Box::new(TestTool::with_permission(
+            "ask_tool",
+            PermissionBehavior::Ask,
+        )));
 
         let context = create_test_context();
         let params = serde_json::json!({"input": "hello"});
 
         // Create a callback that approves the request
-        let callback: PermissionRequestCallback = Box::new(|_name, _message| {
-            Box::pin(async { true })
-        });
+        let callback: PermissionRequestCallback =
+            Box::new(|_name, _message| Box::pin(async { true }));
 
-        let result = registry.execute("ask_tool", params, &context, Some(callback)).await;
+        let result = registry
+            .execute("ask_tool", params, &context, Some(callback))
+            .await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_registry_execute_permission_ask_denied() {
         let mut registry = ToolRegistry::new();
-        registry.register(Box::new(TestTool::with_permission("ask_tool", PermissionBehavior::Ask)));
+        registry.register(Box::new(TestTool::with_permission(
+            "ask_tool",
+            PermissionBehavior::Ask,
+        )));
 
         let context = create_test_context();
         let params = serde_json::json!({"input": "hello"});
 
         // Create a callback that denies the request
-        let callback: PermissionRequestCallback = Box::new(|_name, _message| {
-            Box::pin(async { false })
-        });
+        let callback: PermissionRequestCallback =
+            Box::new(|_name, _message| Box::pin(async { false }));
 
-        let result = registry.execute("ask_tool", params, &context, Some(callback)).await;
+        let result = registry
+            .execute("ask_tool", params, &context, Some(callback))
+            .await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ToolError::PermissionDenied(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ToolError::PermissionDenied(_)
+        ));
     }
 
     #[tokio::test]
     async fn test_registry_execute_permission_ask_no_callback() {
         let mut registry = ToolRegistry::new();
-        registry.register(Box::new(TestTool::with_permission("ask_tool", PermissionBehavior::Ask)));
+        registry.register(Box::new(TestTool::with_permission(
+            "ask_tool",
+            PermissionBehavior::Ask,
+        )));
 
         let context = create_test_context();
         let params = serde_json::json!({"input": "hello"});
@@ -941,7 +977,10 @@ mod tests {
         // No callback provided - should deny
         let result = registry.execute("ask_tool", params, &context, None).await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ToolError::PermissionDenied(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ToolError::PermissionDenied(_)
+        ));
     }
 
     #[test]
@@ -964,7 +1003,8 @@ mod tests {
         let permission_manager = Arc::new(ToolPermissionManager::new(None));
         let audit_logger = Arc::new(AuditLogger::new(AuditLogLevel::Info));
 
-        let registry = ToolRegistry::with_managers(permission_manager.clone(), audit_logger.clone());
+        let registry =
+            ToolRegistry::with_managers(permission_manager.clone(), audit_logger.clone());
 
         assert!(registry.permission_manager().is_some());
         assert!(registry.audit_logger().is_some());
@@ -973,7 +1013,7 @@ mod tests {
     #[test]
     fn test_registry_set_managers() {
         let mut registry = ToolRegistry::new();
-        
+
         assert!(registry.permission_manager().is_none());
         assert!(registry.audit_logger().is_none());
 

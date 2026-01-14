@@ -3,15 +3,9 @@
 //! 提供 Language Server Protocol 服务器管理功能
 
 mod config;
-mod server;
 mod manager;
+mod server;
 
-pub use config::{
-    LSPServerConfig, LSPConfigFile, default_lsp_configs,
-};
-pub use server::{
-    LSPServer, LSPServerState, LSPDiagnostic,
-};
-pub use manager::{
-    LSPServerManager, InitializeLSPOptions,
-};
+pub use config::{default_lsp_configs, LSPConfigFile, LSPServerConfig};
+pub use manager::{InitializeLSPOptions, LSPServerManager};
+pub use server::{LSPDiagnostic, LSPServer, LSPServerState};

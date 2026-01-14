@@ -67,10 +67,14 @@ fn test_prompt_cache_is_valid() {
     assert!(!cache.is_valid("nonexistent", &hash_info.hash));
 }
 
-
 #[test]
 fn test_generate_cache_key() {
-    let key = generate_cache_key("/home/user/project", Some("claude-3"), Some("default"), false);
+    let key = generate_cache_key(
+        "/home/user/project",
+        Some("claude-3"),
+        Some("default"),
+        false,
+    );
     assert!(key.contains("/home/user/project"));
     assert!(key.contains("claude-3"));
     assert!(key.contains("default"));
@@ -136,7 +140,6 @@ fn test_attachment_type_serialize() {
     let json = serde_json::to_string(&att).unwrap();
     assert!(json.contains("agents_md"));
 }
-
 
 #[test]
 fn test_permission_mode_description() {
@@ -222,7 +225,6 @@ fn test_get_git_status_info() {
     assert!(result.contains("file1.rs"));
     assert!(result.contains("</git-status>"));
 }
-
 
 #[test]
 fn test_get_memory_info() {

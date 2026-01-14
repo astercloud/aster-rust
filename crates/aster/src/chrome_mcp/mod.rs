@@ -10,17 +10,17 @@
 //! - `mcp_server` - MCP 服务器
 //! - `tools` - MCP 工具定义
 
-pub mod types;
+pub mod mcp_server;
 pub mod native_host;
 pub mod socket_client;
 pub mod socket_server;
-pub mod mcp_server;
 pub mod tools;
+pub mod types;
 
 // Re-exports
-pub use types::*;
+pub use mcp_server::*;
 pub use native_host::*;
 pub use socket_client::*;
 pub use socket_server::*;
-pub use mcp_server::*;
 pub use tools::*;
+pub use types::*;

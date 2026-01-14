@@ -410,7 +410,10 @@ impl McpError {
     }
 
     /// Create a permission denied error with tool name
-    pub fn permission_denied_for_tool(message: impl Into<String>, tool_name: impl Into<String>) -> Self {
+    pub fn permission_denied_for_tool(
+        message: impl Into<String>,
+        tool_name: impl Into<String>,
+    ) -> Self {
         Self::PermissionDenied {
             code: McpErrorCode::PermissionDenied.code(),
             message: message.into(),
@@ -491,9 +494,7 @@ impl StructuredError {
 impl From<&McpError> for StructuredError {
     fn from(err: &McpError) -> Self {
         let data = match err {
-            McpError::Validation { errors, .. } => {
-                Some(serde_json::json!({ "errors": errors }))
-            }
+            McpError::Validation { errors, .. } => Some(serde_json::json!({ "errors": errors })),
             McpError::Server { data, .. } => data.clone(),
             McpError::Timeout { duration, .. } => {
                 Some(serde_json::json!({ "duration_ms": duration.as_millis() }))
@@ -501,15 +502,15 @@ impl From<&McpError> for StructuredError {
             McpError::Cancelled { reason, .. } => {
                 reason.as_ref().map(|r| serde_json::json!({ "reason": r }))
             }
-            McpError::Lifecycle { server_name, .. } => {
-                server_name.as_ref().map(|n| serde_json::json!({ "server_name": n }))
-            }
-            McpError::Tool { tool_name, .. } => {
-                tool_name.as_ref().map(|n| serde_json::json!({ "tool_name": n }))
-            }
-            McpError::PermissionDenied { tool_name, .. } => {
-                tool_name.as_ref().map(|n| serde_json::json!({ "tool_name": n }))
-            }
+            McpError::Lifecycle { server_name, .. } => server_name
+                .as_ref()
+                .map(|n| serde_json::json!({ "server_name": n })),
+            McpError::Tool { tool_name, .. } => tool_name
+                .as_ref()
+                .map(|n| serde_json::json!({ "tool_name": n })),
+            McpError::PermissionDenied { tool_name, .. } => tool_name
+                .as_ref()
+                .map(|n| serde_json::json!({ "tool_name": n })),
             _ => None,
         };
 
@@ -614,7 +615,7 @@ mod tests {
     fn test_structured_error_from_mcp_error() {
         let mcp_err = McpError::connection("connection failed");
         let structured: StructuredError = (&mcp_err).into();
-        
+
         assert_eq!(structured.code, McpErrorCode::ConnectionError.code());
         assert_eq!(structured.message, "connection failed");
     }
@@ -626,11 +627,11 @@ mod tests {
             vec!["missing field".to_string(), "invalid value".to_string()],
         );
         let structured: StructuredError = (&mcp_err).into();
-        
+
         assert_eq!(structured.code, McpErrorCode::ValidationError.code());
         assert_eq!(structured.message, "invalid config");
         assert!(structured.data.is_some());
-        
+
         let data = structured.data.unwrap();
         let errors = data.get("errors").unwrap().as_array().unwrap();
         assert_eq!(errors.len(), 2);
@@ -640,10 +641,10 @@ mod tests {
     fn test_structured_error_from_timeout_error() {
         let mcp_err = McpError::timeout("request timed out", Duration::from_secs(30));
         let structured: StructuredError = (&mcp_err).into();
-        
+
         assert_eq!(structured.code, McpErrorCode::TimeoutError.code());
         assert!(structured.data.is_some());
-        
+
         let data = structured.data.unwrap();
         assert_eq!(data.get("duration_ms").unwrap().as_u64().unwrap(), 30000);
     }
@@ -652,7 +653,7 @@ mod tests {
     fn test_structured_error_serialization() {
         let err = StructuredError::new(-32000, "test error");
         let json = serde_json::to_string(&err).unwrap();
-        
+
         assert!(json.contains("\"code\":-32000"));
         assert!(json.contains("\"message\":\"test error\""));
         // data should not be present when None
@@ -663,7 +664,7 @@ mod tests {
     fn test_all_error_variants_have_code_and_message() {
         // Test that all error variants can be converted to structured errors
         // with valid code and message (Requirements 8.1)
-        
+
         let errors: Vec<McpError> = vec![
             McpError::connection("test"),
             McpError::transport("test"),
@@ -677,11 +678,14 @@ mod tests {
             McpError::tool("test", None),
             McpError::permission_denied("test"),
         ];
-        
+
         for err in errors {
             let structured: StructuredError = (&err).into();
             assert!(structured.code != 0, "Error code should not be 0");
-            assert!(!structured.message.is_empty(), "Error message should not be empty");
+            assert!(
+                !structured.message.is_empty(),
+                "Error message should not be empty"
+            );
         }
     }
 }

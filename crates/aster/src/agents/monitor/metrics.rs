@@ -254,28 +254,21 @@ impl FullAgentMetrics {
         // Average API latency
         if !self.api_latencies.is_empty() {
             let total: Duration = self.api_latencies.iter().sum();
-            self.performance.avg_api_latency =
-                Some(total / self.api_latencies.len() as u32);
+            self.performance.avg_api_latency = Some(total / self.api_latencies.len() as u32);
         }
 
         // Average tool duration
-        let completed_tools: Vec<_> = self
-            .tool_calls
-            .iter()
-            .filter_map(|t| t.duration)
-            .collect();
+        let completed_tools: Vec<_> = self.tool_calls.iter().filter_map(|t| t.duration).collect();
         if !completed_tools.is_empty() {
             let total: Duration = completed_tools.iter().sum();
-            self.performance.avg_tool_duration =
-                Some(total / completed_tools.len() as u32);
+            self.performance.avg_tool_duration = Some(total / completed_tools.len() as u32);
         }
 
         // Tokens per second
         if let Some(duration) = self.duration {
             let secs = duration.as_secs_f64();
             if secs > 0.0 {
-                self.performance.tokens_per_second =
-                    Some(self.tokens_used.total as f64 / secs);
+                self.performance.tokens_per_second = Some(self.tokens_used.total as f64 / secs);
             }
         }
 
@@ -283,8 +276,7 @@ impl FullAgentMetrics {
         if let Some(duration) = self.duration {
             let mins = duration.as_secs_f64() / 60.0;
             if mins > 0.0 {
-                self.performance.api_calls_per_minute =
-                    Some(self.api_calls as f64 / mins);
+                self.performance.api_calls_per_minute = Some(self.api_calls as f64 / mins);
             }
         }
     }
@@ -312,7 +304,6 @@ impl FullAgentMetrics {
         false
     }
 }
-
 
 /// Monitor configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -409,12 +400,7 @@ impl AgentMonitor {
     }
 
     /// Start tracking an agent
-    pub fn start_tracking(
-        &mut self,
-        agent_id: &str,
-        agent_type: &str,
-        description: Option<&str>,
-    ) {
+    pub fn start_tracking(&mut self, agent_id: &str, agent_type: &str, description: Option<&str>) {
         let mut metrics = FullAgentMetrics::new(agent_id, agent_type);
         if let Some(desc) = description {
             metrics = metrics.with_description(desc);
@@ -610,11 +596,7 @@ impl AgentMonitor {
             stats.avg_tokens_per_agent = stats.total_tokens as f64 / stats.total_agents as f64;
         }
 
-        let total_successful: usize = self
-            .metrics
-            .values()
-            .map(|m| m.api_calls_successful)
-            .sum();
+        let total_successful: usize = self.metrics.values().map(|m| m.api_calls_successful).sum();
         if stats.total_api_calls > 0 {
             stats.overall_error_rate =
                 (stats.total_api_calls - total_successful) as f32 / stats.total_api_calls as f32;
@@ -722,7 +704,6 @@ impl AgentMonitor {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -730,7 +711,7 @@ mod tests {
     #[test]
     fn test_tool_call_metric_creation() {
         let metric = ToolCallMetric::new("test_tool");
-        
+
         assert!(!metric.id.is_empty());
         assert_eq!(metric.tool_name, "test_tool");
         assert!(!metric.success);
@@ -776,7 +757,7 @@ mod tests {
     #[test]
     fn test_full_agent_metrics_record_tokens() {
         let mut metrics = FullAgentMetrics::new("agent-1", "test");
-        
+
         metrics.record_tokens(100, 50);
         assert_eq!(metrics.tokens_used.input, 100);
         assert_eq!(metrics.tokens_used.output, 50);
@@ -1046,8 +1027,8 @@ mod tests {
 
     #[test]
     fn test_full_agent_metrics_is_timed_out() {
-        let mut metrics = FullAgentMetrics::new("agent-1", "test")
-            .with_timeout(Duration::from_millis(100));
+        let mut metrics =
+            FullAgentMetrics::new("agent-1", "test").with_timeout(Duration::from_millis(100));
 
         // Not timed out yet
         assert!(!metrics.is_timed_out());
