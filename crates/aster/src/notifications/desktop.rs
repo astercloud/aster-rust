@@ -46,6 +46,7 @@ pub fn send_desktop_notification(notification: &Notification) -> anyhow::Result<
 }
 
 /// 播放通知声音
+#[allow(unused_variables)]
 pub fn play_sound(notification_type: NotificationType) -> anyhow::Result<()> {
     #[cfg(target_os = "macos")]
     {

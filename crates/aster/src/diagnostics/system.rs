@@ -11,8 +11,6 @@ impl SystemChecker {
     /// 检查 CPU 负载
     #[cfg(unix)]
     pub fn check_cpu_load() -> DiagnosticCheck {
-        use std::process::Command;
-
         // 获取 CPU 核心数
         let cores = std::thread::available_parallelism()
             .map(|n| n.get())
@@ -20,7 +18,9 @@ impl SystemChecker {
 
         // 获取负载平均值
         #[cfg(target_os = "macos")]
-        let load_result = Command::new("sysctl").args(["-n", "vm.loadavg"]).output();
+        let load_result = std::process::Command::new("sysctl")
+            .args(["-n", "vm.loadavg"])
+            .output();
 
         #[cfg(target_os = "linux")]
         let load_result = std::fs::read_to_string("/proc/loadavg")
