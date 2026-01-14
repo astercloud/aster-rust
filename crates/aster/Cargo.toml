@@ -57,6 +57,7 @@ clap = { version = "4.4", features = ["derive"] }
 indoc = "2.0.5"
 nanoid = "0.4"
 sha2 = "0.10"
+hex = "0.4"
 base64 = "0.21"
 url = "2.5"
 axum = "0.8.1"
@@ -73,6 +74,8 @@ tonic = "0.12"
 keyring = { version = "3.6.2", features = ["apple-native", "windows-native", "sync-secret-service", "vendored"] }
 serde_yaml = "0.9.34"
 once_cell = "1.20.2"
+parking_lot = "0.12"
+hostname = "0.4"
 etcetera = { workspace = true }
 rand = "0.8.5"
 utoipa = { version = "4.1", features = ["chrono"] }
@@ -116,6 +119,7 @@ glob = "0.3"
 boa_engine = "0.21.0"
 boa_gc = "0.21"
 unbinder = "0.1.7"
+notify = "8.2.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["wincred"] }

@@ -1,5 +1,8 @@
+pub mod agents_md_parser;
 pub mod aster_mode;
 pub mod base;
+pub mod config_command;
+pub mod config_manager;
 pub mod declarative_providers;
 mod experiments;
 pub mod extensions;
@@ -23,6 +26,12 @@ pub use permission::PermissionManager;
 pub use signup_openrouter::configure_openrouter;
 pub use signup_tetrate::configure_tetrate;
 
+pub use agents_md_parser::{AgentsMdInfo, AgentsMdParser, AgentsMdStats, ValidationResult};
+pub use config_command::{create_config_command, ConfigCommand, ConfigDisplayOptions, ConfigFormat};
+pub use config_manager::{
+    ConfigKeySource, ConfigManager, ConfigManagerOptions, ConfigSource, ConfigSourceInfo,
+    EnterprisePolicyConfig, PolicyMetadata,
+};
 pub use extensions::DEFAULT_DISPLAY_NAME;
 pub use extensions::DEFAULT_EXTENSION;
 pub use extensions::DEFAULT_EXTENSION_DESCRIPTION;

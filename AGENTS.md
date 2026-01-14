@@ -2,6 +2,8 @@
 
 Aster 是一个 Rust AI Agent 框架，支持 CLI 和 Electron 桌面界面。
 
+文件超过 20 行，就要分批进行输出
+
 ## 结构
 ```
 crates/

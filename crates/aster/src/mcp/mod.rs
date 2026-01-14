@@ -1,7 +1,6 @@
 //! MCP (Model Context Protocol) Module
 //!
 //! This module provides enhanced MCP support for aster-rust, aligned with
-//! claude-code-open's implementation. It includes:
 //!
 //! - **Connection Management**: Multi-transport support (stdio, HTTP, SSE, WebSocket),
 //!   automatic reconnection, heartbeat monitoring
@@ -48,13 +47,16 @@
 //! };
 //! ```
 
+pub mod cancellation;
 pub mod config_manager;
 pub mod connection_manager;
 pub mod error;
 pub mod integration;
 pub mod lifecycle_manager;
 pub mod logging;
+pub mod notifications;
 pub mod resource_manager;
+pub mod roots;
 pub mod tool_manager;
 pub mod transport;
 pub mod types;
@@ -115,3 +117,23 @@ pub use types::{
 
 // Re-export JSON types from rmcp
 pub use types::JsonObject;
+
+// Re-export cancellation types
+pub use cancellation::{
+    CancellableRequest, CancellationEvent, CancellationReason, CancellationResult,
+    CancellationStats, CancellationToken, CancelledNotification, McpCancellationManager,
+    RequestDuration,
+};
+
+// Re-export notification types
+pub use notifications::{
+    McpNotificationManager, Notification, NotificationEvent, NotificationFilter,
+    NotificationStats, NotificationType, ProgressNotification, ProgressState,
+    create_progress_params,
+};
+
+// Re-export roots types
+pub use roots::{
+    McpRootsManager, Root, RootEvent, RootInfo, RootPermissions, RootsConfig, RootsStats,
+    create_root_from_path, get_default_roots_config,
+};

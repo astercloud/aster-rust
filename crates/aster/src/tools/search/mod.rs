@@ -3,11 +3,13 @@
 //! This module provides search tools including:
 //! - GlobTool: Find files using glob patterns
 //! - GrepTool: Search file contents using regex patterns
+//! - ripgrep: Enhanced ripgrep integration with vendored binary support
 //!
 //! Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8
 
 pub mod glob;
 pub mod grep;
+pub mod ripgrep;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

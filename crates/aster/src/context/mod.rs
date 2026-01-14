@@ -1,7 +1,6 @@
 //! Context Management Module
 //!
 //! This module provides comprehensive context management functionality aligned with
-//! claude-code-open, including:
 //!
 //! - Token estimation for different content types
 //! - Dynamic context window management

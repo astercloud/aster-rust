@@ -7,5 +7,11 @@
 mod explore;
 mod plan;
 
+#[cfg(test)]
+mod explore_property_tests;
+
+#[cfg(test)]
+mod plan_property_tests;
+
 pub use explore::*;
 pub use plan::*;

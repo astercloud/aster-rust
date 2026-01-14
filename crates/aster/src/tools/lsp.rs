@@ -162,6 +162,150 @@ pub enum LspOperation {
     Completion,
     /// Get diagnostics
     Diagnostics,
+    /// Get document symbols
+    DocumentSymbol,
+    /// Search workspace symbols
+    WorkspaceSymbol,
+    /// Go to implementation
+    Implementation,
+    /// Prepare call hierarchy
+    PrepareCallHierarchy,
+    /// Get incoming calls
+    IncomingCalls,
+    /// Get outgoing calls
+    OutgoingCalls,
+}
+
+/// Symbol kind for document/workspace symbols
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SymbolKind {
+    File,
+    Module,
+    Namespace,
+    Package,
+    Class,
+    Method,
+    Property,
+    Field,
+    Constructor,
+    Enum,
+    Interface,
+    Function,
+    Variable,
+    Constant,
+    String,
+    Number,
+    Boolean,
+    Array,
+    Object,
+    Key,
+    Null,
+    EnumMember,
+    Struct,
+    Event,
+    Operator,
+    TypeParameter,
+}
+
+impl SymbolKind {
+    /// Convert from LSP symbol kind number
+    pub fn from_lsp(kind: u32) -> Self {
+        match kind {
+            1 => SymbolKind::File,
+            2 => SymbolKind::Module,
+            3 => SymbolKind::Namespace,
+            4 => SymbolKind::Package,
+            5 => SymbolKind::Class,
+            6 => SymbolKind::Method,
+            7 => SymbolKind::Property,
+            8 => SymbolKind::Field,
+            9 => SymbolKind::Constructor,
+            10 => SymbolKind::Enum,
+            11 => SymbolKind::Interface,
+            12 => SymbolKind::Function,
+            13 => SymbolKind::Variable,
+            14 => SymbolKind::Constant,
+            15 => SymbolKind::String,
+            16 => SymbolKind::Number,
+            17 => SymbolKind::Boolean,
+            18 => SymbolKind::Array,
+            19 => SymbolKind::Object,
+            20 => SymbolKind::Key,
+            21 => SymbolKind::Null,
+            22 => SymbolKind::EnumMember,
+            23 => SymbolKind::Struct,
+            24 => SymbolKind::Event,
+            25 => SymbolKind::Operator,
+            26 => SymbolKind::TypeParameter,
+            _ => SymbolKind::Variable,
+        }
+    }
+}
+
+/// Document symbol information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentSymbol {
+    /// The name of this symbol
+    pub name: String,
+    /// More detail for this symbol (e.g., signature)
+    pub detail: Option<String>,
+    /// The kind of this symbol
+    pub kind: SymbolKind,
+    /// The range enclosing this symbol
+    pub range: Range,
+    /// The range that should be selected when navigating to this symbol
+    pub selection_range: Range,
+    /// Children of this symbol (e.g., methods of a class)
+    pub children: Vec<DocumentSymbol>,
+}
+
+/// Workspace symbol information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceSymbol {
+    /// The name of this symbol
+    pub name: String,
+    /// The kind of this symbol
+    pub kind: SymbolKind,
+    /// The location of this symbol
+    pub location: Location,
+    /// Container name (e.g., class name for methods)
+    pub container_name: Option<String>,
+}
+
+/// Call hierarchy item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallHierarchyItem {
+    /// The name of this item
+    pub name: String,
+    /// The kind of this item
+    pub kind: SymbolKind,
+    /// More detail for this item (e.g., signature)
+    pub detail: Option<String>,
+    /// The resource identifier of this item
+    pub uri: String,
+    /// The range enclosing this symbol
+    pub range: Range,
+    /// The range that should be selected when navigating to this item
+    pub selection_range: Range,
+}
+
+/// Incoming call hierarchy item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallHierarchyIncomingCall {
+    /// The item that makes the call
+    pub from: CallHierarchyItem,
+    /// The ranges at which the calls appear
+    pub from_ranges: Vec<Range>,
+}
+
+/// Outgoing call hierarchy item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallHierarchyOutgoingCall {
+    /// The item that is called
+    pub to: CallHierarchyItem,
+    /// The ranges at which the calls appear
+    pub from_ranges: Vec<Range>,
 }
 
 /// Result of an LSP operation
@@ -178,6 +322,18 @@ pub enum LspResult {
     Completion { items: Vec<CompletionItem> },
     /// Diagnostics
     Diagnostics { diagnostics: Vec<Diagnostic> },
+    /// Document symbols
+    DocumentSymbol { symbols: Vec<DocumentSymbol> },
+    /// Workspace symbols
+    WorkspaceSymbol { symbols: Vec<WorkspaceSymbol> },
+    /// Implementation locations
+    Implementation { locations: Vec<Location> },
+    /// Call hierarchy items
+    CallHierarchy { items: Vec<CallHierarchyItem> },
+    /// Incoming calls
+    IncomingCalls { calls: Vec<CallHierarchyIncomingCall> },
+    /// Outgoing calls
+    OutgoingCalls { calls: Vec<CallHierarchyOutgoingCall> },
 }
 
 
@@ -343,6 +499,82 @@ impl LspTool {
             _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
         }
     }
+
+    /// Get document symbols
+    ///
+    /// Requirements: 7.6
+    pub async fn document_symbols(&self, path: &Path) -> Result<Vec<DocumentSymbol>, ToolError> {
+        match self.execute_operation(LspOperation::DocumentSymbol, path, None).await? {
+            LspResult::DocumentSymbol { symbols } => Ok(symbols),
+            _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
+        }
+    }
+
+    /// Search workspace symbols
+    ///
+    /// Requirements: 7.7
+    pub async fn workspace_symbols(&self, path: &Path) -> Result<Vec<WorkspaceSymbol>, ToolError> {
+        match self.execute_operation(LspOperation::WorkspaceSymbol, path, None).await? {
+            LspResult::WorkspaceSymbol { symbols } => Ok(symbols),
+            _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
+        }
+    }
+
+    /// Go to implementation
+    ///
+    /// Requirements: 7.8
+    pub async fn goto_implementation(
+        &self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Vec<Location>, ToolError> {
+        match self.execute_operation(LspOperation::Implementation, path, Some(position)).await? {
+            LspResult::Implementation { locations } => Ok(locations),
+            _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
+        }
+    }
+
+    /// Prepare call hierarchy
+    ///
+    /// Requirements: 7.9
+    pub async fn prepare_call_hierarchy(
+        &self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Vec<CallHierarchyItem>, ToolError> {
+        match self.execute_operation(LspOperation::PrepareCallHierarchy, path, Some(position)).await? {
+            LspResult::CallHierarchy { items } => Ok(items),
+            _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
+        }
+    }
+
+    /// Get incoming calls
+    ///
+    /// Requirements: 7.10
+    pub async fn incoming_calls(
+        &self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Vec<CallHierarchyIncomingCall>, ToolError> {
+        match self.execute_operation(LspOperation::IncomingCalls, path, Some(position)).await? {
+            LspResult::IncomingCalls { calls } => Ok(calls),
+            _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
+        }
+    }
+
+    /// Get outgoing calls
+    ///
+    /// Requirements: 7.11
+    pub async fn outgoing_calls(
+        &self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Vec<CallHierarchyOutgoingCall>, ToolError> {
+        match self.execute_operation(LspOperation::OutgoingCalls, path, Some(position)).await? {
+            LspResult::OutgoingCalls { calls } => Ok(calls),
+            _ => Err(ToolError::execution_failed("Unexpected LSP result type")),
+        }
+    }
 }
 
 
@@ -364,7 +596,11 @@ impl Tool for LspTool {
             "properties": {
                 "operation": {
                     "type": "string",
-                    "enum": ["definition", "references", "hover", "completion", "diagnostics"],
+                    "enum": [
+                        "definition", "references", "hover", "completion", "diagnostics",
+                        "document_symbol", "workspace_symbol", "implementation",
+                        "prepare_call_hierarchy", "incoming_calls", "outgoing_calls"
+                    ],
                     "description": "The LSP operation to perform"
                 },
                 "path": {
@@ -373,11 +609,11 @@ impl Tool for LspTool {
                 },
                 "line": {
                     "type": "integer",
-                    "description": "Line number (0-indexed, required for definition/references/hover/completion)"
+                    "description": "Line number (0-indexed, required for position-based operations)"
                 },
                 "character": {
                     "type": "integer",
-                    "description": "Character offset (0-indexed, required for definition/references/hover/completion)"
+                    "description": "Character offset (0-indexed, required for position-based operations)"
                 }
             },
             "required": ["operation", "path"]
@@ -401,8 +637,15 @@ impl Tool for LspTool {
             "hover" => LspOperation::Hover,
             "completion" => LspOperation::Completion,
             "diagnostics" => LspOperation::Diagnostics,
+            "document_symbol" => LspOperation::DocumentSymbol,
+            "workspace_symbol" => LspOperation::WorkspaceSymbol,
+            "implementation" => LspOperation::Implementation,
+            "prepare_call_hierarchy" => LspOperation::PrepareCallHierarchy,
+            "incoming_calls" => LspOperation::IncomingCalls,
+            "outgoing_calls" => LspOperation::OutgoingCalls,
             _ => return Err(ToolError::invalid_params(format!(
-                "Invalid operation: {}. Must be one of: definition, references, hover, completion, diagnostics",
+                "Invalid operation: {}. Must be one of: definition, references, hover, completion, diagnostics, \
+                 document_symbol, workspace_symbol, implementation, prepare_call_hierarchy, incoming_calls, outgoing_calls",
                 operation_str
             ))),
         };
@@ -428,7 +671,12 @@ impl Tool for LspTool {
         }
 
         // Parse position (required for most operations)
-        let position = if operation != LspOperation::Diagnostics {
+        let needs_position = !matches!(
+            operation,
+            LspOperation::Diagnostics | LspOperation::DocumentSymbol | LspOperation::WorkspaceSymbol
+        );
+        
+        let position = if needs_position {
             let line = params
                 .get("line")
                 .and_then(|v| v.as_u64())
@@ -559,6 +807,165 @@ fn format_lsp_result(result: &LspResult, query_path: &Path) -> String {
                 output
             }
         }
+        LspResult::DocumentSymbol { symbols } => {
+            if symbols.is_empty() {
+                "No symbols found in document".to_string()
+            } else {
+                let count = count_document_symbols(symbols);
+                let mut output = format!("Found {} symbol(s) in document:\n", count);
+                format_document_symbols(&mut output, symbols, 0);
+                output
+            }
+        }
+        LspResult::WorkspaceSymbol { symbols } => {
+            if symbols.is_empty() {
+                "No symbols found in workspace".to_string()
+            } else {
+                let mut output = format!("Found {} symbol(s) in workspace:\n", symbols.len());
+                for sym in symbols {
+                    let container = sym.container_name
+                        .as_ref()
+                        .map(|c| format!(" in {}", c))
+                        .unwrap_or_default();
+                    output.push_str(&format!(
+                        "  {} ({:?}) - {}:{}:{}{}\n",
+                        sym.name,
+                        sym.kind,
+                        sym.location.path.display(),
+                        sym.location.range.start.line + 1,
+                        sym.location.range.start.character + 1,
+                        container
+                    ));
+                }
+                output
+            }
+        }
+        LspResult::Implementation { locations } => {
+            if locations.is_empty() {
+                "No implementation found".to_string()
+            } else {
+                let mut output = format!("Found {} implementation(s):\n", locations.len());
+                for loc in locations {
+                    output.push_str(&format!(
+                        "  {}:{}:{}\n",
+                        loc.path.display(),
+                        loc.range.start.line + 1,
+                        loc.range.start.character + 1
+                    ));
+                }
+                output
+            }
+        }
+        LspResult::CallHierarchy { items } => {
+            if items.is_empty() {
+                "No call hierarchy item found at this position".to_string()
+            } else {
+                let mut output = format!("Found {} call hierarchy item(s):\n", items.len());
+                for item in items {
+                    let detail = item.detail
+                        .as_ref()
+                        .map(|d| format!(" [{}]", d))
+                        .unwrap_or_default();
+                    output.push_str(&format!(
+                        "  {} ({:?}) - {}:{}:{}{}\n",
+                        item.name,
+                        item.kind,
+                        item.uri,
+                        item.range.start.line + 1,
+                        item.range.start.character + 1,
+                        detail
+                    ));
+                }
+                output
+            }
+        }
+        LspResult::IncomingCalls { calls } => {
+            if calls.is_empty() {
+                "No incoming calls found (nothing calls this function)".to_string()
+            } else {
+                let mut output = format!("Found {} caller(s):\n", calls.len());
+                for call in calls {
+                    let ranges: Vec<String> = call.from_ranges
+                        .iter()
+                        .map(|r| format!("{}:{}", r.start.line + 1, r.start.character + 1))
+                        .collect();
+                    let ranges_str = if ranges.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" [calls at: {}]", ranges.join(", "))
+                    };
+                    output.push_str(&format!(
+                        "  {} ({:?}) - {}:{}:{}{}\n",
+                        call.from.name,
+                        call.from.kind,
+                        call.from.uri,
+                        call.from.range.start.line + 1,
+                        call.from.range.start.character + 1,
+                        ranges_str
+                    ));
+                }
+                output
+            }
+        }
+        LspResult::OutgoingCalls { calls } => {
+            if calls.is_empty() {
+                "No outgoing calls found (this function calls nothing)".to_string()
+            } else {
+                let mut output = format!("Found {} callee(s):\n", calls.len());
+                for call in calls {
+                    let ranges: Vec<String> = call.from_ranges
+                        .iter()
+                        .map(|r| format!("{}:{}", r.start.line + 1, r.start.character + 1))
+                        .collect();
+                    let ranges_str = if ranges.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" [called from: {}]", ranges.join(", "))
+                    };
+                    output.push_str(&format!(
+                        "  {} ({:?}) - {}:{}:{}{}\n",
+                        call.to.name,
+                        call.to.kind,
+                        call.to.uri,
+                        call.to.range.start.line + 1,
+                        call.to.range.start.character + 1,
+                        ranges_str
+                    ));
+                }
+                output
+            }
+        }
+    }
+}
+
+/// Count document symbols recursively
+fn count_document_symbols(symbols: &[DocumentSymbol]) -> usize {
+    let mut count = symbols.len();
+    for sym in symbols {
+        count += count_document_symbols(&sym.children);
+    }
+    count
+}
+
+/// Format document symbols with indentation
+fn format_document_symbols(output: &mut String, symbols: &[DocumentSymbol], indent: usize) {
+    let prefix = "  ".repeat(indent + 1);
+    for sym in symbols {
+        let detail = sym.detail
+            .as_ref()
+            .map(|d| format!(" - {}", d))
+            .unwrap_or_default();
+        output.push_str(&format!(
+            "{}{} ({:?}) - Line {}{}\n",
+            prefix,
+            sym.name,
+            sym.kind,
+            sym.range.start.line + 1,
+            detail
+        ));
+        if !sym.children.is_empty() {
+            format_document_symbols(output, &sym.children, indent + 1);
+        }
     }
 }
 
@@ -688,6 +1095,69 @@ mod tests {
                             code: Some("E0001".to_string()),
                             source: Some("rustc".to_string()),
                             message: "unused variable".to_string(),
+                        }],
+                    }),
+                    LspOperation::DocumentSymbol => Ok(LspResult::DocumentSymbol {
+                        symbols: vec![DocumentSymbol {
+                            name: "main".to_string(),
+                            detail: Some("fn main()".to_string()),
+                            kind: SymbolKind::Function,
+                            range: Range::new(Position::new(0, 0), Position::new(10, 1)),
+                            selection_range: Range::new(Position::new(0, 3), Position::new(0, 7)),
+                            children: vec![],
+                        }],
+                    }),
+                    LspOperation::WorkspaceSymbol => Ok(LspResult::WorkspaceSymbol {
+                        symbols: vec![WorkspaceSymbol {
+                            name: "MyStruct".to_string(),
+                            kind: SymbolKind::Struct,
+                            location: Location::new(
+                                path,
+                                Range::new(Position::new(5, 0), Position::new(15, 1)),
+                            ),
+                            container_name: Some("module".to_string()),
+                        }],
+                    }),
+                    LspOperation::Implementation => Ok(LspResult::Implementation {
+                        locations: vec![Location::new(
+                            path,
+                            Range::new(Position::new(20, 0), Position::new(30, 1)),
+                        )],
+                    }),
+                    LspOperation::PrepareCallHierarchy => Ok(LspResult::CallHierarchy {
+                        items: vec![CallHierarchyItem {
+                            name: "process".to_string(),
+                            kind: SymbolKind::Function,
+                            detail: Some("fn process()".to_string()),
+                            uri: path.to_string_lossy().to_string(),
+                            range: Range::new(Position::new(10, 0), Position::new(20, 1)),
+                            selection_range: Range::new(Position::new(10, 3), Position::new(10, 10)),
+                        }],
+                    }),
+                    LspOperation::IncomingCalls => Ok(LspResult::IncomingCalls {
+                        calls: vec![CallHierarchyIncomingCall {
+                            from: CallHierarchyItem {
+                                name: "caller".to_string(),
+                                kind: SymbolKind::Function,
+                                detail: None,
+                                uri: path.to_string_lossy().to_string(),
+                                range: Range::new(Position::new(30, 0), Position::new(40, 1)),
+                                selection_range: Range::new(Position::new(30, 3), Position::new(30, 9)),
+                            },
+                            from_ranges: vec![Range::new(Position::new(35, 4), Position::new(35, 11))],
+                        }],
+                    }),
+                    LspOperation::OutgoingCalls => Ok(LspResult::OutgoingCalls {
+                        calls: vec![CallHierarchyOutgoingCall {
+                            to: CallHierarchyItem {
+                                name: "callee".to_string(),
+                                kind: SymbolKind::Function,
+                                detail: None,
+                                uri: path.to_string_lossy().to_string(),
+                                range: Range::new(Position::new(50, 0), Position::new(60, 1)),
+                                selection_range: Range::new(Position::new(50, 3), Position::new(50, 9)),
+                            },
+                            from_ranges: vec![Range::new(Position::new(15, 4), Position::new(15, 10))],
                         }],
                     }),
                 }
@@ -1174,5 +1644,296 @@ mod tests {
         let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains("definition"));
         assert!(json.contains("locations"));
+    }
+
+    // Tests for new operations
+
+    #[test]
+    fn test_symbol_kind_from_lsp() {
+        assert_eq!(SymbolKind::from_lsp(1), SymbolKind::File);
+        assert_eq!(SymbolKind::from_lsp(5), SymbolKind::Class);
+        assert_eq!(SymbolKind::from_lsp(12), SymbolKind::Function);
+        assert_eq!(SymbolKind::from_lsp(999), SymbolKind::Variable);
+    }
+
+    #[tokio::test]
+    async fn test_document_symbols_success() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+
+        let result = tool.document_symbols(Path::new("/path/to/file.rs")).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "main");
+    }
+
+    #[tokio::test]
+    async fn test_workspace_symbols_success() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+
+        let result = tool.workspace_symbols(Path::new("/path/to/file.rs")).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "MyStruct");
+    }
+
+    #[tokio::test]
+    async fn test_goto_implementation_success() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+
+        let result = tool
+            .goto_implementation(Path::new("/path/to/file.rs"), Position::new(5, 10))
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_prepare_call_hierarchy_success() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+
+        let result = tool
+            .prepare_call_hierarchy(Path::new("/path/to/file.rs"), Position::new(5, 10))
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "process");
+    }
+
+    #[tokio::test]
+    async fn test_incoming_calls_success() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+
+        let result = tool
+            .incoming_calls(Path::new("/path/to/file.rs"), Position::new(5, 10))
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].from.name, "caller");
+    }
+
+    #[tokio::test]
+    async fn test_outgoing_calls_success() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+
+        let result = tool
+            .outgoing_calls(Path::new("/path/to/file.rs"), Position::new(5, 10))
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].to.name, "callee");
+    }
+
+    #[tokio::test]
+    async fn test_lsp_tool_execute_document_symbol() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+        let context = ToolContext::new(PathBuf::from("/tmp"));
+
+        let params = serde_json::json!({
+            "operation": "document_symbol",
+            "path": "file.rs"
+        });
+
+        let result = tool.execute(params, &context).await.unwrap();
+        assert!(result.is_success());
+        assert!(result.output.unwrap().contains("symbol"));
+    }
+
+    #[tokio::test]
+    async fn test_lsp_tool_execute_workspace_symbol() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+        let context = ToolContext::new(PathBuf::from("/tmp"));
+
+        let params = serde_json::json!({
+            "operation": "workspace_symbol",
+            "path": "file.rs"
+        });
+
+        let result = tool.execute(params, &context).await.unwrap();
+        assert!(result.is_success());
+        assert!(result.output.unwrap().contains("symbol"));
+    }
+
+    #[tokio::test]
+    async fn test_lsp_tool_execute_implementation() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+        let context = ToolContext::new(PathBuf::from("/tmp"));
+
+        let params = serde_json::json!({
+            "operation": "implementation",
+            "path": "file.rs",
+            "line": 5,
+            "character": 10
+        });
+
+        let result = tool.execute(params, &context).await.unwrap();
+        assert!(result.is_success());
+        assert!(result.output.unwrap().contains("implementation"));
+    }
+
+    #[tokio::test]
+    async fn test_lsp_tool_execute_prepare_call_hierarchy() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+        let context = ToolContext::new(PathBuf::from("/tmp"));
+
+        let params = serde_json::json!({
+            "operation": "prepare_call_hierarchy",
+            "path": "file.rs",
+            "line": 5,
+            "character": 10
+        });
+
+        let result = tool.execute(params, &context).await.unwrap();
+        assert!(result.is_success());
+        assert!(result.output.unwrap().contains("call hierarchy"));
+    }
+
+    #[tokio::test]
+    async fn test_lsp_tool_execute_incoming_calls() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+        let context = ToolContext::new(PathBuf::from("/tmp"));
+
+        let params = serde_json::json!({
+            "operation": "incoming_calls",
+            "path": "file.rs",
+            "line": 5,
+            "character": 10
+        });
+
+        let result = tool.execute(params, &context).await.unwrap();
+        assert!(result.is_success());
+        assert!(result.output.unwrap().contains("caller"));
+    }
+
+    #[tokio::test]
+    async fn test_lsp_tool_execute_outgoing_calls() {
+        let callback = mock_all_operations_callback();
+        let tool = LspTool::new().with_callback(callback);
+        let context = ToolContext::new(PathBuf::from("/tmp"));
+
+        let params = serde_json::json!({
+            "operation": "outgoing_calls",
+            "path": "file.rs",
+            "line": 5,
+            "character": 10
+        });
+
+        let result = tool.execute(params, &context).await.unwrap();
+        assert!(result.is_success());
+        assert!(result.output.unwrap().contains("callee"));
+    }
+
+    #[test]
+    fn test_format_lsp_result_document_symbol_empty() {
+        let result = LspResult::DocumentSymbol { symbols: vec![] };
+        let output = format_lsp_result(&result, Path::new("file.rs"));
+        assert!(output.contains("No symbols found"));
+    }
+
+    #[test]
+    fn test_format_lsp_result_document_symbol_found() {
+        let result = LspResult::DocumentSymbol {
+            symbols: vec![DocumentSymbol {
+                name: "test_fn".to_string(),
+                detail: Some("fn test_fn()".to_string()),
+                kind: SymbolKind::Function,
+                range: Range::new(Position::new(0, 0), Position::new(5, 1)),
+                selection_range: Range::new(Position::new(0, 3), Position::new(0, 10)),
+                children: vec![],
+            }],
+        };
+        let output = format_lsp_result(&result, Path::new("file.rs"));
+        assert!(output.contains("1 symbol"));
+        assert!(output.contains("test_fn"));
+    }
+
+    #[test]
+    fn test_format_lsp_result_workspace_symbol_empty() {
+        let result = LspResult::WorkspaceSymbol { symbols: vec![] };
+        let output = format_lsp_result(&result, Path::new("file.rs"));
+        assert!(output.contains("No symbols found"));
+    }
+
+    #[test]
+    fn test_format_lsp_result_implementation_empty() {
+        let result = LspResult::Implementation { locations: vec![] };
+        let output = format_lsp_result(&result, Path::new("file.rs"));
+        assert!(output.contains("No implementation found"));
+    }
+
+    #[test]
+    fn test_format_lsp_result_call_hierarchy_empty() {
+        let result = LspResult::CallHierarchy { items: vec![] };
+        let output = format_lsp_result(&result, Path::new("file.rs"));
+        assert!(output.contains("No call hierarchy item"));
+    }
+
+    #[test]
+    fn test_format_lsp_result_incoming_calls_empty() {
+        let result = LspResult::IncomingCalls { calls: vec![] };
+        let output = format_lsp_result(&result, Path::new("file.rs"));
+        assert!(output.contains("No incoming calls"));
+    }
+
+    #[test]
+    fn test_format_lsp_result_outgoing_calls_empty() {
+        let result = LspResult::OutgoingCalls { calls: vec![] };
+        let output = format_lsp_result(&result, Path::new("file.rs"));
+        assert!(output.contains("No outgoing calls"));
+    }
+
+    #[test]
+    fn test_symbol_kind_serialization() {
+        let kind = SymbolKind::Function;
+        let json = serde_json::to_string(&kind).unwrap();
+        assert_eq!(json, "\"function\"");
+    }
+
+    #[test]
+    fn test_document_symbol_serialization() {
+        let sym = DocumentSymbol {
+            name: "test".to_string(),
+            detail: None,
+            kind: SymbolKind::Function,
+            range: Range::new(Position::new(0, 0), Position::new(1, 0)),
+            selection_range: Range::new(Position::new(0, 0), Position::new(0, 4)),
+            children: vec![],
+        };
+        let json = serde_json::to_string(&sym).unwrap();
+        assert!(json.contains("test"));
+        assert!(json.contains("function"));
+    }
+
+    #[test]
+    fn test_call_hierarchy_item_serialization() {
+        let item = CallHierarchyItem {
+            name: "process".to_string(),
+            kind: SymbolKind::Function,
+            detail: Some("fn process()".to_string()),
+            uri: "file:///path/to/file.rs".to_string(),
+            range: Range::new(Position::new(0, 0), Position::new(10, 1)),
+            selection_range: Range::new(Position::new(0, 3), Position::new(0, 10)),
+        };
+        let json = serde_json::to_string(&item).unwrap();
+        assert!(json.contains("process"));
+        assert!(json.contains("uri"));
+    }
+
+    #[test]
+    fn test_new_lsp_operation_serialization() {
+        assert_eq!(serde_json::to_string(&LspOperation::DocumentSymbol).unwrap(), "\"document_symbol\"");
+        assert_eq!(serde_json::to_string(&LspOperation::WorkspaceSymbol).unwrap(), "\"workspace_symbol\"");
+        assert_eq!(serde_json::to_string(&LspOperation::Implementation).unwrap(), "\"implementation\"");
+        assert_eq!(serde_json::to_string(&LspOperation::PrepareCallHierarchy).unwrap(), "\"prepare_call_hierarchy\"");
+        assert_eq!(serde_json::to_string(&LspOperation::IncomingCalls).unwrap(), "\"incoming_calls\"");
+        assert_eq!(serde_json::to_string(&LspOperation::OutgoingCalls).unwrap(), "\"outgoing_calls\"");
     }
 }

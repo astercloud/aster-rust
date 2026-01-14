@@ -3,7 +3,6 @@
 // =============================================================================
 //
 // This module provides a unified tool system for aster-rust, aligned with
-// claude-code-open's tool architecture. It includes:
 // - Tool trait and base types
 // - Tool registry for managing native and MCP tools
 // - Core tool implementations (Bash, File, Search, etc.)
