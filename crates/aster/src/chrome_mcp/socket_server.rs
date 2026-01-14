@@ -2,6 +2,10 @@
 //!
 //! 架构：
 //! Chrome 扩展 → Native Messaging → Native Host (包含此 Socket Server) ← Socket ← MCP Client
+//!
+//! 平台支持：
+//! - Unix: 使用 Unix Domain Socket
+//! - Windows: 使用 Named Pipe
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -18,12 +22,20 @@ const NATIVE_HOST_VERSION: &str = "1.0.0";
 /// 最大消息大小 (1MB)
 const MAX_MESSAGE_SIZE: u32 = 1048576;
 
-/// MCP 客户端信息
+/// MCP 客户端信息 (Unix)
+#[cfg(unix)]
 #[allow(dead_code)]
 struct McpClientInfo {
     id: u32,
-    #[cfg(unix)]
     writer: tokio::net::unix::OwnedWriteHalf,
+}
+
+/// MCP 客户端信息 (Windows)
+#[cfg(windows)]
+#[allow(dead_code)]
+struct McpClientInfo {
+    id: u32,
+    pipe: Arc<Mutex<tokio::net::windows::named_pipe::NamedPipeServer>>,
 }
 
 /// Socket Server - 管理与 MCP 客户端的连接
@@ -61,7 +73,6 @@ impl SocketServer {
             .map_err(|e| format!("Failed to bind socket: {}", e))?;
 
         // 设置权限
-        #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let perms = std::fs::Permissions::from_mode(0o600);
@@ -86,6 +97,45 @@ impl SocketServer {
                     log_message(&format!("Accept error: {}", e));
                 }
             }
+        }
+    }
+
+    /// 启动 Socket 服务器 (Windows - Named Pipe)
+    #[cfg(windows)]
+    pub async fn start(&self) -> Result<(), String> {
+        use tokio::net::windows::named_pipe::ServerOptions;
+
+        let mut running = self.running.lock().await;
+        if *running {
+            return Ok(());
+        }
+
+        let pipe_path = get_socket_path();
+        log_message(&format!("Creating named pipe server: {}", pipe_path));
+
+        *running = true;
+        log_message("Named pipe server listening for connections");
+
+        let clients = Arc::clone(&self.mcp_clients);
+        let next_id = &self.next_client_id;
+
+        // 接受连接循环
+        loop {
+            // 创建新的 Named Pipe 实例
+            let server = ServerOptions::new()
+                .first_pipe_instance(false)
+                .create(&pipe_path)
+                .map_err(|e| format!("Failed to create named pipe: {}", e))?;
+
+            // 等待客户端连接
+            if let Err(e) = server.connect().await {
+                log_message(&format!("Named pipe connect error: {}", e));
+                continue;
+            }
+
+            let id = next_id.fetch_add(1, Ordering::SeqCst);
+            self.handle_mcp_client_windows(id, server, Arc::clone(&clients))
+                .await;
         }
     }
 
@@ -121,6 +171,69 @@ impl SocketServer {
 
             loop {
                 match reader.read(&mut read_buf).await {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        buffer.extend_from_slice(&read_buf[..n]);
+                        Self::process_mcp_buffer(&mut buffer, id).await;
+                    }
+                    Err(_) => break,
+                }
+            }
+
+            let mut clients = clients_clone.lock().await;
+            clients.remove(&id);
+            log_message(&format!(
+                "MCP client {} disconnected. Total: {}",
+                id,
+                clients.len()
+            ));
+        });
+    }
+
+    /// 处理 MCP 客户端连接 (Windows)
+    #[cfg(windows)]
+    async fn handle_mcp_client_windows(
+        &self,
+        id: u32,
+        server: tokio::net::windows::named_pipe::NamedPipeServer,
+        clients: Arc<Mutex<HashMap<u32, McpClientInfo>>>,
+    ) {
+        let pipe = Arc::new(Mutex::new(server));
+
+        {
+            let mut clients = clients.lock().await;
+            clients.insert(
+                id,
+                McpClientInfo {
+                    id,
+                    pipe: Arc::clone(&pipe),
+                },
+            );
+            log_message(&format!(
+                "MCP client {} connected. Total: {}",
+                id,
+                clients.len()
+            ));
+        }
+
+        // 通知 Chrome 扩展
+        send_to_chrome(&serde_json::json!({ "type": "mcp_connected" }));
+
+        let clients_clone = Arc::clone(&clients);
+        let pipe_clone = Arc::clone(&pipe);
+
+        // 读取循环
+        tokio::spawn(async move {
+            let mut buffer = Vec::new();
+            let mut read_buf = [0u8; 4096];
+
+            loop {
+                let read_result = {
+                    let mut pipe = pipe_clone.lock().await;
+                    pipe.read(&mut read_buf).await
+                };
+
+                match read_result {
                     Ok(0) => break,
                     Ok(n) => {
                         buffer.extend_from_slice(&read_buf[..n]);
@@ -219,7 +332,7 @@ impl SocketServer {
         Ok(())
     }
 
-    /// 转发消息到所有 MCP 客户端
+    /// 转发消息到所有 MCP 客户端 (Unix)
     #[cfg(unix)]
     async fn forward_to_mcp_clients(&self, data: &serde_json::Value) {
         let mut clients = self.mcp_clients.lock().await;
@@ -248,7 +361,36 @@ impl SocketServer {
         }
     }
 
-    /// 停止服务器
+    /// 转发消息到所有 MCP 客户端 (Windows)
+    #[cfg(windows)]
+    async fn forward_to_mcp_clients(&self, data: &serde_json::Value) {
+        let mut clients = self.mcp_clients.lock().await;
+        if clients.is_empty() {
+            return;
+        }
+
+        log_message(&format!("Forwarding to {} MCP clients", clients.len()));
+
+        let json = serde_json::to_vec(data).unwrap_or_default();
+        let mut header = [0u8; 4];
+        header.copy_from_slice(&(json.len() as u32).to_le_bytes());
+
+        let mut failed_ids = Vec::new();
+
+        for (id, client) in clients.iter_mut() {
+            let mut pipe = client.pipe.lock().await;
+            if pipe.write_all(&header).await.is_err() || pipe.write_all(&json).await.is_err() {
+                failed_ids.push(*id);
+            }
+        }
+
+        for id in failed_ids {
+            clients.remove(&id);
+        }
+    }
+
+    /// 停止服务器 (Unix)
+    #[cfg(unix)]
     pub async fn stop(&self) {
         let mut running = self.running.lock().await;
         if !*running {
@@ -265,6 +407,22 @@ impl SocketServer {
         clients.clear();
 
         log_message("Socket server stopped");
+    }
+
+    /// 停止服务器 (Windows)
+    #[cfg(windows)]
+    pub async fn stop(&self) {
+        let mut running = self.running.lock().await;
+        if !*running {
+            return;
+        }
+        *running = false;
+
+        // 关闭所有客户端
+        let mut clients = self.mcp_clients.lock().await;
+        clients.clear();
+
+        log_message("Named pipe server stopped");
     }
 }
 
@@ -359,7 +517,6 @@ pub async fn run_native_host() -> Result<(), String> {
     let mut reader = NativeMessageReader::new();
 
     // 启动 socket server（在后台）
-    let _server_clone = server.mcp_clients.clone();
     tokio::spawn(async move {
         let s = SocketServer::new();
         if let Err(e) = s.start().await {

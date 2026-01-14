@@ -268,7 +268,8 @@ fn setup_windows_registry(manifest_path: &PathBuf) -> Result<(), String> {
         .create_subkey(&path)
         .map_err(|e| format!("Failed to create registry key: {}", e))?;
 
-    key.set_value("", &manifest_path.to_string_lossy().to_string())
+    let manifest_str: String = manifest_path.to_string_lossy().to_string();
+    key.set_value("", &manifest_str)
         .map_err(|e| format!("Failed to set registry value: {}", e))?;
 
     Ok(())

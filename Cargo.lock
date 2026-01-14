@@ -297,6 +297,7 @@ dependencies = [
  "webbrowser",
  "which 8.0.0",
  "winapi",
+ "winreg 0.55.0",
  "wiremock",
  "zip 0.6.6",
 ]
