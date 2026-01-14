@@ -350,7 +350,6 @@ dependencies = [
  "indicatif",
  "is-terminal",
  "jsonschema",
- "nix 0.30.1",
  "once_cell",
  "open",
  "rand 0.8.5",
