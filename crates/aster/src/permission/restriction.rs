@@ -275,7 +275,10 @@ fn format_violation(restriction: &ParameterRestriction, value: &Value) -> String
             )
         }
         RestrictionType::Validator => {
-            let desc = restriction.description.as_deref().unwrap_or("custom validation");
+            let desc = restriction
+                .description
+                .as_deref()
+                .unwrap_or("custom validation");
             format!(
                 "Parameter '{}' value {} failed {}",
                 param_name, value_str, desc

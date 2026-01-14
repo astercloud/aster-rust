@@ -189,9 +189,10 @@ impl PlanPersistenceManager {
         // 标签过滤
         if let Some(ref tags) = options.tags {
             plans.retain(|p| {
-                p.metadata.tags.as_ref().is_some_and(|plan_tags| {
-                    tags.iter().any(|t| plan_tags.contains(t))
-                })
+                p.metadata
+                    .tags
+                    .as_ref()
+                    .is_some_and(|plan_tags| tags.iter().any(|t| plan_tags.contains(t)))
             });
         }
 

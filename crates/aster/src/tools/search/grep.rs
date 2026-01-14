@@ -752,10 +752,7 @@ mod tests {
             GrepOutputMode::parse("l"),
             Some(GrepOutputMode::FilesWithMatches)
         );
-        assert_eq!(
-            GrepOutputMode::parse("count"),
-            Some(GrepOutputMode::Count)
-        );
+        assert_eq!(GrepOutputMode::parse("count"), Some(GrepOutputMode::Count));
         assert_eq!(GrepOutputMode::parse("c"), Some(GrepOutputMode::Count));
         assert_eq!(GrepOutputMode::parse("invalid"), None);
     }

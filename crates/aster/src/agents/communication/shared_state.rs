@@ -281,10 +281,7 @@ impl SharedStateManager {
             callback: Arc::new(callback),
         };
 
-        self.watchers
-            .entry(key)
-            .or_default()
-            .push(entry);
+        self.watchers.entry(key).or_default().push(entry);
 
         handle
     }

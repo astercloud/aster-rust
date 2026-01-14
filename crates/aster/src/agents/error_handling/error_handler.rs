@@ -12,7 +12,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Error severity levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum ErrorSeverity {
     /// Debug level - for development

@@ -251,7 +251,10 @@ impl BackgroundTaskManager {
             .values()
             .map(|task| {
                 let input_preview = if task.user_input.len() > 100 {
-                    format!("{}...", task.user_input.get(..100).unwrap_or(&task.user_input))
+                    format!(
+                        "{}...",
+                        task.user_input.get(..100).unwrap_or(&task.user_input)
+                    )
                 } else {
                     task.user_input.clone()
                 };

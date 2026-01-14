@@ -556,7 +556,10 @@ impl AgentContextManager {
                 .join(" ");
 
             let preview = if content_preview.chars().count() > 100 {
-                format!("{}...", content_preview.chars().take(100).collect::<String>())
+                format!(
+                    "{}...",
+                    content_preview.chars().take(100).collect::<String>()
+                )
             } else {
                 content_preview
             };

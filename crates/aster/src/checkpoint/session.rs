@@ -371,7 +371,11 @@ impl CheckpointManager {
         }
 
         // 应用 diff
-        for checkpoint in checkpoints.iter().take(target_index + 1).skip(base_index + 1) {
+        for checkpoint in checkpoints
+            .iter()
+            .take(target_index + 1)
+            .skip(base_index + 1)
+        {
             if let Some(ref diff) = checkpoint.diff {
                 content = self.diff_engine.apply_diff(&content, diff);
             } else if let Some(ref c) = checkpoint.content {

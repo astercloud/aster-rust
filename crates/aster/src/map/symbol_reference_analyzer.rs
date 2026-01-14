@@ -317,7 +317,10 @@ impl SymbolReferenceAnalyzer {
         static RE_FUNC_CALL: Lazy<regex::Regex> =
             Lazy::new(|| regex::Regex::new(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(").unwrap());
         static RE_METHOD_CALL: Lazy<regex::Regex> = Lazy::new(|| {
-            regex::Regex::new(r"(?:([a-zA-Z_][a-zA-Z0-9_]*)|self|this)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(").unwrap()
+            regex::Regex::new(
+                r"(?:([a-zA-Z_][a-zA-Z0-9_]*)|self|this)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
+            )
+            .unwrap()
         });
         static RE_CONSTRUCTOR: Lazy<regex::Regex> =
             Lazy::new(|| regex::Regex::new(r"(?:new\s+|::new\s*\()([A-Z][a-zA-Z0-9_]*)").unwrap());
@@ -396,16 +399,16 @@ impl SymbolReferenceAnalyzer {
                             callee_name: name.to_string(),
                             call_type: CallType::Direct,
                             location: LocationInfo {
-                                    file: module.id.clone(),
-                                    start_line: line_num,
-                                    start_column: func_name.start() as u32,
-                                    end_line: line_num,
-                                    end_column: func_name.end() as u32,
-                                },
-                            });
-                        }
+                                file: module.id.clone(),
+                                start_line: line_num,
+                                start_column: func_name.start() as u32,
+                                end_line: line_num,
+                                end_column: func_name.end() as u32,
+                            },
+                        });
                     }
                 }
+            }
 
             // 模式 2: 方法调用 obj.methodName( 或 self.methodName(
             for cap in RE_METHOD_CALL.captures_iter(line) {

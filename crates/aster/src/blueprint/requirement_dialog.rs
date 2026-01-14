@@ -563,10 +563,8 @@ impl RequirementDialogManager {
                 });
             } else if let Some(ref mut p) = current_process {
                 if line.starts_with('-') || line.starts_with('•') || line.starts_with("步骤") {
-                    p.steps.push(
-                        line.trim_start_matches(['-', '•', ' '])
-                            .to_string(),
-                    );
+                    p.steps
+                        .push(line.trim_start_matches(['-', '•', ' ']).to_string());
                 } else {
                     p.description.push_str(line);
                     p.description.push(' ');
@@ -655,10 +653,8 @@ impl RequirementDialogManager {
                 });
             } else if let Some(ref mut m) = current_module {
                 if line.starts_with('-') || line.starts_with('•') {
-                    m.responsibilities.push(
-                        line.trim_start_matches(['-', '•', ' '])
-                            .to_string(),
-                    );
+                    m.responsibilities
+                        .push(line.trim_start_matches(['-', '•', ' ']).to_string());
                 } else {
                     m.description.push_str(line);
                     m.description.push(' ');

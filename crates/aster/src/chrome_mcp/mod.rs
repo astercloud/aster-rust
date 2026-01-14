@@ -24,10 +24,10 @@ pub use native_host::{
     is_chrome_integration_supported, setup_chrome_native_host, uninstall_chrome_native_host,
     SetupResult,
 };
-pub use types::Platform;
 pub use socket_client::{create_socket_client, SocketClient, SocketConnectionError};
 pub use socket_server::{run_native_host, SocketServer};
 pub use tools::{get_chrome_mcp_tools, McpTool};
+pub use types::Platform;
 pub use types::{
     ChromeIntegrationConfig, McpServerConfig, ToolCallResult, ToolErrorContent, ToolResultContent,
 };

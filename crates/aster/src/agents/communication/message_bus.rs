@@ -80,7 +80,9 @@ impl MessageTarget {
 }
 
 /// Priority levels for messages
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash,
+)]
 #[serde(rename_all = "camelCase")]
 pub enum MessagePriority {
     /// Low priority - processed last
@@ -335,9 +337,7 @@ impl AgentMessageBus {
         let subscription = MessageSubscription::new(&agent_id).with_types(types);
         self.subscriptions.insert(agent_id.clone(), subscription);
         // Ensure queue exists
-        self.message_queues
-            .entry(agent_id)
-            .or_default();
+        self.message_queues.entry(agent_id).or_default();
     }
 
     /// Unsubscribe an agent
@@ -404,10 +404,7 @@ impl AgentMessageBus {
     /// Deliver a message to a specific agent
     fn deliver_to_agent(&mut self, agent_id: &str, message: AgentMessage) -> MessageBusResult<()> {
         // Ensure queue exists
-        let queue = self
-            .message_queues
-            .entry(agent_id.to_string())
-            .or_default();
+        let queue = self.message_queues.entry(agent_id.to_string()).or_default();
 
         // Check queue size limit
         if queue.len() >= self.max_queue_size {

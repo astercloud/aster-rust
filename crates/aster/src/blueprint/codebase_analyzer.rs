@@ -978,12 +978,10 @@ impl CodebaseAnalyzer {
     fn extract_imports_from_files(&self, files: &[PathBuf]) -> Vec<String> {
         use once_cell::sync::Lazy;
 
-        static RE_TS_IMPORT: Lazy<regex::Regex> = Lazy::new(|| {
-            regex::Regex::new(r#"import\s+.*from\s+['"](\.[^'"]+)['"]"#).unwrap()
-        });
-        static RE_RUST_USE: Lazy<regex::Regex> = Lazy::new(|| {
-            regex::Regex::new(r"use\s+(?:crate|super)::(\w+)").unwrap()
-        });
+        static RE_TS_IMPORT: Lazy<regex::Regex> =
+            Lazy::new(|| regex::Regex::new(r#"import\s+.*from\s+['"](\.[^'"]+)['"]"#).unwrap());
+        static RE_RUST_USE: Lazy<regex::Regex> =
+            Lazy::new(|| regex::Regex::new(r"use\s+(?:crate|super)::(\w+)").unwrap());
 
         let mut imports = std::collections::HashSet::new();
 

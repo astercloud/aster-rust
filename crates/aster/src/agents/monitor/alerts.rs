@@ -14,7 +14,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 /// Alert severity levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum AlertSeverity {
     /// Low severity - informational

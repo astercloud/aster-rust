@@ -165,11 +165,7 @@ impl PlanComparisonManager {
             score += (plan.architectural_decisions.len() as f32 * 0.5).min(2.0);
         }
 
-        if plan
-            .recommendations
-            .as_ref()
-            .is_some_and(|r| !r.is_empty())
-        {
+        if plan.recommendations.as_ref().is_some_and(|r| !r.is_empty()) {
             score += 1.0;
         }
 

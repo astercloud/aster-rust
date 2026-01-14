@@ -280,8 +280,7 @@ impl PersistenceManager {
 
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            if path.extension().is_some_and(|e| e == "json")
-                && fs::remove_file(&path).await.is_ok()
+            if path.extension().is_some_and(|e| e == "json") && fs::remove_file(&path).await.is_ok()
             {
                 cleared += 1;
             }
