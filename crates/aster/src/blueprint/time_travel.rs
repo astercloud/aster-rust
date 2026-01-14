@@ -569,12 +569,13 @@ impl TimeTravelManager {
         // 绘制标签
         let mut labels = String::new();
         for cp in checkpoints.iter().rev() {
-            let short_name = if cp.name.len() > 10 {
-                format!("{}..", &cp.name[..10])
+            let short_name: String = cp.name.chars().take(10).collect();
+            let display_name = if cp.name.chars().count() > 10 {
+                format!("{}..", short_name)
             } else {
-                cp.name.clone()
+                short_name
             };
-            labels.push_str(&format!("{:<15}", short_name));
+            labels.push_str(&format!("{:<15}", display_name));
         }
         lines.push(labels);
 

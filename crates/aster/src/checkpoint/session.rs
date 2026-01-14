@@ -3,7 +3,6 @@
 //! 管理检查点会话的创建、加载和保存
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

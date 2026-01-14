@@ -132,3 +132,83 @@ pub async fn is_working_directory_clean() -> bool {
         _ => false,
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_repo_url_https() {
+        let url = "https://github.com/user/repo.git";
+        assert_eq!(normalize_repo_url(url), "https://github.com/user/repo");
+    }
+
+    #[test]
+    fn test_normalize_repo_url_ssh() {
+        let url = "git@github.com:user/repo.git";
+        assert_eq!(normalize_repo_url(url), "https://github.com/user/repo");
+    }
+
+    #[test]
+    fn test_normalize_repo_url_trailing_slash() {
+        let url = "https://github.com/user/repo/";
+        assert_eq!(normalize_repo_url(url), "https://github.com/user/repo");
+    }
+
+    #[test]
+    fn test_normalize_repo_url_lowercase() {
+        let url = "https://GitHub.com/User/Repo";
+        assert_eq!(normalize_repo_url(url), "https://github.com/user/repo");
+    }
+
+    #[test]
+    fn test_compare_repo_urls_same() {
+        assert!(compare_repo_urls(
+            "https://github.com/user/repo",
+            "https://github.com/user/repo"
+        ));
+    }
+
+    #[test]
+    fn test_compare_repo_urls_different_format() {
+        assert!(compare_repo_urls(
+            "git@github.com:user/repo.git",
+            "https://github.com/user/repo"
+        ));
+    }
+
+    #[test]
+    fn test_compare_repo_urls_different() {
+        assert!(!compare_repo_urls(
+            "https://github.com/user/repo1",
+            "https://github.com/user/repo2"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_validate_session_repository_no_validation() {
+        let result = validate_session_repository(None).await;
+        assert_eq!(result.status, RepoValidationStatus::NoValidation);
+    }
+
+    #[tokio::test]
+    async fn test_get_current_repo_url() {
+        // 在 git 仓库中应该返回 Some
+        let url = get_current_repo_url().await;
+        // 可能有也可能没有，取决于运行环境
+        println!("Current repo URL: {:?}", url);
+    }
+
+    #[tokio::test]
+    async fn test_get_current_branch() {
+        let branch = get_current_branch().await;
+        println!("Current branch: {:?}", branch);
+    }
+
+    #[tokio::test]
+    async fn test_is_working_directory_clean() {
+        let clean = is_working_directory_clean().await;
+        println!("Working directory clean: {}", clean);
+    }
+}

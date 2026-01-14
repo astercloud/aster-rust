@@ -205,12 +205,8 @@ impl FileHistoryManager {
         let mut insertions = 0u32;
         let mut deletions = 0u32;
 
-        for file_path in &self.tracked_files {
-            let backup = match snapshot.tracked_file_backups.get(file_path) {
-                Some(b) => b,
-                None => continue,
-            };
-
+        // 遍历快照中的所有文件备份
+        for (file_path, backup) in &snapshot.tracked_file_backups {
             let path = Path::new(file_path);
 
             if backup.backup_file_name.is_none() {
@@ -229,11 +225,20 @@ impl FileHistoryManager {
                     continue;
                 }
 
-                let (ins, del) = self.calculate_diff(path, &backup_path);
-                insertions += ins;
-                deletions += del;
+                // 检查文件是否需要恢复（通过哈希比较）
+                let current_hash = if path.exists() {
+                    fs::read(path).ok().map(|c| self.compute_hash(&c))
+                } else {
+                    None
+                };
 
-                if ins > 0 || del > 0 {
+                let needs_restore = current_hash.as_ref() != backup.hash.as_ref();
+
+                if needs_restore {
+                    let (ins, del) = self.calculate_diff(path, &backup_path);
+                    insertions += ins;
+                    deletions += del;
+
                     if !dry_run {
                         if let Ok(content) = fs::read(&backup_path) {
                             if let Some(parent) = path.parent() {
@@ -313,5 +318,248 @@ impl FileHistoryManager {
     /// 获取快照数量
     pub fn get_snapshots_count(&self) -> usize {
         self.snapshots.len()
+    }
+}
+
+
+// ============ 增强功能 ============
+
+impl FileHistoryManager {
+    /// 获取会话 ID
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    /// 获取备份目录
+    pub fn backup_dir(&self) -> &Path {
+        &self.backup_dir
+    }
+
+    /// 获取所有被跟踪的文件
+    pub fn get_tracked_files(&self) -> Vec<String> {
+        self.tracked_files.iter().cloned().collect()
+    }
+
+    /// 停止跟踪文件
+    pub fn untrack_file(&mut self, file_path: impl AsRef<Path>) {
+        let path = self.normalize_path(file_path.as_ref());
+        self.tracked_files.remove(&path);
+    }
+
+    /// 清除所有跟踪的文件
+    pub fn clear_tracked_files(&mut self) {
+        self.tracked_files.clear();
+    }
+
+    /// 获取指定消息的快照
+    pub fn get_snapshot(&self, message_id: &str) -> Option<&FileSnapshot> {
+        self.snapshots.iter().find(|s| s.message_id == message_id)
+    }
+
+    /// 获取最新的快照
+    pub fn get_latest_snapshot(&self) -> Option<&FileSnapshot> {
+        self.snapshots.last()
+    }
+
+
+    /// 删除指定消息之后的所有快照
+    pub fn remove_snapshots_after(&mut self, message_id: &str) -> usize {
+        let idx = self.snapshots.iter().position(|s| s.message_id == message_id);
+        match idx {
+            Some(i) if i + 1 < self.snapshots.len() => {
+                let removed = self.snapshots.len() - i - 1;
+                self.snapshots.truncate(i + 1);
+                removed
+            }
+            _ => 0,
+        }
+    }
+
+    /// 获取文件在指定快照时的内容
+    pub fn get_file_content_at_snapshot(&self, message_id: &str, file_path: &str) -> Option<Vec<u8>> {
+        let snapshot = self.get_snapshot(message_id)?;
+        let backup = snapshot.tracked_file_backups.get(file_path)?;
+        let backup_name = backup.backup_file_name.as_ref()?;
+        let backup_path = self.backup_dir.join(backup_name);
+        fs::read(&backup_path).ok()
+    }
+
+    /// 获取备份目录大小（字节）
+    pub fn get_backup_size(&self) -> u64 {
+        self.calculate_dir_size(&self.backup_dir)
+    }
+
+    fn calculate_dir_size(&self, path: &Path) -> u64 {
+        fs::read_dir(path)
+            .map(|entries| {
+                entries.filter_map(|e| e.ok())
+                    .map(|e| e.metadata().map(|m| m.len()).unwrap_or(0))
+                    .sum()
+            })
+            .unwrap_or(0)
+    }
+}
+
+
+// ============ 单元测试 ============
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    fn create_test_file(dir: &Path, name: &str, content: &str) -> PathBuf {
+        let path = dir.join(name);
+        let mut file = fs::File::create(&path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        path
+    }
+
+    #[test]
+    fn test_new_manager() {
+        let manager = FileHistoryManager::new("test-session");
+        assert_eq!(manager.session_id(), "test-session");
+        assert!(manager.is_enabled());
+        assert_eq!(manager.get_tracked_files_count(), 0);
+        assert_eq!(manager.get_snapshots_count(), 0);
+        manager.cleanup();
+    }
+
+    #[test]
+    fn test_track_file() {
+        let mut manager = FileHistoryManager::new("test-track");
+        manager.track_file("/tmp/test.rs");
+        assert!(manager.is_tracked("/tmp/test.rs"));
+        assert!(!manager.is_tracked("/tmp/other.rs"));
+        assert_eq!(manager.get_tracked_files_count(), 1);
+        manager.cleanup();
+    }
+
+
+    #[test]
+    fn test_untrack_file() {
+        let mut manager = FileHistoryManager::new("test-untrack");
+        manager.track_file("/tmp/test.rs");
+        assert!(manager.is_tracked("/tmp/test.rs"));
+        manager.untrack_file("/tmp/test.rs");
+        assert!(!manager.is_tracked("/tmp/test.rs"));
+        manager.cleanup();
+    }
+
+    #[test]
+    fn test_backup_and_snapshot() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = create_test_file(temp_dir.path(), "test.txt", "hello world");
+
+        let mut manager = FileHistoryManager::new("test-backup");
+        
+        // 备份文件
+        let backup = manager.backup_file_before_change(&test_file);
+        assert!(backup.is_some());
+        let backup = backup.unwrap();
+        assert!(backup.backup_file_name.is_some());
+        assert!(backup.hash.is_some());
+
+        // 创建快照
+        manager.create_snapshot("msg-1");
+        assert_eq!(manager.get_snapshots_count(), 1);
+        assert!(manager.has_snapshot("msg-1"));
+
+        manager.cleanup();
+    }
+
+
+    #[test]
+    fn test_rewind_to_message() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = create_test_file(temp_dir.path(), "test.txt", "original content");
+
+        let mut manager = FileHistoryManager::new("test-rewind");
+        
+        // 备份原始状态
+        manager.backup_file_before_change(&test_file);
+        manager.create_snapshot("msg-1");
+
+        // 修改文件
+        fs::write(&test_file, "modified content").unwrap();
+
+        // 预览回退
+        let preview = manager.rewind_to_message("msg-1", true);
+        assert!(preview.success);
+        
+        // 文件应该还是修改后的内容（dry_run）
+        let content = fs::read_to_string(&test_file).unwrap();
+        assert_eq!(content, "modified content");
+
+        // 实际回退
+        let result = manager.rewind_to_message("msg-1", false);
+        assert!(result.success);
+
+        // 文件应该恢复为原始内容
+        let content = fs::read_to_string(&test_file).unwrap();
+        assert_eq!(content, "original content");
+
+        manager.cleanup();
+    }
+
+    #[test]
+    fn test_rewind_nonexistent_snapshot() {
+        let manager = FileHistoryManager::new("test-nonexistent");
+        let result = manager.rewind_to_message("nonexistent", false);
+        assert!(!result.success);
+        assert!(result.error.is_some());
+        manager.cleanup();
+    }
+
+
+    #[test]
+    fn test_disabled_manager() {
+        let mut manager = FileHistoryManager::new("test-disabled");
+        manager.set_enabled(false);
+        assert!(!manager.is_enabled());
+
+        manager.track_file("/tmp/test.rs");
+        assert_eq!(manager.get_tracked_files_count(), 0);
+
+        manager.create_snapshot("msg-1");
+        assert_eq!(manager.get_snapshots_count(), 0);
+
+        let result = manager.rewind_to_message("msg-1", false);
+        assert!(!result.success);
+
+        manager.cleanup();
+    }
+
+    #[test]
+    fn test_remove_snapshots_after() {
+        let mut manager = FileHistoryManager::new("test-remove");
+        
+        manager.create_snapshot("msg-1");
+        manager.create_snapshot("msg-2");
+        manager.create_snapshot("msg-3");
+        assert_eq!(manager.get_snapshots_count(), 3);
+
+        let removed = manager.remove_snapshots_after("msg-1");
+        assert_eq!(removed, 2);
+        assert_eq!(manager.get_snapshots_count(), 1);
+        assert!(manager.has_snapshot("msg-1"));
+        assert!(!manager.has_snapshot("msg-2"));
+
+        manager.cleanup();
+    }
+
+    #[test]
+    fn test_compute_hash() {
+        let manager = FileHistoryManager::new("test-hash");
+        let hash1 = manager.compute_hash(b"hello");
+        let hash2 = manager.compute_hash(b"hello");
+        let hash3 = manager.compute_hash(b"world");
+        
+        assert_eq!(hash1, hash2);
+        assert_ne!(hash1, hash3);
+        assert_eq!(hash1.len(), 64); // SHA256 hex
+        
+        manager.cleanup();
     }
 }

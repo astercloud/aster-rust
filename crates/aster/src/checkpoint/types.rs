@@ -3,7 +3,6 @@
 //! 包含文件检查点、会话、搜索选项等核心类型
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// 文件检查点
 #[derive(Debug, Clone, Serialize, Deserialize)]

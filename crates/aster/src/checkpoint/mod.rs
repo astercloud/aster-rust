@@ -15,6 +15,9 @@ pub mod session;
 pub mod storage;
 pub mod diff;
 
+#[cfg(test)]
+mod tests;
+
 // Re-exports
 pub use types::*;
 pub use session::*;

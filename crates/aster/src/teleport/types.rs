@@ -3,7 +3,6 @@
 //! 远程会话连接的数据结构
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// 远程会话配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,4 +135,126 @@ pub struct RemoteSessionState {
     pub config: TeleportConfig,
     /// 错误信息
     pub error: Option<String>,
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_teleport_config() {
+        let config = TeleportConfig {
+            session_id: "test-session".to_string(),
+            ingress_url: Some("wss://example.com".to_string()),
+            auth_token: Some("token".to_string()),
+            metadata: Some(TeleportMetadata {
+                repo: Some("https://github.com/user/repo".to_string()),
+                branch: Some("main".to_string()),
+                created_at: Some("2026-01-14".to_string()),
+                updated_at: None,
+            }),
+        };
+        assert_eq!(config.session_id, "test-session");
+        assert!(config.ingress_url.is_some());
+    }
+
+    #[test]
+    fn test_teleport_metadata_default() {
+        let metadata = TeleportMetadata::default();
+        assert!(metadata.repo.is_none());
+        assert!(metadata.branch.is_none());
+    }
+
+    #[test]
+    fn test_repo_validation_status_variants() {
+        let statuses = [
+            RepoValidationStatus::Match,
+            RepoValidationStatus::Mismatch,
+            RepoValidationStatus::NoValidation,
+            RepoValidationStatus::Error,
+        ];
+        assert_eq!(statuses.len(), 4);
+    }
+
+    #[test]
+    fn test_repo_validation_result() {
+        let result = RepoValidationResult {
+            status: RepoValidationStatus::Match,
+            session_repo: Some("repo1".to_string()),
+            current_repo: Some("repo1".to_string()),
+            error_message: None,
+        };
+        assert_eq!(result.status, RepoValidationStatus::Match);
+    }
+
+    #[test]
+    fn test_remote_message_type_variants() {
+        let types = [
+            RemoteMessageType::SyncRequest,
+            RemoteMessageType::SyncResponse,
+            RemoteMessageType::Message,
+            RemoteMessageType::AssistantMessage,
+            RemoteMessageType::ToolResult,
+            RemoteMessageType::Heartbeat,
+            RemoteMessageType::Error,
+        ];
+        assert_eq!(types.len(), 7);
+    }
+
+    #[test]
+    fn test_remote_message() {
+        let msg = RemoteMessage {
+            message_type: RemoteMessageType::Message,
+            id: Some("msg-1".to_string()),
+            session_id: "session-1".to_string(),
+            payload: serde_json::json!({"text": "hello"}),
+            timestamp: "2026-01-14T00:00:00Z".to_string(),
+        };
+        assert_eq!(msg.message_type, RemoteMessageType::Message);
+        assert_eq!(msg.session_id, "session-1");
+    }
+
+    #[test]
+    fn test_sync_state_default() {
+        let state = SyncState::default();
+        assert!(!state.syncing);
+        assert!(state.last_sync_time.is_none());
+        assert_eq!(state.synced_messages, 0);
+        assert!(state.sync_error.is_none());
+    }
+
+    #[test]
+    fn test_connection_state_variants() {
+        let states = [
+            ConnectionState::Disconnected,
+            ConnectionState::Connecting,
+            ConnectionState::Connected,
+            ConnectionState::Syncing,
+            ConnectionState::Error,
+        ];
+        assert_eq!(states.len(), 5);
+    }
+
+    #[test]
+    fn test_connection_state_default() {
+        let state = ConnectionState::default();
+        assert_eq!(state, ConnectionState::Disconnected);
+    }
+
+    #[test]
+    fn test_remote_session_state() {
+        let state = RemoteSessionState {
+            connection_state: ConnectionState::Connected,
+            sync_state: SyncState::default(),
+            config: TeleportConfig {
+                session_id: "test".to_string(),
+                ingress_url: None,
+                auth_token: None,
+                metadata: None,
+            },
+            error: None,
+        };
+        assert_eq!(state.connection_state, ConnectionState::Connected);
+    }
 }

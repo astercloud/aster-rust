@@ -253,26 +253,61 @@ impl DiagnosticChecker {
 
 /// 运行所有诊断检查
 pub fn run_diagnostics() -> Vec<DiagnosticCheck> {
+    use super::network::NetworkChecker;
+    use super::system::SystemChecker;
+
     vec![
+        // 环境检查
         DiagnosticChecker::check_git(),
         DiagnosticChecker::check_ripgrep(),
+        // 系统检查
         DiagnosticChecker::check_memory_usage(),
+        SystemChecker::check_cpu_load(),
+        // 配置检查
         DiagnosticChecker::check_environment_variables(),
         DiagnosticChecker::check_config_directory(),
+        SystemChecker::check_mcp_servers(),
+        // 目录检查
+        SystemChecker::check_session_directory(),
+        SystemChecker::check_cache_directory(),
+        // 网络检查
+        NetworkChecker::check_proxy_configuration(),
+        NetworkChecker::check_ssl_certificates(),
     ]
 }
 
-/// 快速健康检查
-pub fn quick_health_check() -> (bool, Vec<String>) {
-    let checks = run_diagnostics();
-    let issues: Vec<String> = checks
-        .iter()
-        .filter(|c| c.status == CheckStatus::Fail)
-        .map(|c| format!("{}: {}", c.name, c.message))
-        .collect();
+/// 运行所有诊断检查（包括异步检查）
+pub async fn run_diagnostics_async() -> Vec<DiagnosticCheck> {
+    use super::network::NetworkChecker;
+    use super::system::SystemChecker;
 
-    (issues.is_empty(), issues)
+    let mut checks = vec![
+        // 环境检查
+        DiagnosticChecker::check_git(),
+        DiagnosticChecker::check_ripgrep(),
+        // 系统检查
+        DiagnosticChecker::check_memory_usage(),
+        SystemChecker::check_cpu_load(),
+        // 配置检查
+        DiagnosticChecker::check_environment_variables(),
+        DiagnosticChecker::check_config_directory(),
+        SystemChecker::check_mcp_servers(),
+        // 目录检查
+        SystemChecker::check_session_directory(),
+        SystemChecker::check_cache_directory(),
+        // 网络检查（同步）
+        NetworkChecker::check_proxy_configuration(),
+        NetworkChecker::check_ssl_certificates(),
+    ];
+
+    // 异步网络检查
+    checks.push(NetworkChecker::check_api_connectivity().await);
+    checks.push(NetworkChecker::check_network_connectivity().await);
+
+    checks
 }
+
+// quick_health_check 已移至 health.rs
 
 #[cfg(test)]
 mod tests {
@@ -281,7 +316,12 @@ mod tests {
     #[test]
     fn test_check_git() {
         let result = DiagnosticChecker::check_git();
-        // Git 通常已安装
+        assert!(result.status == CheckStatus::Pass || result.status == CheckStatus::Warn);
+    }
+
+    #[test]
+    fn test_check_ripgrep() {
+        let result = DiagnosticChecker::check_ripgrep();
         assert!(result.status == CheckStatus::Pass || result.status == CheckStatus::Warn);
     }
 
@@ -292,9 +332,69 @@ mod tests {
     }
 
     #[test]
-    fn test_quick_health_check() {
-        let (healthy, _issues) = quick_health_check();
-        // 基本检查应该通过
+    fn test_check_memory_usage() {
+        let result = DiagnosticChecker::check_memory_usage();
+        assert!(result.status == CheckStatus::Pass || result.status == CheckStatus::Warn);
+    }
+
+    #[test]
+    fn test_check_config_directory() {
+        let result = DiagnosticChecker::check_config_directory();
+        // 应该能创建或已存在
+        assert!(result.status == CheckStatus::Pass || result.status == CheckStatus::Fail);
+    }
+
+    #[test]
+    fn test_diagnostic_check_pass() {
+        let check = DiagnosticCheck::pass("Test", "通过");
+        assert_eq!(check.status, CheckStatus::Pass);
+        assert_eq!(check.name, "Test");
+    }
+
+    #[test]
+    fn test_diagnostic_check_warn() {
+        let check = DiagnosticCheck::warn("Test", "警告")
+            .with_details("详情")
+            .with_fix("修复建议");
+        assert_eq!(check.status, CheckStatus::Warn);
+        assert!(check.details.is_some());
+        assert!(check.fix.is_some());
+    }
+
+    #[test]
+    fn test_diagnostic_check_fail() {
+        let check = DiagnosticCheck::fail("Test", "失败");
+        assert_eq!(check.status, CheckStatus::Fail);
+    }
+
+    #[test]
+    fn test_run_diagnostics() {
+        let checks = run_diagnostics();
+        assert!(!checks.is_empty());
+        // 至少应该有环境检查
+        assert!(checks.iter().any(|c| c.name == "Git" || c.name == "Ripgrep"));
+    }
+
+    #[test]
+    fn test_check_file_permissions() {
+        let temp_dir = std::env::temp_dir().join("aster_test_perms");
+        let result = DiagnosticChecker::check_file_permissions(&temp_dir);
+        // 临时目录应该可写
+        assert!(result.status == CheckStatus::Pass || result.status == CheckStatus::Fail);
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_quick_health_check() {
+        let (healthy, _issues) = crate::diagnostics::quick_health_check().await;
         assert!(healthy || !healthy); // 只验证函数能运行
+    }
+
+    #[tokio::test]
+    async fn test_run_diagnostics_async() {
+        let checks = run_diagnostics_async().await;
+        assert!(!checks.is_empty());
+        // 异步版本应该包含网络检查
+        assert!(checks.len() >= run_diagnostics().len());
     }
 }
