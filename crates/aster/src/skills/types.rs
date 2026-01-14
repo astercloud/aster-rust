@@ -96,8 +96,8 @@ impl SkillDefinition {
     /// Get the short name (without namespace)
     pub fn short_name(&self) -> &str {
         self.skill_name
-            .split(':')
-            .last()
+            .rsplit(':')
+            .next()
             .unwrap_or(&self.skill_name)
     }
 

@@ -52,7 +52,7 @@ impl McpLogLevel {
     }
 
     /// Convert from string representation
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "debug" => Some(McpLogLevel::Debug),
             "info" => Some(McpLogLevel::Info),
@@ -104,7 +104,7 @@ impl std::fmt::Display for TransportType {
 }
 
 /// Connection status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnectionStatus {
     /// Connection is being established
@@ -112,17 +112,12 @@ pub enum ConnectionStatus {
     /// Connection is active and ready
     Connected,
     /// Connection has been closed
+    #[default]
     Disconnected,
     /// Connection is in error state
     Error,
     /// Connection is reconnecting
     Reconnecting,
-}
-
-impl Default for ConnectionStatus {
-    fn default() -> Self {
-        Self::Disconnected
-    }
 }
 
 /// Connection options configuration
@@ -251,10 +246,11 @@ impl McpConnection {
 }
 
 /// Server state for lifecycle management
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ServerState {
     /// Server is stopped
+    #[default]
     Stopped,
     /// Server is starting
     Starting,
@@ -266,12 +262,6 @@ pub enum ServerState {
     Error,
     /// Server has crashed
     Crashed,
-}
-
-impl Default for ServerState {
-    fn default() -> Self {
-        Self::Stopped
-    }
 }
 
 /// Server process information
@@ -650,14 +640,14 @@ mod tests {
     }
 
     #[test]
-    fn test_mcp_log_level_from_str() {
-        assert_eq!(McpLogLevel::from_str("debug"), Some(McpLogLevel::Debug));
-        assert_eq!(McpLogLevel::from_str("DEBUG"), Some(McpLogLevel::Debug));
-        assert_eq!(McpLogLevel::from_str("info"), Some(McpLogLevel::Info));
-        assert_eq!(McpLogLevel::from_str("warn"), Some(McpLogLevel::Warn));
-        assert_eq!(McpLogLevel::from_str("warning"), Some(McpLogLevel::Warn));
-        assert_eq!(McpLogLevel::from_str("error"), Some(McpLogLevel::Error));
-        assert_eq!(McpLogLevel::from_str("invalid"), None);
+    fn test_mcp_log_level_parse() {
+        assert_eq!(McpLogLevel::parse("debug"), Some(McpLogLevel::Debug));
+        assert_eq!(McpLogLevel::parse("DEBUG"), Some(McpLogLevel::Debug));
+        assert_eq!(McpLogLevel::parse("info"), Some(McpLogLevel::Info));
+        assert_eq!(McpLogLevel::parse("warn"), Some(McpLogLevel::Warn));
+        assert_eq!(McpLogLevel::parse("warning"), Some(McpLogLevel::Warn));
+        assert_eq!(McpLogLevel::parse("error"), Some(McpLogLevel::Error));
+        assert_eq!(McpLogLevel::parse("invalid"), None);
     }
 
     #[test]

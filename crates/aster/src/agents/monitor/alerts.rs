@@ -14,23 +14,18 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 /// Alert severity levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AlertSeverity {
     /// Low severity - informational
     Low,
     /// Medium severity - warning
+    #[default]
     Medium,
     /// High severity - requires attention
     High,
     /// Critical severity - immediate action required
     Critical,
-}
-
-impl Default for AlertSeverity {
-    fn default() -> Self {
-        Self::Medium
-    }
 }
 
 impl std::fmt::Display for AlertSeverity {
@@ -283,10 +278,11 @@ impl std::hash::Hash for Alert {
 }
 
 /// Agent execution status for metrics
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentExecutionStatus {
     /// Agent is currently running
+    #[default]
     Running,
     /// Agent completed successfully
     Completed,
@@ -296,12 +292,6 @@ pub enum AgentExecutionStatus {
     Cancelled,
     /// Agent timed out
     TimedOut,
-}
-
-impl Default for AgentExecutionStatus {
-    fn default() -> Self {
-        Self::Running
-    }
 }
 
 /// Token usage tracking

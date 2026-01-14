@@ -31,7 +31,10 @@ pub fn normalize_repo_url(url: &str) -> String {
 
     // 移除 .git 后缀
     if normalized.ends_with(".git") {
-        normalized = normalized[..normalized.len() - 4].to_string();
+        normalized = normalized
+            .get(..normalized.len().saturating_sub(4))
+            .unwrap_or(&normalized)
+            .to_string();
     }
 
     // 转换 SSH 格式为 HTTPS

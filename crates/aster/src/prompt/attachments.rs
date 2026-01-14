@@ -300,7 +300,7 @@ You are running as a delegated subagent. Complete your assigned task and report 
             }
             let x = line.chars().next().unwrap_or(' ');
             let y = line.chars().nth(1).unwrap_or(' ');
-            let file = line[3..].to_string();
+            let file = line.get(3..).unwrap_or("").to_string();
 
             if x == '?' && y == '?' {
                 untracked.push(file);

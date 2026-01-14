@@ -95,16 +95,12 @@ impl CacheController {
 
         // Determine which messages are eligible for caching
         // Only cache the most recent N messages as configured
-        let start_index = if len > config.cache_recent_messages {
-            len - config.cache_recent_messages
-        } else {
-            0
-        };
+        let start_index = len.saturating_sub(config.cache_recent_messages);
 
         // Check eligibility for each message in the range
-        for i in start_index..len {
-            if Self::is_cacheable(&messages[i], config.min_tokens_for_cache) {
-                let tokens = TokenEstimator::estimate_message_tokens(&messages[i]);
+        for (i, message) in messages.iter().enumerate().take(len).skip(start_index) {
+            if Self::is_cacheable(message, config.min_tokens_for_cache) {
+                let tokens = TokenEstimator::estimate_message_tokens(message);
                 cacheable_indices.push(i);
                 cacheable_tokens += tokens;
             }

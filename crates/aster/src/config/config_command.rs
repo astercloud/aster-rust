@@ -132,7 +132,7 @@ impl<'a> ConfigCommand<'a> {
             }
         }
 
-        output.push_str("\n");
+        output.push('\n');
         output
     }
 
@@ -144,7 +144,7 @@ impl<'a> ConfigCommand<'a> {
             Value::Number(n) => n.to_string(),
             Value::String(s) => {
                 if s.len() > 30 {
-                    format!("{}...", &s[..27])
+                    format!("{}...", s.get(..27).unwrap_or(s))
                 } else {
                     s.clone()
                 }
@@ -152,7 +152,7 @@ impl<'a> ConfigCommand<'a> {
             Value::Array(_) | Value::Object(_) => {
                 let json = serde_json::to_string(value).unwrap_or_default();
                 if json.len() > 30 {
-                    format!("{}...", &json[..27])
+                    format!("{}...", json.get(..27).unwrap_or(&json))
                 } else {
                     json
                 }
@@ -183,7 +183,7 @@ impl<'a> ConfigCommand<'a> {
             output.push_str(&format!("  最新: {}\n", latest));
         }
 
-        output.push_str("\n");
+        output.push('\n');
         output
     }
 
@@ -226,7 +226,7 @@ impl<'a> ConfigCommand<'a> {
             output.push_str("\n提示: 创建 AGENTS.md 文件为 AI Agent 提供项目指导。\n");
         }
 
-        output.push_str("\n");
+        output.push('\n');
         output
     }
 
@@ -347,7 +347,7 @@ Aster 配置命令
 }
 
 /// 创建配置命令实例
-pub fn create_config_command(config_manager: &ConfigManager) -> ConfigCommand {
+pub fn create_config_command(config_manager: &ConfigManager) -> ConfigCommand<'_> {
     ConfigCommand::new(config_manager)
 }
 

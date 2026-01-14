@@ -469,7 +469,7 @@ fn get_or_create_anonymous_id() -> String {
     let mut hasher = Sha256::new();
     hasher.update(machine_info.as_bytes());
     let hash = format!("{:x}", hasher.finalize());
-    let id = format!("anon_{}", &hash[..32]);
+    let id = format!("anon_{}", hash.get(..32).unwrap_or(&hash));
 
     // 确保目录存在
     if let Some(parent) = id_file.parent() {
@@ -536,7 +536,7 @@ fn trim_jsonl_file(path: &std::path::Path, max_lines: usize) {
     };
 
     let reader = BufReader::new(file);
-    let lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
+    let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
     if lines.len() > max_lines {
         let trimmed: Vec<&str> = lines

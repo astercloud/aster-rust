@@ -2,11 +2,14 @@
 //!
 //! 注：实际渲染需要 resvg 库，这里提供基础验证功能
 
+#![allow(unexpected_cfgs)]
+
 use std::fs;
 use std::path::Path;
 
-#[cfg(feature = "svg-render")]
-use super::image::{ImageDimensions, ImageResult};
+#[allow(dead_code)]
+#[cfg(feature = "svg_render")]
+use super::image::ImageResult;
 
 /// SVG 渲染选项
 #[derive(Debug, Clone, Default)]
@@ -79,7 +82,8 @@ pub fn read_svg_file(file_path: &Path) -> Result<String, String> {
 
 /// SVG 渲染结果（占位实现）
 /// 实际渲染需要 resvg 库
-#[cfg(feature = "svg-render")]
+#[allow(unexpected_cfgs)]
+#[cfg(feature = "svg_render")]
 pub fn render_svg_to_png(
     svg_path: &Path,
     _options: SvgRenderOptions,
@@ -95,7 +99,8 @@ pub fn render_svg_to_png(
 }
 
 /// 从 SVG 字符串渲染为 PNG（占位实现）
-#[cfg(feature = "svg-render")]
+#[allow(unexpected_cfgs)]
+#[cfg(feature = "svg_render")]
 pub fn render_svg_string_to_png(
     _svg_string: &str,
     _options: SvgRenderOptions,

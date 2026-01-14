@@ -976,6 +976,15 @@ impl CodebaseAnalyzer {
 
     /// 从文件中提取导入的模块
     fn extract_imports_from_files(&self, files: &[PathBuf]) -> Vec<String> {
+        use once_cell::sync::Lazy;
+
+        static RE_TS_IMPORT: Lazy<regex::Regex> = Lazy::new(|| {
+            regex::Regex::new(r#"import\s+.*from\s+['"](\.[^'"]+)['"]"#).unwrap()
+        });
+        static RE_RUST_USE: Lazy<regex::Regex> = Lazy::new(|| {
+            regex::Regex::new(r"use\s+(?:crate|super)::(\w+)").unwrap()
+        });
+
         let mut imports = std::collections::HashSet::new();
 
         // 只检查前 10 个文件
@@ -987,29 +996,23 @@ impl CodebaseAnalyzer {
 
             if let Ok(content) = fs::read_to_string(file) {
                 // TypeScript/JavaScript 相对路径导入
-                let re = regex::Regex::new(r#"import\s+.*from\s+['"](\.[^'"]+)['"]"#).ok();
-                if let Some(re) = re {
-                    for cap in re.captures_iter(&content) {
-                        if let Some(import_path) = cap.get(1) {
-                            let parts: Vec<&str> = import_path
-                                .as_str()
-                                .split('/')
-                                .filter(|p| *p != "." && *p != "..")
-                                .collect();
-                            if let Some(first) = parts.first() {
-                                imports.insert(first.to_string());
-                            }
+                for cap in RE_TS_IMPORT.captures_iter(&content) {
+                    if let Some(import_path) = cap.get(1) {
+                        let parts: Vec<&str> = import_path
+                            .as_str()
+                            .split('/')
+                            .filter(|p| *p != "." && *p != "..")
+                            .collect();
+                        if let Some(first) = parts.first() {
+                            imports.insert(first.to_string());
                         }
                     }
                 }
 
                 // Rust use 语句
-                let re_rust = regex::Regex::new(r"use\s+(?:crate|super)::(\w+)").ok();
-                if let Some(re) = re_rust {
-                    for cap in re.captures_iter(&content) {
-                        if let Some(name) = cap.get(1) {
-                            imports.insert(name.as_str().to_string());
-                        }
+                for cap in RE_RUST_USE.captures_iter(&content) {
+                    if let Some(name) = cap.get(1) {
+                        imports.insert(name.as_str().to_string());
                     }
                 }
             }
@@ -1166,7 +1169,7 @@ impl CodebaseAnalyzer {
     /// 使用 AI 分析代码语义
     async fn analyze_with_ai(&self, codebase: &CodebaseInfo) -> Result<AIAnalysisResult, String> {
         // 构建分析上下文
-        let context = self.build_ai_context(codebase);
+        let _context = self.build_ai_context(codebase);
 
         // 这里应该调用 AI 客户端进行分析
         // 由于 Rust 版本可能没有直接的 AI 客户端，返回基于规则的分析结果
@@ -1416,12 +1419,12 @@ impl CodebaseAnalyzer {
 
         // 2. 尝试部分匹配
         let last_part = normalized_name
-            .split('/')
-            .last()
+            .rsplit('/')
+            .next()
             .unwrap_or(&normalized_name);
         if let Some(m) = ai_modules.iter().find(|m| {
             let ai_last = m.name.to_lowercase();
-            let ai_last = ai_last.split('/').last().unwrap_or(&ai_last);
+            let ai_last = ai_last.rsplit('/').next().unwrap_or(&ai_last);
             ai_last == last_part
         }) {
             return Some(m);
@@ -1445,7 +1448,7 @@ impl CodebaseAnalyzer {
         blueprint_manager: &mut BlueprintManager,
     ) -> Result<Blueprint, String> {
         // 创建蓝图
-        let mut blueprint = blueprint_manager
+        let blueprint = blueprint_manager
             .create_blueprint(codebase.name.clone(), codebase.description.clone())
             .await
             .map_err(|e| e.to_string())?;

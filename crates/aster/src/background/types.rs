@@ -2,15 +2,15 @@
 //!
 //! 包含任务优先级、状态、Shell 状态等核心类型
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// 任务优先级
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskPriority {
     High,
+    #[default]
     Normal,
     Low,
 }
@@ -26,16 +26,11 @@ impl TaskPriority {
     }
 }
 
-impl Default for TaskPriority {
-    fn default() -> Self {
-        TaskPriority::Normal
-    }
-}
-
 /// 任务状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskStatus {
+    #[default]
     Pending,
     Running,
     Completed,
@@ -43,42 +38,26 @@ pub enum TaskStatus {
     Cancelled,
 }
 
-impl Default for TaskStatus {
-    fn default() -> Self {
-        TaskStatus::Pending
-    }
-}
-
 /// 任务类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskType {
     Bash,
     Agent,
+    #[default]
     Generic,
 }
 
-impl Default for TaskType {
-    fn default() -> Self {
-        TaskType::Generic
-    }
-}
-
 /// Shell 状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ShellStatus {
+    #[default]
     Running,
     Completed,
     Failed,
     Paused,
     Terminated,
-}
-
-impl Default for ShellStatus {
-    fn default() -> Self {
-        ShellStatus::Running
-    }
 }
 
 /// 队列状态统计

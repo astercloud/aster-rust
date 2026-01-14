@@ -5,13 +5,19 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex, RwLock};
 
 use super::types::*;
+
+/// LSP 请求响应发送器类型
+pub(crate) type LspResponseSender = tokio::sync::oneshot::Sender<Result<Value, LspError>>;
+
+/// LSP 待处理请求映射类型
+pub(crate) type PendingRequestsMap = Arc<Mutex<HashMap<u64, LspResponseSender>>>;
 
 /// LSP 消息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,8 +81,7 @@ pub struct LspClient {
     state: Arc<RwLock<LspServerState>>,
     process: Arc<Mutex<Option<Child>>>,
     message_id: AtomicU64,
-    pending_requests:
-        Arc<Mutex<HashMap<u64, tokio::sync::oneshot::Sender<Result<Value, LspError>>>>>,
+    pending_requests: PendingRequestsMap,
     capabilities: Arc<RwLock<Option<Value>>>,
     event_sender: broadcast::Sender<LspClientEvent>,
 }

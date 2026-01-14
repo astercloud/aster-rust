@@ -622,24 +622,19 @@ pub struct CacheStats {
 // ============================================================================
 
 /// Message priority levels for sorting and compression decisions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum MessagePriority {
     /// Lowest priority - can be removed first
     Minimal = 1,
     /// Low priority
     Low = 2,
     /// Medium priority
+    #[default]
     Medium = 3,
     /// High priority - recent messages, tool calls
     High = 4,
     /// Critical - system messages, summaries
     Critical = 5,
-}
-
-impl Default for MessagePriority {
-    fn default() -> Self {
-        MessagePriority::Medium
-    }
 }
 
 /// A message with associated priority information.

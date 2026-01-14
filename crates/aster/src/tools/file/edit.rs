@@ -243,7 +243,10 @@ impl EditTool {
             return Err(ToolError::execution_failed(format!(
                 "String not found in file: '{}'",
                 if old_str.len() > 50 {
-                    format!("{}...", &old_str[..50])
+                    format!(
+                        "{}...",
+                        old_str.get(..50).unwrap_or(old_str)
+                    )
                 } else {
                     old_str.to_string()
                 }
@@ -262,7 +265,9 @@ impl EditTool {
         let new_content = if self.smart_quote_matching {
             // Use the actual position from normalized matching
             let pos = match_result.positions[0];
-            let actual_old_str = &content[pos..pos + old_str.len()];
+            let actual_old_str = content
+                .get(pos..pos + old_str.len())
+                .unwrap_or(old_str);
             content.replacen(actual_old_str, new_str, 1)
         } else {
             content.replacen(old_str, new_str, 1)
@@ -385,7 +390,10 @@ impl EditTool {
                     "Edit {}: String not found: '{}'",
                     i + 1,
                     if edit.old_str.len() > 50 {
-                        format!("{}...", &edit.old_str[..50])
+                        format!(
+                            "{}...",
+                            edit.old_str.get(..50).unwrap_or(&edit.old_str)
+                        )
                     } else {
                         edit.old_str.clone()
                     }

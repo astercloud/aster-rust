@@ -154,10 +154,8 @@ pub fn verify_file(file_path: &str) -> VerifyResult {
     }
 
     // 验证加密签名
-    if signature.signature.is_some() {
-        if !verify_signature(&content, &signature) {
-            return VerifyResult::err_with_sig("Cryptographic signature invalid", signature);
-        }
+    if signature.signature.is_some() && !verify_signature(&content, &signature) {
+        return VerifyResult::err_with_sig("Cryptographic signature invalid", signature);
     }
 
     VerifyResult::ok(signature)

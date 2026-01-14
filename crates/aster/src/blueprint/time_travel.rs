@@ -574,7 +574,7 @@ impl TimeTravelManager {
             }
 
             lines.push(format!("{}💾 {} 个文件变更", indent, cp.code_changes_count));
-            lines.push(format!("{}", indent));
+            lines.push(indent.to_string());
         }
 
         lines.join("\n")

@@ -297,7 +297,7 @@ impl FileHistoryManager {
 
     /// 生成备份文件名
     fn generate_backup_file_name(&self, file_path: &Path, hash: &str) -> String {
-        let file_name = file_path
+        let _file_name = file_path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("file");
@@ -308,9 +308,9 @@ impl FileHistoryManager {
             .unwrap_or("file");
 
         if ext.is_empty() {
-            format!("{}_{}", name, &hash[..8])
+            format!("{}_{}", name, hash.get(..8).unwrap_or(hash))
         } else {
-            format!("{}_{}.{}", name, &hash[..8], ext)
+            format!("{}_{}.{}", name, hash.get(..8).unwrap_or(hash), ext)
         }
     }
 

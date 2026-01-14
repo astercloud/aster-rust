@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Error severity levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ErrorSeverity {
     /// Debug level - for development
@@ -22,15 +22,10 @@ pub enum ErrorSeverity {
     /// Warning level - potential issues
     Warning,
     /// Error level - recoverable errors
+    #[default]
     Error,
     /// Critical level - unrecoverable errors
     Critical,
-}
-
-impl Default for ErrorSeverity {
-    fn default() -> Self {
-        Self::Error
-    }
 }
 
 impl std::fmt::Display for ErrorSeverity {
@@ -508,9 +503,11 @@ impl ErrorHandler {
 }
 
 /// Thread-safe error handler wrapper
+#[allow(dead_code)]
 pub type SharedErrorHandler = Arc<RwLock<ErrorHandler>>;
 
 /// Create a new shared error handler
+#[allow(dead_code)]
 pub fn new_shared_error_handler() -> SharedErrorHandler {
     Arc::new(RwLock::new(ErrorHandler::new()))
 }

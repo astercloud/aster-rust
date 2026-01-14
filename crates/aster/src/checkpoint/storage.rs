@@ -83,8 +83,8 @@ impl CheckpointStorage {
 
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "json") {
-                if path.file_name().map_or(false, |n| n == "session.json") {
+            if path.extension().is_some_and(|e| e == "json") {
+                if path.file_name().is_some_and(|n| n == "session.json") {
                     continue;
                 }
 
@@ -93,7 +93,7 @@ impl CheckpointStorage {
                         session
                             .checkpoints
                             .entry(checkpoint.path.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(checkpoint);
                     }
                 }

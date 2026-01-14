@@ -3,18 +3,13 @@
 use serde::{Deserialize, Serialize};
 
 /// 哈希算法
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum HashAlgorithm {
+    #[default]
     Sha256,
     Sha384,
     Sha512,
-}
-
-impl Default for HashAlgorithm {
-    fn default() -> Self {
-        Self::Sha256
-    }
 }
 
 impl HashAlgorithm {

@@ -455,6 +455,7 @@ impl AcceptanceTestRunner {
     }
 
     /// 从任务树中找到测试对应的任务 ID
+    #[allow(dead_code)]
     fn find_task_id_for_test(root_task: &TaskNode, test_id: &str) -> Option<String> {
         for test in &root_task.acceptance_tests {
             if test.id == test_id {

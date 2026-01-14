@@ -143,7 +143,7 @@ impl AcceptanceTestGenerator {
         &self,
         context: &AcceptanceTestContext,
     ) -> AcceptanceTestResult {
-        let prompt = self.build_prompt(context);
+        let _prompt = self.build_prompt(context);
 
         // TODO: 调用 LLM API 生成测试
         // 这里返回模拟结果
@@ -197,7 +197,17 @@ impl AcceptanceTestGenerator {
             prompt.push_str("\n## 相关代码\n");
             for (file_path, content) in &context.related_code {
                 let truncated = if content.len() > 2000 {
-                    format!("{}... (truncated)", &content[..2000])
+                    // Find safe UTF-8 boundary for truncation
+                    let truncate_at = content
+                        .char_indices()
+                        .take_while(|(i, _)| *i < 2000)
+                        .last()
+                        .map(|(i, c)| i + c.len_utf8())
+                        .unwrap_or(0);
+                    format!(
+                        "{}... (truncated)",
+                        content.get(..truncate_at).unwrap_or(content)
+                    )
                 } else {
                     content.clone()
                 };

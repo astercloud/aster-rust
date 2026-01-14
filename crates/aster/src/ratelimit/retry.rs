@@ -2,7 +2,6 @@
 //!
 //! 指数退避重试和错误判断
 
-use rand::Rng;
 use std::future::Future;
 use std::time::Duration;
 

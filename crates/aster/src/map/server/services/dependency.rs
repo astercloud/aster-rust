@@ -34,6 +34,10 @@ pub fn detect_entry_points(blueprint: &EnhancedCodeBlueprint) -> Vec<String> {
     let mut candidates: Vec<(String, i32)> = Vec::new();
 
     for module in blueprint.modules.values() {
+        use once_cell::sync::Lazy;
+        static ROOT_PATTERN: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^(src/)?[^/]+\.(ts|js)$").unwrap());
+
         let mut score: i32 = 0;
 
         // 入口文件名模式匹配
@@ -45,8 +49,7 @@ pub fn detect_entry_points(blueprint: &EnhancedCodeBlueprint) -> Vec<String> {
         }
 
         // 在根目录或 src 目录下的文件加分
-        let root_pattern = Regex::new(r"^(src/)?[^/]+\.(ts|js)$").unwrap();
-        if root_pattern.is_match(&module.id) {
+        if ROOT_PATTERN.is_match(&module.id) {
             score += 5;
         }
 
@@ -76,7 +79,7 @@ pub fn build_dependency_tree(
     entry_id: &str,
     max_depth: usize,
 ) -> Option<DependencyTreeNode> {
-    let module = blueprint.modules.get(entry_id)?;
+    let _module = blueprint.modules.get(entry_id)?;
 
     // 构建依赖图
     let mut deps_by_source: HashMap<String, Vec<&ModuleDependency>> = HashMap::new();

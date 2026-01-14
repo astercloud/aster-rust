@@ -231,11 +231,11 @@ impl McpRootsManager {
             return None;
         }
 
-        let path_str = &uri[7..]; // Remove "file://"
+        let path_str = uri.get(7..)?; // Remove "file://"
 
         #[cfg(windows)]
         let path_str = if path_str.starts_with('/') && path_str.chars().nth(2) == Some(':') {
-            &path_str[1..] // Remove leading / for Windows paths like /C:/
+            path_str.get(1..)? // Remove leading / for Windows paths like /C:/
         } else {
             path_str
         };

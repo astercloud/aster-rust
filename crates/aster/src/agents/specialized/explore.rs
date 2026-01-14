@@ -488,7 +488,7 @@ impl ExploreAgent {
                 }
                 // Handle simple extension patterns like "*.rs"
                 if pattern.starts_with("*.") {
-                    let ext = &pattern[2..];
+                    let ext = pattern.get(2..).unwrap_or("");
                     if let Some(file_ext) = path.extension() {
                         if file_ext.to_string_lossy() == ext {
                             return true;
@@ -585,6 +585,7 @@ impl ExploreAgent {
         Ok(files)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn find_files_recursive(
         &self,
         path: &Path,
@@ -1051,20 +1052,20 @@ impl ExploreAgent {
     fn extract_fn_name(&self, line: &str) -> Option<String> {
         let rest = line.strip_prefix("fn ")?.trim();
         let name_end = rest.find(|c: char| c == '(' || c == '<' || c.is_whitespace())?;
-        Some(rest[..name_end].to_string())
+        Some(rest.get(..name_end)?.to_string())
     }
 
     fn extract_type_name(&self, line: &str, prefix: &str) -> Option<String> {
         let rest = line.strip_prefix(prefix)?.trim();
         let name_end =
             rest.find(|c: char| c == '{' || c == '<' || c == '(' || c.is_whitespace())?;
-        Some(rest[..name_end].to_string())
+        Some(rest.get(..name_end)?.to_string())
     }
 
     fn extract_const_name(&self, line: &str) -> Option<String> {
         let rest = line.strip_prefix("const ")?.trim();
         let name_end = rest.find(|c: char| c == ':' || c == '=' || c.is_whitespace())?;
-        Some(rest[..name_end].to_string())
+        Some(rest.get(..name_end)?.to_string())
     }
 
     fn extract_impl_name(&self, line: &str) -> Option<String> {
@@ -1072,12 +1073,12 @@ impl ExploreAgent {
         // Skip generic parameters
         let rest = if rest.starts_with('<') {
             let end = rest.find('>')?;
-            rest[end + 1..].trim()
+            rest.get(end + 1..)?.trim()
         } else {
             rest
         };
         let name_end = rest.find(|c: char| c == '{' || c == '<' || c.is_whitespace())?;
-        let name = rest[..name_end].trim();
+        let name = rest.get(..name_end)?.trim();
         if name.is_empty() {
             None
         } else {
@@ -1088,19 +1089,19 @@ impl ExploreAgent {
     fn extract_python_class_name(&self, line: &str) -> Option<String> {
         let rest = line.strip_prefix("class ")?.trim();
         let name_end = rest.find(|c: char| c == '(' || c == ':' || c.is_whitespace())?;
-        Some(rest[..name_end].to_string())
+        Some(rest.get(..name_end)?.to_string())
     }
 
     fn extract_python_fn_name(&self, line: &str) -> Option<String> {
         let rest = line.strip_prefix("def ")?.trim();
         let name_end = rest.find('(')?;
-        Some(rest[..name_end].to_string())
+        Some(rest.get(..name_end)?.to_string())
     }
 
     fn extract_js_fn_name(&self, line: &str) -> Option<String> {
         let rest = line.strip_prefix("function ")?.trim();
         let name_end = rest.find(|c: char| c == '(' || c == '<' || c.is_whitespace())?;
-        let name = rest[..name_end].trim();
+        let name = rest.get(..name_end)?.trim();
         if name.is_empty() {
             None
         } else {
@@ -1111,13 +1112,13 @@ impl ExploreAgent {
     fn extract_js_class_name(&self, line: &str) -> Option<String> {
         let rest = line.strip_prefix("class ")?.trim();
         let name_end = rest.find(|c: char| c == '{' || c == '<' || c.is_whitespace())?;
-        Some(rest[..name_end].to_string())
+        Some(rest.get(..name_end)?.to_string())
     }
 
     fn extract_js_const_name(&self, line: &str) -> Option<String> {
         let rest = line.strip_prefix("const ")?.trim();
         let name_end = rest.find(|c: char| c == '=' || c == ':' || c.is_whitespace())?;
-        Some(rest[..name_end].to_string())
+        Some(rest.get(..name_end)?.to_string())
     }
 
     fn extract_go_fn_name(&self, line: &str) -> Option<String> {
@@ -1125,12 +1126,12 @@ impl ExploreAgent {
         // Handle method receivers: func (r *Receiver) Name()
         let rest = if rest.starts_with('(') {
             let end = rest.find(')')?;
-            rest[end + 1..].trim()
+            rest.get(end + 1..)?.trim()
         } else {
             rest
         };
         let name_end = rest.find(|c: char| c == '(' || c == '<' || c.is_whitespace())?;
-        let name = rest[..name_end].trim();
+        let name = rest.get(..name_end)?.trim();
         if name.is_empty() {
             None
         } else {
@@ -1141,13 +1142,13 @@ impl ExploreAgent {
     fn extract_go_type_name(&self, line: &str) -> Option<String> {
         let rest = line.strip_prefix("type ")?.trim();
         let name_end = rest.find(|c: char| c.is_whitespace())?;
-        Some(rest[..name_end].to_string())
+        Some(rest.get(..name_end)?.to_string())
     }
 
     fn extract_go_const_name(&self, line: &str) -> Option<String> {
         let rest = line.strip_prefix("const ")?.trim();
         let name_end = rest.find(|c: char| c == '=' || c.is_whitespace())?;
-        Some(rest[..name_end].to_string())
+        Some(rest.get(..name_end)?.to_string())
     }
 
     /// Generate a summary of the exploration results

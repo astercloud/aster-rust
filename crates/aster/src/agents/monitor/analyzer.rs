@@ -478,16 +478,14 @@ impl PerformanceAnalyzer {
                 let position = value - good;
                 (100.0 * (1.0 - position / range)) as f32
             }
+        } else if value >= good {
+            100.0
+        } else if value <= poor {
+            0.0
         } else {
-            if value >= good {
-                100.0
-            } else if value <= poor {
-                0.0
-            } else {
-                let range = good - poor;
-                let position = value - poor;
-                (100.0 * (position / range)) as f32
-            }
+            let range = good - poor;
+            let position = value - poor;
+            (100.0 * (position / range)) as f32
         }
     }
 

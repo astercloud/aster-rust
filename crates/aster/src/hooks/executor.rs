@@ -339,6 +339,7 @@ pub async fn run_pre_compact_hooks(
 }
 
 /// PostToolUseFailure hook
+#[allow(clippy::too_many_arguments)]
 pub async fn run_post_tool_use_failure_hooks(
     tool_name: &str,
     tool_input: Option<serde_json::Value>,

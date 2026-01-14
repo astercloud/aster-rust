@@ -215,7 +215,7 @@ impl SymbolReferenceAnalyzer {
                 }
 
                 let starts_with_uppercase =
-                    exp.name.chars().next().map_or(false, |c| c.is_uppercase());
+                    exp.name.chars().next().is_some_and(|c| c.is_uppercase());
                 let looks_like_type = starts_with_uppercase && !exp.name.contains('_');
 
                 let info = SymbolInfo {
@@ -312,6 +312,16 @@ impl SymbolReferenceAnalyzer {
         lines: &[&str],
         parent_class: Option<&ClassNode>,
     ) -> Vec<CallInfo> {
+        use once_cell::sync::Lazy;
+
+        static RE_FUNC_CALL: Lazy<regex::Regex> =
+            Lazy::new(|| regex::Regex::new(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(").unwrap());
+        static RE_METHOD_CALL: Lazy<regex::Regex> = Lazy::new(|| {
+            regex::Regex::new(r"(?:([a-zA-Z_][a-zA-Z0-9_]*)|self|this)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(").unwrap()
+        });
+        static RE_CONSTRUCTOR: Lazy<regex::Regex> =
+            Lazy::new(|| regex::Regex::new(r"(?:new\s+|::new\s*\()([A-Z][a-zA-Z0-9_]*)").unwrap());
+
         let mut calls = Vec::new();
         let caller_symbol = func.id.clone();
 
@@ -361,8 +371,7 @@ impl SymbolReferenceAnalyzer {
         .into_iter()
         .collect();
 
-        for i in start_line..end_line {
-            let line = lines[i];
+        for (i, line) in lines.iter().enumerate().take(end_line).skip(start_line) {
             let line_num = (i + 1) as u32;
 
             // 跳过注释行
@@ -372,22 +381,21 @@ impl SymbolReferenceAnalyzer {
             }
 
             // 模式 1: 普通函数调用 functionName(
-            if let Ok(re) = regex::Regex::new(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(") {
-                for cap in re.captures_iter(line) {
-                    if let Some(func_name) = cap.get(1) {
-                        let name = func_name.as_str();
-                        if ignored.contains(name) {
-                            continue;
-                        }
+            for cap in RE_FUNC_CALL.captures_iter(line) {
+                if let Some(func_name) = cap.get(1) {
+                    let name = func_name.as_str();
+                    if ignored.contains(name) {
+                        continue;
+                    }
 
-                        let targets = self.find_target_symbols(name, module);
-                        for target_id in targets {
-                            calls.push(CallInfo {
-                                caller_symbol: caller_symbol.clone(),
-                                callee_symbol: target_id,
-                                callee_name: name.to_string(),
-                                call_type: CallType::Direct,
-                                location: LocationInfo {
+                    let targets = self.find_target_symbols(name, module);
+                    for target_id in targets {
+                        calls.push(CallInfo {
+                            caller_symbol: caller_symbol.clone(),
+                            callee_symbol: target_id,
+                            callee_name: name.to_string(),
+                            call_type: CallType::Direct,
+                            location: LocationInfo {
                                     file: module.id.clone(),
                                     start_line: line_num,
                                     start_column: func_name.start() as u32,
@@ -398,44 +406,21 @@ impl SymbolReferenceAnalyzer {
                         }
                     }
                 }
-            }
 
             // 模式 2: 方法调用 obj.methodName( 或 self.methodName(
-            if let Ok(re) = regex::Regex::new(
-                r"(?:([a-zA-Z_][a-zA-Z0-9_]*)|self|this)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
-            ) {
-                for cap in re.captures_iter(line) {
-                    let obj_name = cap.get(1).map(|m| m.as_str());
-                    if let Some(method_name) = cap.get(2) {
-                        let name = method_name.as_str();
-                        if ignored.contains(name) {
-                            continue;
-                        }
+            for cap in RE_METHOD_CALL.captures_iter(line) {
+                let obj_name = cap.get(1).map(|m| m.as_str());
+                if let Some(method_name) = cap.get(2) {
+                    let name = method_name.as_str();
+                    if ignored.contains(name) {
+                        continue;
+                    }
 
-                        // self.method() 或 this.method() 调用
-                        if obj_name.is_none() {
-                            if let Some(cls) = parent_class {
-                                let target_id = format!("{}::{}::{}", module.id, cls.name, name);
-                                if self.symbol_index.contains_key(&target_id) {
-                                    calls.push(CallInfo {
-                                        caller_symbol: caller_symbol.clone(),
-                                        callee_symbol: target_id,
-                                        callee_name: name.to_string(),
-                                        call_type: CallType::Method,
-                                        location: LocationInfo {
-                                            file: module.id.clone(),
-                                            start_line: line_num,
-                                            start_column: method_name.start() as u32,
-                                            end_line: line_num,
-                                            end_column: method_name.end() as u32,
-                                        },
-                                    });
-                                }
-                            }
-                        } else {
-                            // obj.method() 调用
-                            let targets = self.find_method_targets(name);
-                            for target_id in targets {
+                    // self.method() 或 this.method() 调用
+                    if obj_name.is_none() {
+                        if let Some(cls) = parent_class {
+                            let target_id = format!("{}::{}::{}", module.id, cls.name, name);
+                            if self.symbol_index.contains_key(&target_id) {
                                 calls.push(CallInfo {
                                     caller_symbol: caller_symbol.clone(),
                                     callee_symbol: target_id,
@@ -451,33 +436,49 @@ impl SymbolReferenceAnalyzer {
                                 });
                             }
                         }
+                    } else {
+                        // obj.method() 调用
+                        let targets = self.find_method_targets(name);
+                        for target_id in targets {
+                            calls.push(CallInfo {
+                                caller_symbol: caller_symbol.clone(),
+                                callee_symbol: target_id,
+                                callee_name: name.to_string(),
+                                call_type: CallType::Method,
+                                location: LocationInfo {
+                                    file: module.id.clone(),
+                                    start_line: line_num,
+                                    start_column: method_name.start() as u32,
+                                    end_line: line_num,
+                                    end_column: method_name.end() as u32,
+                                },
+                            });
+                        }
                     }
                 }
             }
 
             // 模式 3: 构造函数调用 new ClassName( 或 ClassName::new(
-            if let Ok(re) = regex::Regex::new(r"(?:new\s+|::new\s*\()([A-Z][a-zA-Z0-9_]*)") {
-                for cap in re.captures_iter(line) {
-                    if let Some(class_name) = cap.get(1) {
-                        let name = class_name.as_str();
-                        let targets = self.find_target_symbols(name, module);
-                        for target_id in targets {
-                            if let Some(symbol) = self.symbol_index.get(&target_id) {
-                                if symbol.kind == SymbolKind::Class {
-                                    calls.push(CallInfo {
-                                        caller_symbol: caller_symbol.clone(),
-                                        callee_symbol: target_id,
-                                        callee_name: name.to_string(),
-                                        call_type: CallType::Constructor,
-                                        location: LocationInfo {
-                                            file: module.id.clone(),
-                                            start_line: line_num,
-                                            start_column: class_name.start() as u32,
-                                            end_line: line_num,
-                                            end_column: class_name.end() as u32,
-                                        },
-                                    });
-                                }
+            for cap in RE_CONSTRUCTOR.captures_iter(line) {
+                if let Some(class_name) = cap.get(1) {
+                    let name = class_name.as_str();
+                    let targets = self.find_target_symbols(name, module);
+                    for target_id in targets {
+                        if let Some(symbol) = self.symbol_index.get(&target_id) {
+                            if symbol.kind == SymbolKind::Class {
+                                calls.push(CallInfo {
+                                    caller_symbol: caller_symbol.clone(),
+                                    callee_symbol: target_id,
+                                    callee_name: name.to_string(),
+                                    call_type: CallType::Constructor,
+                                    location: LocationInfo {
+                                        file: module.id.clone(),
+                                        start_line: line_num,
+                                        start_column: class_name.start() as u32,
+                                        end_line: line_num,
+                                        end_column: class_name.end() as u32,
+                                    },
+                                });
                             }
                         }
                     }
@@ -570,7 +571,7 @@ impl SymbolReferenceAnalyzer {
             let mut entry = SymbolEntry {
                 id: info.id.clone(),
                 name: info.name.clone(),
-                kind: info.kind.clone(),
+                kind: info.kind,
                 module_id: info.module_id.clone(),
                 location: info.location.clone(),
                 signature: info.signature.clone(),

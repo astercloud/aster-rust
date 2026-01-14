@@ -23,6 +23,7 @@ use super::types::*;
 // ============================================================================
 
 /// 任务树管理器
+#[allow(dead_code)]
 pub struct TaskTreeManager {
     /// 任务树存储
     task_trees: Arc<RwLock<HashMap<String, TaskTree>>>,
@@ -46,7 +47,7 @@ impl TaskTreeManager {
     }
 
     /// 从默认目录创建
-    pub fn default() -> Self {
+    pub fn with_default_dir() -> Self {
         let storage_dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join(".aster")
@@ -184,7 +185,17 @@ impl TaskTreeManager {
             .enumerate()
             .map(|(i, (name, desc))| {
                 let short_resp = if responsibility.len() > 20 {
-                    format!("{}...", &responsibility[..20])
+                    // Find safe UTF-8 boundary for truncation
+                    let truncate_at = responsibility
+                        .char_indices()
+                        .take_while(|(idx, _)| *idx < 20)
+                        .last()
+                        .map(|(idx, c)| idx + c.len_utf8())
+                        .unwrap_or(0);
+                    format!(
+                        "{}...",
+                        responsibility.get(..truncate_at).unwrap_or(responsibility)
+                    )
                 } else {
                     responsibility.to_string()
                 };

@@ -25,7 +25,6 @@
 use crate::context::token_estimator::TokenEstimator;
 use crate::context::types::{MessagePriority, PrioritizedMessage};
 use crate::conversation::message::{Message, MessageContent};
-use rmcp::model::Role;
 
 // ============================================================================
 // Constants
@@ -332,7 +331,7 @@ impl PrioritySorter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmcp::model::{CallToolRequestParam, JsonObject};
+    use rmcp::model::{CallToolRequestParam, JsonObject, Role};
 
     fn create_text_message(role: Role, text: &str) -> Message {
         match role {

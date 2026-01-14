@@ -9,6 +9,7 @@
 //! - `services`: 业务逻辑服务
 
 pub mod routes;
+#[allow(clippy::module_inception)]
 pub mod server;
 pub mod services;
 pub mod types;

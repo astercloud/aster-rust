@@ -168,12 +168,12 @@ impl PlanComparisonManager {
         if plan
             .recommendations
             .as_ref()
-            .map_or(false, |r| !r.is_empty())
+            .is_some_and(|r| !r.is_empty())
         {
             score += 1.0;
         }
 
-        score.min(10.0).max(1.0)
+        score.clamp(1.0, 10.0)
     }
 
     /// 评估性能影响得分
@@ -211,7 +211,7 @@ impl PlanComparisonManager {
             score -= avg_level * 0.5;
         }
 
-        score.min(10.0).max(1.0)
+        score.clamp(1.0, 10.0)
     }
 
     /// 评估实现时间得分（时间越短，得分越高）

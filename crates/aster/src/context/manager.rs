@@ -101,7 +101,7 @@ impl EnhancedContextManager {
     }
 
     /// Create a new EnhancedContextManager with default configuration.
-    pub fn default() -> Self {
+    pub fn with_default_config() -> Self {
         Self::new(ContextConfig::default())
     }
 
@@ -624,10 +624,10 @@ impl EnhancedContextManager {
         }
 
         // If all content was references, ensure we have at least the placeholder
-        if new_content.is_empty() || (!has_non_reference && reference_collapsed) {
-            if new_content.is_empty() {
-                new_content.push(MessageContent::text(TOOL_REFERENCE_PLACEHOLDER));
-            }
+        if (new_content.is_empty() || (!has_non_reference && reference_collapsed))
+            && new_content.is_empty()
+        {
+            new_content.push(MessageContent::text(TOOL_REFERENCE_PLACEHOLDER));
         }
 
         Message {

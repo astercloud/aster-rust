@@ -713,7 +713,7 @@ impl<C: ConnectionManager + 'static> ToolManager for McpToolManager<C> {
 
         // If no schema or empty schema, accept any args
         if schema.is_null()
-            || (schema.is_object() && schema.as_object().map_or(true, |o| o.is_empty()))
+            || (schema.is_object() && schema.as_object().is_none_or(|o| o.is_empty()))
         {
             return ArgValidationResult::valid();
         }

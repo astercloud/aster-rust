@@ -19,9 +19,10 @@ use super::types::{AcceptanceTest, ArtifactType, Blueprint, TaskNode, TddPhase, 
 // ============================================================================
 
 /// 测试框架类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TestFramework {
     /// Rust cargo test
+    #[default]
     Cargo,
     /// Vitest (TypeScript)
     Vitest,
@@ -31,12 +32,6 @@ pub enum TestFramework {
     Mocha,
     /// Pytest (Python)
     Pytest,
-}
-
-impl Default for TestFramework {
-    fn default() -> Self {
-        Self::Cargo
-    }
 }
 
 impl TestFramework {

@@ -2,7 +2,7 @@
 //!
 //! 分析函数/方法之间的调用关系
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use super::types::*;
 
@@ -177,7 +177,7 @@ impl CallGraphBuilder {
                     continue;
                 }
                 if let Some(target_ids) = self.name_to_ids.get(called_name) {
-                    for target_id in target_ids {
+                    if let Some(target_id) = target_ids.iter().next() {
                         edges.push(CallGraphEdge {
                             source: func.id.clone(),
                             target: target_id.clone(),
@@ -191,7 +191,6 @@ impl CallGraphBuilder {
                                 end_column: line.len() as u32,
                             }],
                         });
-                        break;
                     }
                 }
             }
@@ -217,7 +216,7 @@ impl CallGraphBuilder {
                     continue;
                 }
                 if let Some(target_ids) = self.name_to_ids.get(called_name) {
-                    for target_id in target_ids {
+                    if let Some(target_id) = target_ids.iter().next() {
                         edges.push(CallGraphEdge {
                             source: method.id.clone(),
                             target: target_id.clone(),
@@ -231,7 +230,6 @@ impl CallGraphBuilder {
                                 end_column: line.len() as u32,
                             }],
                         });
-                        break;
                     }
                 }
             }

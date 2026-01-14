@@ -221,10 +221,8 @@ pub fn cleanup_old_summaries(max_age_days: u32) -> Result<usize> {
             if path.extension().is_some_and(|ext| ext == "json") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(data) = serde_json::from_str::<SummaryCacheData>(&content) {
-                        if data.timestamp < cutoff {
-                            if fs::remove_file(&path).is_ok() {
-                                deleted += 1;
-                            }
+                        if data.timestamp < cutoff && fs::remove_file(&path).is_ok() {
+                            deleted += 1;
                         }
                     }
                 }

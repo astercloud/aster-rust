@@ -118,8 +118,8 @@ impl NetworkChecker {
                     // 隐藏凭证
                     let masked = if value.contains('@') {
                         value
-                            .split('@')
-                            .last()
+                            .rsplit('@')
+                            .next()
                             .map(|s| format!("***@{}", s))
                             .unwrap_or_else(|| "***".to_string())
                     } else {

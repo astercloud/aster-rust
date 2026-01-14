@@ -24,7 +24,7 @@ pub fn parse_frontmatter(content: &str) -> (SkillFrontmatter, String) {
     if let Some(captures) = regex.captures(content) {
         let frontmatter_text = captures.get(1).map(|m| m.as_str()).unwrap_or("");
         let body_start = captures.get(0).map(|m| m.end()).unwrap_or(0);
-        let body = content[body_start..].to_string();
+        let body = content.get(body_start..).unwrap_or("").to_string();
 
         // Parse YAML-like frontmatter
         let mut frontmatter = SkillFrontmatter::default();
@@ -32,8 +32,8 @@ pub fn parse_frontmatter(content: &str) -> (SkillFrontmatter, String) {
 
         for line in frontmatter_text.lines() {
             if let Some(colon_idx) = line.find(':') {
-                let key = line[..colon_idx].trim();
-                let value = line[colon_idx + 1..].trim();
+                let key = line.get(..colon_idx).unwrap_or("").trim();
+                let value = line.get(colon_idx + 1..).unwrap_or("").trim();
                 // Remove surrounding quotes
                 let clean_value = value
                     .trim_start_matches('"')

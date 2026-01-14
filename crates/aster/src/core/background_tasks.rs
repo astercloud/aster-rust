@@ -177,7 +177,11 @@ impl BackgroundTaskManager {
                     serde_json::to_string_pretty(&input).unwrap_or_default()
                 );
                 if let Some(ref r) = result {
-                    let preview = if r.len() > 1000 { &r[..1000] } else { r };
+                    let preview = if r.len() > 1000 {
+                        r.get(..1000).unwrap_or(r)
+                    } else {
+                        r
+                    };
                     let _ = writeln!(file, "Result: {}", preview);
                 }
                 if let Some(ref e) = error {
@@ -247,12 +251,15 @@ impl BackgroundTaskManager {
             .values()
             .map(|task| {
                 let input_preview = if task.user_input.len() > 100 {
-                    format!("{}...", &task.user_input[..100])
+                    format!("{}...", task.user_input.get(..100).unwrap_or(&task.user_input))
                 } else {
                     task.user_input.clone()
                 };
                 let output_preview = if task.text_output.len() > 200 {
-                    format!("{}...", &task.text_output[..200])
+                    format!(
+                        "{}...",
+                        task.text_output.get(..200).unwrap_or(&task.text_output)
+                    )
                 } else {
                     task.text_output.clone()
                 };

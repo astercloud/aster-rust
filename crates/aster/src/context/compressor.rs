@@ -247,9 +247,12 @@ impl MessageCompressor {
             let remaining = max_chars.saturating_sub(total_code_chars);
             let text_before_first = code_blocks
                 .first()
-                .map(|b| &content[..b.start])
+                .map(|b| content.get(..b.start).unwrap_or(""))
                 .unwrap_or("");
-            let text_after_last = code_blocks.last().map(|b| &content[b.end..]).unwrap_or("");
+            let text_after_last = code_blocks
+                .last()
+                .map(|b| content.get(b.end..).unwrap_or(""))
+                .unwrap_or("");
 
             let before_budget = remaining / 2;
             let after_budget = remaining.saturating_sub(before_budget);
@@ -569,7 +572,7 @@ impl MessageCompressor {
             return "";
         }
 
-        &s[valid_start..valid_end]
+        s.get(valid_start..valid_end).unwrap_or("")
     }
 
     /// Calculate compression result for a message.

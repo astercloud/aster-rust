@@ -14,7 +14,6 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, RwLock};
-use tokio::time::{timeout, Duration};
 
 use super::types::{ShellOutputEvent, ShellOutputType, ShellStats, ShellStatus};
 
@@ -89,10 +88,11 @@ impl ShellManager {
 
     /// 生成唯一的 Shell ID
     fn generate_shell_id(&self) -> String {
+        let uuid_str = uuid::Uuid::new_v4().to_string();
         format!(
             "bash_{}_{}",
             chrono::Utc::now().timestamp_millis(),
-            uuid::Uuid::new_v4().to_string()[..8].to_string()
+            uuid_str.get(..8).unwrap_or(&uuid_str)
         )
     }
 

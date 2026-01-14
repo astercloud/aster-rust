@@ -88,7 +88,7 @@ impl Installer {
             .map_err(|e| format!("创建下载目录失败: {}", e))?;
 
         // 从 URL 提取文件名
-        let filename = url.split('/').last().unwrap_or("update.tar.gz");
+        let filename = url.rsplit('/').next().unwrap_or("update.tar.gz");
         let download_path = self.download_dir.join(filename);
 
         // 实际下载逻辑（简化实现）

@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "aster"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "agent-client-protocol-schema",
  "ahash",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "aster-bench"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "aster",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "aster-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "agent-client-protocol-schema",
  "anstream",
@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "aster-mcp"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -447,7 +447,7 @@ dependencies = [
 
 [[package]]
 name = "aster-server"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "aster",
@@ -493,7 +493,7 @@ dependencies = [
 
 [[package]]
 name = "aster-test"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "serde_json",

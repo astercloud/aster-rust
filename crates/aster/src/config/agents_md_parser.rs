@@ -9,6 +9,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+/// 变更回调函数类型
+pub(crate) type ChangeCallback = Box<dyn Fn(String) + Send + Sync>;
+
+/// 变更回调列表类型
+pub(crate) type ChangeCallbackList = Arc<RwLock<Vec<ChangeCallback>>>;
+
 /// AGENTS.md 文件信息
 #[derive(Debug, Clone)]
 pub struct AgentsMdInfo {
@@ -49,7 +55,7 @@ pub struct AgentsMdParser {
     /// 文件监听器
     watcher: RwLock<Option<RecommendedWatcher>>,
     /// 变更回调
-    change_callbacks: Arc<RwLock<Vec<Box<dyn Fn(String) + Send + Sync>>>>,
+    change_callbacks: ChangeCallbackList,
 }
 
 impl AgentsMdParser {

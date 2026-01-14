@@ -22,8 +22,9 @@ use super::types::{
 // ============================================================================
 
 /// 对话阶段
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DialogPhase {
+    #[default]
     Welcome,
     ProjectBackground,
     BusinessProcess,
@@ -31,12 +32,6 @@ pub enum DialogPhase {
     NFR,
     Summary,
     Complete,
-}
-
-impl Default for DialogPhase {
-    fn default() -> Self {
-        Self::Welcome
-    }
 }
 
 /// 对话状态
@@ -347,6 +342,7 @@ impl RequirementDialogManager {
     }
 
     /// 设置事件发送器
+    #[allow(dead_code)]
     pub fn with_event_sender(mut self, sender: mpsc::Sender<DialogEvent>) -> Self {
         self.event_sender = Some(sender);
         self
@@ -507,7 +503,7 @@ impl RequirementDialogManager {
             }
         }
         if state.target_users.is_empty() && state.problems_to_solve.is_empty() {
-            state.project_description.push_str("\n");
+            state.project_description.push('\n');
             state.project_description.push_str(input);
         }
     }
@@ -568,7 +564,7 @@ impl RequirementDialogManager {
             } else if let Some(ref mut p) = current_process {
                 if line.starts_with('-') || line.starts_with('•') || line.starts_with("步骤") {
                     p.steps.push(
-                        line.trim_start_matches(|c| c == '-' || c == '•' || c == ' ')
+                        line.trim_start_matches(['-', '•', ' '])
                             .to_string(),
                     );
                 } else {
@@ -660,7 +656,7 @@ impl RequirementDialogManager {
             } else if let Some(ref mut m) = current_module {
                 if line.starts_with('-') || line.starts_with('•') {
                     m.responsibilities.push(
-                        line.trim_start_matches(|c| c == '-' || c == '•' || c == ' ')
+                        line.trim_start_matches(['-', '•', ' '])
                             .to_string(),
                     );
                 } else {
@@ -817,36 +813,43 @@ impl RequirementDialogManager {
     }
 
     /// 处理欢迎阶段输入
+    #[allow(dead_code)]
     fn process_welcome_input(&self, state: &mut DialogState, input: &str) {
         Self::process_welcome_input_static(state, input);
     }
 
     /// 格式化欢迎响应
+    #[allow(dead_code)]
     fn format_welcome_response(&self, state: &DialogState) -> String {
         Self::format_welcome_response_static(state)
     }
 
     /// 处理项目背景阶段输入
+    #[allow(dead_code)]
     fn process_background_input(&self, state: &mut DialogState, input: &str) {
         Self::process_background_input_static(state, input);
     }
 
     /// 格式化背景响应
+    #[allow(dead_code)]
     fn format_background_response(&self, state: &DialogState) -> String {
         Self::format_background_response_static(state)
     }
 
     /// 处理业务流程阶段输入
+    #[allow(dead_code)]
     fn process_business_process_input(&self, state: &mut DialogState, input: &str) {
         Self::process_business_process_input_static(state, input);
     }
 
     /// 格式化业务流程响应
+    #[allow(dead_code)]
     fn format_business_process_response(&self, state: &DialogState) -> String {
         Self::format_business_process_response_static(state)
     }
 
     /// 处理系统模块阶段输入
+    #[allow(dead_code)]
     fn process_module_input(&self, state: &mut DialogState, input: &str) {
         // 如果还没有模块，先生成建议模块
         if state.modules.is_empty() {
@@ -856,11 +859,13 @@ impl RequirementDialogManager {
     }
 
     /// 格式化模块响应
+    #[allow(dead_code)]
     fn format_module_response(&self, state: &DialogState) -> String {
         Self::format_module_response_static(state)
     }
 
     /// 建议系统模块
+    #[allow(dead_code)]
     fn suggest_modules(&self, state: &DialogState) -> Vec<SystemModuleDraft> {
         let mut modules = Vec::new();
 
@@ -916,6 +921,7 @@ impl RequirementDialogManager {
     }
 
     /// 处理非功能要求阶段输入
+    #[allow(dead_code)]
     fn process_nfr_input(&self, state: &mut DialogState, input: &str) {
         // 解析用户输入的 NFR
         let input_lower = input.to_lowercase();
@@ -966,6 +972,7 @@ impl RequirementDialogManager {
     }
 
     /// 获取默认 NFR
+    #[allow(dead_code)]
     fn get_default_nfrs(&self) -> Vec<NFRDraft> {
         vec![
             NFRDraft {
@@ -993,6 +1000,7 @@ impl RequirementDialogManager {
     }
 
     /// 生成摘要
+    #[allow(dead_code)]
     fn generate_summary(&self, state: &DialogState) -> String {
         let processes_str = state
             .business_processes
@@ -1086,6 +1094,7 @@ impl RequirementDialogManager {
     }
 
     /// 处理汇总确认阶段输入
+    #[allow(dead_code)]
     fn process_summary_input(&self, state: &mut DialogState, input: &str) -> (String, DialogPhase) {
         let normalized = input.trim().to_lowercase();
 

@@ -5,7 +5,7 @@
 use super::loader::{load_skills_from_directory, load_skills_from_plugin_cache};
 use super::types::{InvokedSkill, SkillDefinition, SkillSource};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -89,7 +89,7 @@ impl SkillRegistry {
     }
 
     /// Record an invoked skill
-    pub fn record_invoked(&mut self, skill_name: &str, skill_path: &PathBuf, content: &str) {
+    pub fn record_invoked(&mut self, skill_name: &str, skill_path: &Path, content: &str) {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -99,7 +99,7 @@ impl SkillRegistry {
             skill_name.to_string(),
             InvokedSkill {
                 skill_name: skill_name.to_string(),
-                skill_path: skill_path.clone(),
+                skill_path: skill_path.to_path_buf(),
                 content: content.to_string(),
                 invoked_at: timestamp,
             },

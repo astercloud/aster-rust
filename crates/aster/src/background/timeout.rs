@@ -14,6 +14,9 @@ use tokio::time::{sleep, Duration};
 
 use super::types::TimeoutStats;
 
+/// 超时回调函数类型
+pub(crate) type TimeoutCallback = Arc<dyn Fn(&str) + Send + Sync>;
+
 /// 超时配置
 #[derive(Debug, Clone)]
 pub struct TimeoutConfig {
@@ -45,7 +48,7 @@ pub struct TimeoutHandle {
 pub struct TimeoutManager {
     timeouts: Arc<RwLock<HashMap<String, TimeoutHandle>>>,
     config: TimeoutConfig,
-    on_timeout: Option<Arc<dyn Fn(&str) + Send + Sync>>,
+    on_timeout: Option<TimeoutCallback>,
 }
 
 impl TimeoutManager {

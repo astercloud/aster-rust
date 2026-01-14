@@ -13,12 +13,21 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// 权限条件验证器类型
+pub(crate) type PermissionConditionValidator =
+    Arc<dyn Fn(&PermissionContext) -> bool + Send + Sync>;
+
+/// 参数限制验证器类型
+pub(crate) type ParameterRestrictionValidator =
+    Arc<dyn Fn(&serde_json::Value) -> bool + Send + Sync>;
+
 /// 权限范围
 ///
 /// 定义权限的作用域级别，优先级从低到高：Global < Project < Session
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum PermissionScope {
     /// 全局权限，适用于所有项目
+    #[default]
     Global,
     /// 项目权限，仅适用于特定项目
     Project,
@@ -26,18 +35,13 @@ pub enum PermissionScope {
     Session,
 }
 
-impl Default for PermissionScope {
-    fn default() -> Self {
-        Self::Global
-    }
-}
-
 /// 条件类型
 ///
 /// 定义权限条件的类型分类
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ConditionType {
     /// 基于上下文的条件（如工作目录）
+    #[default]
     Context,
     /// 基于时间的条件
     Time,
@@ -49,18 +53,13 @@ pub enum ConditionType {
     Custom,
 }
 
-impl Default for ConditionType {
-    fn default() -> Self {
-        Self::Context
-    }
-}
-
 /// 条件运算符
 ///
 /// 定义条件评估时使用的比较运算符
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ConditionOperator {
     /// 等于
+    #[default]
     Equals,
     /// 不等于
     NotEquals,
@@ -82,18 +81,13 @@ pub enum ConditionOperator {
     Custom,
 }
 
-impl Default for ConditionOperator {
-    fn default() -> Self {
-        Self::Equals
-    }
-}
-
 /// 参数限制类型
 ///
 /// 定义对工具参数值的限制方式
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum RestrictionType {
     /// 白名单：只允许指定的值
+    #[default]
     Whitelist,
     /// 黑名单：禁止指定的值
     Blacklist,
@@ -105,29 +99,18 @@ pub enum RestrictionType {
     Range,
 }
 
-impl Default for RestrictionType {
-    fn default() -> Self {
-        Self::Whitelist
-    }
-}
-
 /// 合并策略
 ///
 /// 定义多个权限规则合并时的策略
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum MergeStrategy {
     /// 覆盖：高优先级完全替换低优先级
+    #[default]
     Override,
     /// 合并：合并条件和限制
     Merge,
     /// 联合：保留两者
     Union,
-}
-
-impl Default for MergeStrategy {
-    fn default() -> Self {
-        Self::Override
-    }
 }
 
 /// 权限条件
@@ -146,7 +129,7 @@ pub struct PermissionCondition {
     pub value: serde_json::Value,
     /// 自定义验证器函数（不序列化）
     #[serde(skip)]
-    pub validator: Option<Arc<dyn Fn(&PermissionContext) -> bool + Send + Sync>>,
+    pub validator: Option<PermissionConditionValidator>,
     /// 条件描述
     pub description: Option<String>,
 }
@@ -191,7 +174,7 @@ impl PartialEq for PermissionCondition {
 ///
 /// 对工具参数值进行约束的规则
 /// Requirements: 3.1, 3.2, 3.3, 3.4, 3.5
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ParameterRestriction {
     /// 参数名称
     pub parameter: String,
@@ -203,7 +186,7 @@ pub struct ParameterRestriction {
     pub pattern: Option<String>,
     /// 自定义验证器函数（不序列化）
     #[serde(skip)]
-    pub validator: Option<Arc<dyn Fn(&serde_json::Value) -> bool + Send + Sync>>,
+    pub validator: Option<ParameterRestrictionValidator>,
     /// 最小值（用于 Range）
     pub min: Option<f64>,
     /// 最大值（用于 Range）
@@ -227,22 +210,6 @@ impl std::fmt::Debug for ParameterRestriction {
             .field("required", &self.required)
             .field("description", &self.description)
             .finish()
-    }
-}
-
-impl Default for ParameterRestriction {
-    fn default() -> Self {
-        Self {
-            parameter: String::new(),
-            restriction_type: RestrictionType::default(),
-            values: None,
-            pattern: None,
-            validator: None,
-            min: None,
-            max: None,
-            required: false,
-            description: None,
-        }
     }
 }
 

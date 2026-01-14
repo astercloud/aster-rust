@@ -529,7 +529,7 @@ impl McpServerInfo {
 
         Self {
             name: name.to_string(),
-            transport_type: config.transport_type.clone(),
+            transport_type: config.transport_type,
             command: config.command.clone(),
             args: config.args.clone(),
             env: config.env.clone(),

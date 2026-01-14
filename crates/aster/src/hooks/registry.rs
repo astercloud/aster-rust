@@ -52,7 +52,9 @@ impl HookRegistry {
                     if let Some(name) = tool_name {
                         // 支持正则匹配
                         if matcher.starts_with('/') && matcher.ends_with('/') {
-                            let pattern = &matcher[1..matcher.len() - 1];
+                            let pattern = matcher
+                                .get(1..matcher.len().saturating_sub(1))
+                                .unwrap_or("");
                             if let Ok(regex) = Regex::new(pattern) {
                                 return regex.is_match(name);
                             }

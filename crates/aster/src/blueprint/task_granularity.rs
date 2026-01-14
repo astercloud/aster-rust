@@ -244,7 +244,7 @@ pub struct AdjustmentStats {
 }
 
 /// 调整结果
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AdjustmentResult {
     /// 是否需要调整
     pub needs_adjustment: bool,
@@ -256,18 +256,6 @@ pub struct AdjustmentResult {
     pub stats: AdjustmentStats,
     /// 诊断问题
     pub issues: Vec<StructureIssue>,
-}
-
-impl Default for AdjustmentResult {
-    fn default() -> Self {
-        Self {
-            needs_adjustment: false,
-            split_suggestions: Vec::new(),
-            merge_suggestions: Vec::new(),
-            stats: AdjustmentStats::default(),
-            issues: Vec::new(),
-        }
-    }
 }
 
 // ============================================================================
@@ -333,7 +321,7 @@ impl TaskGranularityController {
                 estimated_lines,
                 estimated_duration,
                 has_dependencies: !task.dependencies.is_empty(),
-                has_interfaces: module.map_or(false, |m| !m.interfaces.is_empty()),
+                has_interfaces: module.is_some_and(|m| !m.interfaces.is_empty()),
                 has_tests: !task.acceptance_tests.is_empty() || task.test_spec.is_some(),
                 depth: task.depth,
                 children_count: task.children.len(),

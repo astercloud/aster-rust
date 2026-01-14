@@ -198,19 +198,14 @@ pub struct UrlHookConfig {
 }
 
 /// HTTP 方法
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum HttpMethod {
     Get,
+    #[default]
     Post,
     Put,
     Patch,
-}
-
-impl Default for HttpMethod {
-    fn default() -> Self {
-        HttpMethod::Post
-    }
 }
 
 /// Hook 配置（联合类型）

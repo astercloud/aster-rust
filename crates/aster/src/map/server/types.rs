@@ -143,22 +143,17 @@ pub struct DependencyTreeNode {
 // ============================================================================
 
 /// 逻辑块类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LogicBlockType {
     Entry,
     Core,
     Feature,
+    #[default]
     Util,
     Ui,
     Data,
     Config,
-}
-
-impl Default for LogicBlockType {
-    fn default() -> Self {
-        Self::Util
-    }
 }
 
 /// 逻辑块
@@ -227,19 +222,14 @@ pub struct FlowchartNode {
 }
 
 /// 流程图边类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FlowchartEdgeType {
+    #[default]
     Normal,
     Yes,
     No,
     Error,
-}
-
-impl Default for FlowchartEdgeType {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 /// 流程图边

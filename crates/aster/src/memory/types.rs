@@ -8,7 +8,7 @@ use std::collections::HashMap;
 pub type Timestamp = String;
 
 /// 记忆重要性等级
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum MemoryImportance {
     /// 临时记忆 - 可遗忘
@@ -16,17 +16,12 @@ pub enum MemoryImportance {
     /// 低重要性 - 可压缩
     Low = 2,
     /// 普通记忆 - 中期保留
+    #[default]
     Medium = 3,
     /// 重要记忆 - 长期保留
     High = 4,
     /// 核心记忆 - 永不遗忘
     Core = 5,
-}
-
-impl Default for MemoryImportance {
-    fn default() -> Self {
-        Self::Medium
-    }
 }
 
 /// 记忆情感色彩

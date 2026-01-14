@@ -283,7 +283,7 @@ impl SharedStateManager {
 
         self.watchers
             .entry(key)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(entry);
 
         handle
@@ -430,7 +430,7 @@ impl SharedStateManager {
 
                 self.lock_wait_queue
                     .entry(key.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(waiter);
 
                 return Ok((key, rx));

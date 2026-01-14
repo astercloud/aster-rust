@@ -80,23 +80,18 @@ impl MessageTarget {
 }
 
 /// Priority levels for messages
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum MessagePriority {
     /// Low priority - processed last
     Low = 0,
     /// Normal priority - default
+    #[default]
     Normal = 1,
     /// High priority - processed before normal
     High = 2,
     /// Critical priority - processed first
     Critical = 3,
-}
-
-impl Default for MessagePriority {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 impl From<u8> for MessagePriority {
@@ -342,7 +337,7 @@ impl AgentMessageBus {
         // Ensure queue exists
         self.message_queues
             .entry(agent_id)
-            .or_insert_with(BinaryHeap::new);
+            .or_default();
     }
 
     /// Unsubscribe an agent
@@ -412,7 +407,7 @@ impl AgentMessageBus {
         let queue = self
             .message_queues
             .entry(agent_id.to_string())
-            .or_insert_with(BinaryHeap::new);
+            .or_default();
 
         // Check queue size limit
         if queue.len() >= self.max_queue_size {
@@ -667,7 +662,7 @@ impl AgentMessageBus {
 
             // Also create a response message for history/queue
             let response_message = AgentMessage::new(
-                &request.to.get_agent_id().unwrap_or_default(),
+                request.to.get_agent_id().unwrap_or_default(),
                 MessageTarget::Agent(request.from.clone()),
                 format!("{}_response", request.message_type),
                 payload,

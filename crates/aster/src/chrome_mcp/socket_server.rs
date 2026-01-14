@@ -19,6 +19,7 @@ const NATIVE_HOST_VERSION: &str = "1.0.0";
 const MAX_MESSAGE_SIZE: u32 = 1048576;
 
 /// MCP 客户端信息
+#[allow(dead_code)]
 struct McpClientInfo {
     id: u32,
     #[cfg(unix)]
@@ -164,7 +165,7 @@ impl SocketServer {
                     log_message(&format!(
                         "Received from MCP client {}: {}",
                         client_id,
-                        &msg_str[..msg_str.len().min(200)]
+                        msg_str.get(..msg_str.len().min(200)).unwrap_or(msg_str)
                     ));
                     // 转发到 Chrome 扩展
                     send_to_chrome(&message);
@@ -179,7 +180,7 @@ impl SocketServer {
     pub async fn handle_chrome_message(&self, message: &str) -> Result<(), String> {
         log_message(&format!(
             "Chrome message: {}",
-            &message[..message.len().min(300)]
+            message.get(..message.len().min(300)).unwrap_or(message)
         ));
 
         let data: serde_json::Value =
@@ -296,7 +297,7 @@ fn send_to_chrome(message: &serde_json::Value) {
     let json_str = serde_json::to_string(message).unwrap_or_default();
     log_message(&format!(
         "Sending to Chrome: {}",
-        &json_str[..json_str.len().min(200)]
+        json_str.get(..json_str.len().min(200)).unwrap_or(&json_str)
     ));
 
     let json = json_str.as_bytes();
@@ -310,6 +311,7 @@ fn send_to_chrome(message: &serde_json::Value) {
 }
 
 /// Native Message Reader - 从 stdin 读取 Native Messaging 消息
+#[allow(dead_code)]
 pub struct NativeMessageReader {
     buffer: Vec<u8>,
 }
@@ -357,7 +359,7 @@ pub async fn run_native_host() -> Result<(), String> {
     let mut reader = NativeMessageReader::new();
 
     // 启动 socket server（在后台）
-    let server_clone = server.mcp_clients.clone();
+    let _server_clone = server.mcp_clients.clone();
     tokio::spawn(async move {
         let s = SocketServer::new();
         if let Err(e) = s.start().await {

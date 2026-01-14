@@ -16,10 +16,11 @@ use uuid::Uuid;
 // ============================================================================
 
 /// 蓝图状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum BlueprintStatus {
     /// 草稿：正在与用户对话完善中
+    #[default]
     Draft,
     /// 审核：等待用户确认签字
     Review,
@@ -33,12 +34,6 @@ pub enum BlueprintStatus {
     Paused,
     /// 已修改：执行中用户修改了蓝图，需要重新规划
     Modified,
-}
-
-impl Default for BlueprintStatus {
-    fn default() -> Self {
-        Self::Draft
-    }
 }
 
 /// 蓝图来源
@@ -299,10 +294,11 @@ impl Blueprint {
 // ============================================================================
 
 /// 任务状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
     /// 等待中：还未开始
+    #[default]
     Pending,
     /// 阻塞：等待依赖任务完成
     Blocked,
@@ -324,12 +320,6 @@ pub enum TaskStatus {
     Rejected,
     /// 已取消
     Cancelled,
-}
-
-impl Default for TaskStatus {
-    fn default() -> Self {
-        Self::Pending
-    }
 }
 
 /// 测试类型
@@ -629,20 +619,15 @@ pub struct TaskTreeStats {
 }
 
 /// 任务树状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskTreeStatus {
+    #[default]
     Pending,
     Executing,
     Paused,
     Completed,
     Failed,
-}
-
-impl Default for TaskTreeStatus {
-    fn default() -> Self {
-        Self::Pending
-    }
 }
 
 /// 任务树
@@ -753,21 +738,16 @@ pub struct AgentAction {
 }
 
 /// TDD 循环阶段
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TddPhase {
+    #[default]
     WriteTest,
     RunTestRed,
     WriteCode,
     RunTestGreen,
     Refactor,
     Done,
-}
-
-impl Default for TddPhase {
-    fn default() -> Self {
-        Self::WriteTest
-    }
 }
 
 /// TDD 循环状态

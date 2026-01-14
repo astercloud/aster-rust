@@ -691,7 +691,7 @@ impl ParallelAgentExecutor {
 
         // Sort tasks by priority (higher priority first)
         let mut sorted_tasks = tasks.clone();
-        sorted_tasks.sort_by(|a, b| b.effective_priority().cmp(&a.effective_priority()));
+        sorted_tasks.sort_by_key(|b| std::cmp::Reverse(b.effective_priority()));
 
         // Execute tasks
         let execution_result = self

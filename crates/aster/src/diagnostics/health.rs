@@ -40,7 +40,7 @@ impl HealthSummary {
         let score = if total > 0 {
             let penalty = failed as f64 + warnings as f64 * 0.5;
             let raw_score = ((total as f64 - penalty) / total as f64) * 100.0;
-            raw_score.max(0.0).min(100.0) as u8
+            raw_score.clamp(0.0, 100.0) as u8
         } else {
             100
         };
@@ -152,10 +152,8 @@ pub async fn quick_health_check() -> (bool, Vec<String>) {
         .map(|p| p.join("aster"))
         .unwrap_or_else(|| std::path::PathBuf::from("~/.config/aster"));
 
-    if !config_dir.exists() {
-        if std::fs::create_dir_all(&config_dir).is_err() {
-            issues.push("无法创建配置目录".to_string());
-        }
+    if !config_dir.exists() && std::fs::create_dir_all(&config_dir).is_err() {
+        issues.push("无法创建配置目录".to_string());
     }
 
     // 检查环境变量

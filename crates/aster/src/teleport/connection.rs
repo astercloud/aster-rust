@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
-use tokio::time::{interval, timeout};
+use tokio::time::interval;
 
 /// 连接配置
 #[derive(Debug, Clone)]
@@ -138,7 +138,7 @@ impl WebSocketManager {
         let ws_url = self.build_websocket_url()?;
 
         // 创建通道
-        let (outgoing_tx, mut outgoing_rx) = mpsc::channel::<RemoteMessage>(100);
+        let (outgoing_tx, outgoing_rx) = mpsc::channel::<RemoteMessage>(100);
         let (stop_tx, mut stop_rx) = mpsc::channel::<()>(1);
 
         self.outgoing_tx = Some(outgoing_tx);
@@ -148,6 +148,9 @@ impl WebSocketManager {
         let heartbeat_interval = self.config.heartbeat_interval;
         let session_id = self.config.session_id.clone();
         let event_tx = self.event_tx.clone();
+
+        // 标记 outgoing_rx 为使用（实际连接逻辑待实现）
+        let _ = outgoing_rx;
         let connected = Arc::clone(&self.connected);
 
         tokio::spawn(async move {

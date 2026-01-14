@@ -1,6 +1,5 @@
 use crate::action_required_manager::ActionRequiredManager;
 use crate::agents::types::SharedProvider;
-use crate::providers::base::Provider;
 use crate::session_context::SESSION_ID_HEADER;
 use rmcp::model::{
     Content, CreateElicitationRequestParam, CreateElicitationResult, ElicitationAction, ErrorCode,
@@ -209,7 +208,7 @@ impl ClientHandler for AsterClient {
 
         // Apply temperature if provided in the request
         if let Some(temperature) = params.temperature {
-            model_config = model_config.with_temperature(Some(temperature as f32));
+            model_config = model_config.with_temperature(Some(temperature));
         }
 
         // Use complete_with_model to apply the custom model config

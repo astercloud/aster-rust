@@ -294,7 +294,7 @@ impl McpLogger {
         let level = params
             .get("level")
             .and_then(|v| v.as_str())
-            .and_then(McpLogLevel::from_str)
+            .and_then(McpLogLevel::parse)
             .unwrap_or(McpLogLevel::Info);
 
         let message = params

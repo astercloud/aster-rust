@@ -500,7 +500,7 @@ impl BlueprintCodeSyncManager {
         if let Ok(entries) = fs::read_dir(&self.chunks_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |e| e == "json") {
+                if path.extension().is_some_and(|e| e == "json") {
                     if let Ok(content) = fs::read_to_string(&path) {
                         if let Ok(chunk) = serde_json::from_str::<ChunkData>(&content) {
                             if let Some(modules) = chunk.planned_modules {
@@ -716,7 +716,7 @@ export default {};
 
     /// 转换为 PascalCase
     fn to_pascal_case(&self, s: &str) -> String {
-        s.split(|c| c == '-' || c == '_')
+        s.split(['-', '_'])
             .map(|word| {
                 let mut chars = word.chars();
                 match chars.next() {

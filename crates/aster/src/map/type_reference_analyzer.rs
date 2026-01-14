@@ -143,7 +143,11 @@ impl TypeReferenceAnalyzer {
     fn extract_type_name(&self, full_type: &str) -> String {
         // 去除泛型参数 Foo<T> -> Foo
         if let Some(generic_index) = full_type.find('<') {
-            full_type[..generic_index].trim().to_string()
+            full_type
+                .get(..generic_index)
+                .unwrap_or(full_type)
+                .trim()
+                .to_string()
         } else {
             full_type.trim().to_string()
         }
@@ -416,8 +420,7 @@ impl TypeUsageAnalyzer {
         let name = full_type
             .replace(['<', '>'], " ")
             .replace("[]", "")
-            .replace('|', " ")
-            .replace('&', " ");
+            .replace(['|', '&'], " ");
 
         // 取第一个单词
         name.split_whitespace().next().unwrap_or(&name).to_string()

@@ -51,17 +51,12 @@ pub type CoordinatorResult<T> = Result<T, CoordinatorError>;
 // ============================================================================
 
 /// Agent status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AgentStatus {
+    #[default]
     Idle,
     Busy,
     Offline,
-}
-
-impl Default for AgentStatus {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 /// Agent capabilities and state
@@ -134,8 +129,6 @@ impl AgentCapabilities {
 
         self.status = if self.current_tasks == 0 {
             AgentStatus::Idle
-        } else if self.current_tasks >= self.max_concurrent_tasks {
-            AgentStatus::Busy
         } else {
             AgentStatus::Busy
         };
@@ -281,6 +274,7 @@ pub struct TaskResult {
 
 /// Task assignment record
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct TaskAssignment {
     task: Task,
     agent_id: String,
@@ -316,6 +310,7 @@ pub struct DependencyLink {
 
 /// Synchronization barrier
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct SyncBarrier {
     id: String,
     agent_ids: HashSet<String>,
@@ -374,6 +369,9 @@ pub enum CoordinatorEvent {
 // Agent Coordinator
 // ============================================================================
 
+/// Type alias for event callback functions
+type EventCallback = Box<dyn Fn(&CoordinatorEvent) + Send + Sync>;
+
 /// Agent Coordinator
 ///
 /// Coordinates multiple agents with task assignment,
@@ -392,7 +390,7 @@ pub struct AgentCoordinator {
     /// Round-robin index for load balancing
     round_robin_index: usize,
     /// Event callbacks
-    event_callbacks: Vec<Box<dyn Fn(&CoordinatorEvent) + Send + Sync>>,
+    event_callbacks: Vec<EventCallback>,
     /// Heartbeat timeout in seconds
     heartbeat_timeout_secs: i64,
 }
@@ -794,7 +792,7 @@ impl AgentCoordinator {
     pub fn record_resource_dependency(&mut self, agent_id: &str, resource: &str) {
         self.resource_dependencies
             .entry(agent_id.to_string())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(resource.to_string());
     }
 

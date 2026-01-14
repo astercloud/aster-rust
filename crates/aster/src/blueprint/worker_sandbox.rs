@@ -75,6 +75,7 @@ pub struct LockInfo {
 
 /// 文件元数据
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct FileMetadata {
     /// 文件路径（相对于 base_dir）
     relative_path: String,
@@ -102,7 +103,8 @@ fn compute_file_hash(file_path: &Path) -> Result<String, std::io::Error> {
 fn compute_string_hash(s: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(s.as_bytes());
-    format!("{:x}", hasher.finalize())[..16].to_string()
+    let hash = format!("{:x}", hasher.finalize());
+    hash.get(..16).unwrap_or(&hash).to_string()
 }
 
 /// 递归复制目录
@@ -314,7 +316,7 @@ impl FileLockManager {
         if let Ok(entries) = fs::read_dir(&self.lock_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |ext| ext == "lock") {
+                if path.extension().is_some_and(|ext| ext == "lock") {
                     if let Some(lock_info) = self.read_lock_info(&path) {
                         if !self.is_lock_expired(&lock_info) {
                             locks.push(lock_info);
@@ -338,12 +340,10 @@ impl FileLockManager {
         if let Ok(entries) = fs::read_dir(&self.lock_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |ext| ext == "lock") {
+                if path.extension().is_some_and(|ext| ext == "lock") {
                     if let Some(lock_info) = self.read_lock_info(&path) {
-                        if self.is_lock_expired(&lock_info) {
-                            if fs::remove_file(&path).is_ok() {
-                                cleaned += 1;
-                            }
+                        if self.is_lock_expired(&lock_info) && fs::remove_file(&path).is_ok() {
+                            cleaned += 1;
                         }
                     }
                 }
@@ -364,12 +364,10 @@ impl FileLockManager {
         if let Ok(entries) = fs::read_dir(&self.lock_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |ext| ext == "lock") {
+                if path.extension().is_some_and(|ext| ext == "lock") {
                     if let Some(lock_info) = self.read_lock_info(&path) {
-                        if lock_info.worker_id == worker_id {
-                            if fs::remove_file(&path).is_ok() {
-                                released += 1;
-                            }
+                        if lock_info.worker_id == worker_id && fs::remove_file(&path).is_ok() {
+                            released += 1;
                         }
                     }
                 }
@@ -627,7 +625,7 @@ impl WorkerSandbox {
                 // 跳过元数据文件
                 if path
                     .file_name()
-                    .map_or(false, |n| n == ".sandbox-metadata.json")
+                    .is_some_and(|n| n == ".sandbox-metadata.json")
                 {
                     continue;
                 }

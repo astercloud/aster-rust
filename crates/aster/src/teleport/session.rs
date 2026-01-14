@@ -65,7 +65,7 @@ impl RemoteSession {
         }
 
         // 检查 ingress URL
-        let Some(ingress_url) = &self.config.ingress_url else {
+        let Some(_ingress_url) = &self.config.ingress_url else {
             let error = "未提供远程服务器 URL";
             self.set_error(error);
             anyhow::bail!(error);

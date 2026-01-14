@@ -3,7 +3,6 @@
 //! 提供 CPU、内存、磁盘等系统资源检查
 
 use super::checker::DiagnosticCheck;
-use std::path::Path;
 
 /// 系统检查器
 pub struct SystemChecker;
@@ -134,7 +133,7 @@ impl SystemChecker {
     }
 
     /// 计算目录大小
-    fn calculate_dir_size(path: &Path) -> u64 {
+    fn calculate_dir_size(path: &std::path::Path) -> u64 {
         let mut size = 0u64;
 
         if let Ok(entries) = std::fs::read_dir(path) {

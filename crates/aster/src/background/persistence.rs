@@ -177,7 +177,7 @@ impl PersistenceManager {
 
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            if !path.extension().map_or(false, |e| e == "json") {
+            if path.extension().is_none_or(|e| e != "json") {
                 continue;
             }
 
@@ -227,7 +227,7 @@ impl PersistenceManager {
 
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "json") {
+            if path.extension().is_some_and(|e| e == "json") {
                 if let Ok(data) = fs::read_to_string(&path).await {
                     if let Ok(agent) = serde_json::from_str::<PersistedAgentState>(&data) {
                         agents.push(agent);
@@ -245,10 +245,8 @@ impl PersistenceManager {
         let mut cleaned = 0;
 
         for task in tasks {
-            if self.is_expired(&task) {
-                if self.delete_task(&task.id, task.task_type).await.is_ok() {
-                    cleaned += 1;
-                }
+            if self.is_expired(&task) && self.delete_task(&task.id, task.task_type).await.is_ok() {
+                cleaned += 1;
             }
         }
 
@@ -261,10 +259,10 @@ impl PersistenceManager {
         let mut cleaned = 0;
 
         for task in tasks {
-            if task.status == "completed" || task.status == "failed" {
-                if self.delete_task(&task.id, task.task_type).await.is_ok() {
-                    cleaned += 1;
-                }
+            if (task.status == "completed" || task.status == "failed")
+                && self.delete_task(&task.id, task.task_type).await.is_ok()
+            {
+                cleaned += 1;
             }
         }
 
@@ -282,10 +280,10 @@ impl PersistenceManager {
 
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "json") {
-                if fs::remove_file(&path).await.is_ok() {
-                    cleared += 1;
-                }
+            if path.extension().is_some_and(|e| e == "json")
+                && fs::remove_file(&path).await.is_ok()
+            {
+                cleared += 1;
             }
         }
 

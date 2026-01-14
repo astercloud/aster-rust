@@ -134,8 +134,8 @@ pub fn get_git_status(cwd: &Path) -> Result<GitStatus, String> {
             continue;
         }
 
-        let status = &line[..2];
-        let file = line[3..].trim().to_string();
+        let status = line.get(..2).unwrap_or("");
+        let file = line.get(3..).unwrap_or("").trim().to_string();
 
         if status == "??" {
             untracked.push(file);

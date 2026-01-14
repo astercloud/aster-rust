@@ -36,17 +36,12 @@ pub struct ActiveTaskContext {
 }
 
 /// 文件操作类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FileOperation {
     Read,
+    #[default]
     Write,
     Delete,
-}
-
-impl Default for FileOperation {
-    fn default() -> Self {
-        Self::Write
-    }
 }
 
 // ============================================================================
@@ -171,7 +166,7 @@ impl BlueprintContextManager {
     pub async fn check_file_operation(
         &self,
         file_path: &str,
-        operation: FileOperation,
+        _operation: FileOperation,
         worker_id: Option<&str>,
     ) -> BoundaryCheckResult {
         let inner = self.inner.read().await;

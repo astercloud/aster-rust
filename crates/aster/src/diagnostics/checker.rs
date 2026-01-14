@@ -3,7 +3,6 @@
 //! 提供各种系统检查功能
 
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::process::Command;
 
 /// 检查状态
@@ -114,11 +113,10 @@ impl DiagnosticChecker {
     }
 
     /// 检查磁盘空间
-    pub fn check_disk_space(path: &Path) -> DiagnosticCheck {
+    pub fn check_disk_space(path: &std::path::Path) -> DiagnosticCheck {
         #[cfg(unix)]
         {
-            use std::os::unix::fs::MetadataExt;
-            if let Ok(metadata) = std::fs::metadata(path) {
+            if std::fs::metadata(path).is_ok() {
                 // 简化检查，实际应使用 statvfs
                 DiagnosticCheck::pass("磁盘空间", "磁盘空间检查通过")
             } else {
@@ -127,12 +125,13 @@ impl DiagnosticChecker {
         }
         #[cfg(not(unix))]
         {
+            let _ = path;
             DiagnosticCheck::pass("磁盘空间", "磁盘空间检查跳过")
         }
     }
 
     /// 检查文件权限
-    pub fn check_file_permissions(path: &Path) -> DiagnosticCheck {
+    pub fn check_file_permissions(path: &std::path::Path) -> DiagnosticCheck {
         if !path.exists() {
             // 尝试创建目录
             if std::fs::create_dir_all(path).is_ok() {

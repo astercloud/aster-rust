@@ -266,9 +266,10 @@ impl TransportConfig {
 }
 
 /// Transport state
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TransportState {
     /// Transport is disconnected
+    #[default]
     Disconnected,
     /// Transport is connecting
     Connecting,
@@ -278,12 +279,6 @@ pub enum TransportState {
     Closing,
     /// Transport encountered an error
     Error,
-}
-
-impl Default for TransportState {
-    fn default() -> Self {
-        Self::Disconnected
-    }
 }
 
 /// Transport event for monitoring transport state changes

@@ -337,7 +337,7 @@ impl Summarizer {
                             .collect::<Vec<_>>()
                             .join("");
                         if text.len() > 100 {
-                            format!("[Tool result: {}...]", &text[..100])
+                            format!("[Tool result: {}...]", text.get(..100).unwrap_or(&text))
                         } else if !text.is_empty() {
                             format!("[Tool result: {}]", text)
                         } else {
@@ -370,9 +370,9 @@ impl Summarizer {
             trimmed.to_string()
         } else {
             // Find a good break point (word boundary)
-            let truncated = &trimmed[..max_len];
+            let truncated = trimmed.get(..max_len).unwrap_or(trimmed);
             if let Some(last_space) = truncated.rfind(' ') {
-                format!("{}...", &truncated[..last_space])
+                format!("{}...", truncated.get(..last_space).unwrap_or(truncated))
             } else {
                 format!("{}...", truncated)
             }

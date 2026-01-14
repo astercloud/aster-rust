@@ -35,18 +35,12 @@ const ASTER_RECIPE_RETRY_TIMEOUT_SECONDS: &str = "ASTER_RECIPE_RETRY_TIMEOUT_SEC
 const ASTER_RECIPE_ON_FAILURE_TIMEOUT_SECONDS: &str = "ASTER_RECIPE_ON_FAILURE_TIMEOUT_SECONDS";
 
 /// Manages retry state and operations for agent execution
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RetryManager {
     /// Current number of retry attempts
     attempts: Arc<Mutex<u32>>,
     /// Optional repetition inspector for reset operations
     repetition_inspector: Option<Arc<Mutex<Option<RepetitionInspector>>>>,
-}
-
-impl Default for RetryManager {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl RetryManager {

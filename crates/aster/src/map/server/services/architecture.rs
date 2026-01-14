@@ -77,7 +77,7 @@ pub fn build_architecture_map(blueprint: &EnhancedCodeBlueprint) -> Architecture
 
     for (dir, mods) in &dir_groups {
         let mut block_type = LogicBlockType::Util;
-        let mut default_name = dir.split('/').last().unwrap_or(dir).to_string();
+        let mut default_name = dir.rsplit('/').next().unwrap_or(dir).to_string();
 
         for pattern in &type_patterns {
             if pattern.pattern.is_match(dir) {

@@ -367,7 +367,11 @@ impl McpConfigManager {
         if value.len() <= 8 {
             "***".to_string()
         } else {
-            format!("{}***{}", &value[..4], &value[value.len() - 4..])
+            format!(
+                "{}***{}",
+                value.get(..4).unwrap_or(""),
+                value.get(value.len().saturating_sub(4)..).unwrap_or("")
+            )
         }
     }
 }

@@ -12,6 +12,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+/// 配置重载回调函数类型
+pub(crate) type ConfigReloadCallback = Box<dyn Fn(&HashMap<String, Value>) + Send + Sync>;
+
+/// 配置重载回调列表类型
+pub(crate) type ConfigReloadCallbackList = Arc<RwLock<Vec<ConfigReloadCallback>>>;
+
 /// 配置来源
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -152,7 +158,7 @@ pub struct ConfigManager {
     /// 文件监听器
     watcher: RwLock<Option<RecommendedWatcher>>,
     /// 重载回调
-    reload_callbacks: Arc<RwLock<Vec<Box<dyn Fn(&HashMap<String, Value>) + Send + Sync>>>>,
+    reload_callbacks: ConfigReloadCallbackList,
     /// CLI 标志
     cli_flags: HashMap<String, Value>,
     /// 调试模式
@@ -480,17 +486,13 @@ impl ConfigManager {
             Ok(content) => {
                 // 尝试 YAML 解析
                 if let Ok(yaml_value) = serde_yaml::from_str::<serde_yaml::Value>(&content) {
-                    if let Ok(json_value) = serde_json::to_value(yaml_value) {
-                        if let Value::Object(map) = json_value {
-                            return Some(map.into_iter().collect());
-                        }
+                    if let Ok(Value::Object(map)) = serde_json::to_value(yaml_value) {
+                        return Some(map.into_iter().collect());
                     }
                 }
                 // 尝试 JSON 解析
-                if let Ok(json_value) = serde_json::from_str::<Value>(&content) {
-                    if let Value::Object(map) = json_value {
-                        return Some(map.into_iter().collect());
-                    }
+                if let Ok(Value::Object(map)) = serde_json::from_str::<Value>(&content) {
+                    return Some(map.into_iter().collect());
                 }
                 tracing::warn!("无法解析配置文件: {:?}", path);
                 None
@@ -1031,7 +1033,11 @@ impl ConfigManager {
             if sensitive_keys.iter().any(|s| key_lower.contains(s)) {
                 if let Value::String(s) = value {
                     if s.len() > 8 {
-                        *value = Value::String(format!("{}...{}", &s[..4], &s[s.len() - 4..]));
+                        *value = Value::String(format!(
+                            "{}...{}",
+                            s.get(..4).unwrap_or(""),
+                            s.get(s.len().saturating_sub(4)..).unwrap_or("")
+                        ));
                     } else {
                         *value = Value::String("****".to_string());
                     }

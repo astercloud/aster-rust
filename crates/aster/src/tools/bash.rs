@@ -682,10 +682,14 @@ impl BashTool {
         }
 
         // Try to truncate at a line boundary
-        let truncated = &output[..safe_length];
-        let last_newline = truncated.rfind('\n').unwrap_or(safe_length);
+        let truncated = output.get(..safe_length).unwrap_or(output);
+        let last_newline = truncated.rfind('\n').unwrap_or(truncated.len());
 
-        format!("{}{}", &output[..last_newline], truncation_message)
+        format!(
+            "{}{}",
+            output.get(..last_newline).unwrap_or(output),
+            truncation_message
+        )
     }
 
     /// Check if output would be truncated

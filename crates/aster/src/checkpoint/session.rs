@@ -29,7 +29,7 @@ impl CheckpointSession {
         working_directory: String,
         auto_checkpoint_interval: u32,
     ) -> Self {
-        let session_id = id.unwrap_or_else(|| generate_session_id());
+        let session_id = id.unwrap_or_else(generate_session_id);
 
         Self {
             id: session_id,
@@ -145,7 +145,7 @@ impl CheckpointManager {
 
         // 决定使用完整内容还是 diff
         let use_full_content =
-            existing.map_or(true, |c| c.is_empty()) || opts.force_full_content.unwrap_or(false);
+            existing.is_none_or(|c| c.is_empty()) || opts.force_full_content.unwrap_or(false);
 
         let (checkpoint_content, checkpoint_diff, compressed) = if use_full_content {
             let (content_str, is_compressed) = if content.len() > COMPRESSION_THRESHOLD_BYTES {
@@ -371,11 +371,11 @@ impl CheckpointManager {
         }
 
         // 应用 diff
-        for i in (base_index + 1)..=target_index {
-            if let Some(ref diff) = checkpoints[i].diff {
+        for checkpoint in checkpoints.iter().take(target_index + 1).skip(base_index + 1) {
+            if let Some(ref diff) = checkpoint.diff {
                 content = self.diff_engine.apply_diff(&content, diff);
-            } else if let Some(ref c) = checkpoints[i].content {
-                content = if checkpoints[i].compressed.unwrap_or(false) {
+            } else if let Some(ref c) = checkpoint.content {
+                content = if checkpoint.compressed.unwrap_or(false) {
                     self.storage.decompress_content(c)
                 } else {
                     c.clone()
@@ -554,10 +554,11 @@ pub struct CreateCheckpointOptions {
 
 /// 生成会话 ID
 fn generate_session_id() -> String {
+    let uuid_str = uuid::Uuid::new_v4().to_string();
     format!(
         "{}-{}",
         chrono::Utc::now().timestamp_millis(),
-        uuid::Uuid::new_v4().to_string()[..8].to_string()
+        uuid_str.get(..8).unwrap_or(&uuid_str)
     )
 }
 

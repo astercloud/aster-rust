@@ -64,14 +64,11 @@ impl IncrementalCache {
             let _ = std::fs::create_dir_all(parent);
         }
 
-        match serde_json::to_string_pretty(&self.cache) {
-            Ok(content) => {
-                if std::fs::write(&self.cache_file, content).is_ok() {
-                    self.dirty = false;
-                    return true;
-                }
+        if let Ok(content) = serde_json::to_string_pretty(&self.cache) {
+            if std::fs::write(&self.cache_file, content).is_ok() {
+                self.dirty = false;
+                return true;
             }
-            Err(_) => {}
         }
         false
     }

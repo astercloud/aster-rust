@@ -234,10 +234,7 @@ impl StreamJsonReader {
             return None;
         }
 
-        match serde_json::from_str::<AnyStreamMessage>(trimmed) {
-            Ok(msg) => Some(msg),
-            Err(_) => None,
-        }
+        serde_json::from_str::<AnyStreamMessage>(trimmed).ok()
     }
 
     /// Read from a BufRead source

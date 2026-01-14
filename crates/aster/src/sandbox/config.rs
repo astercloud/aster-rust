@@ -332,7 +332,7 @@ impl SandboxConfigManager {
 
     /// 验证配置
     pub fn validate_config(&self, config: &SandboxConfig) -> ValidationResult {
-        let mut errors = Vec::new();
+        let errors = Vec::new();
         let mut warnings = Vec::new();
 
         // 检查平台兼容性

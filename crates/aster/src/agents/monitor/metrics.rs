@@ -556,9 +556,10 @@ impl AgentMonitor {
 
     /// Get aggregated statistics
     pub fn get_aggregated_stats(&self) -> AggregatedStats {
-        let mut stats = AggregatedStats::default();
-
-        stats.total_agents = self.metrics.len();
+        let mut stats = AggregatedStats {
+            total_agents: self.metrics.len(),
+            ..Default::default()
+        };
 
         let mut total_duration = Duration::ZERO;
         let mut completed_count = 0usize;
@@ -648,7 +649,7 @@ impl AgentMonitor {
         for entry in std::fs::read_dir(&self.metrics_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "json") {
+            if path.extension().is_some_and(|ext| ext == "json") {
                 if let Some(stem) = path.file_stem() {
                     agent_ids.push(stem.to_string_lossy().to_string());
                 }

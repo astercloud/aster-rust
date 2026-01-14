@@ -52,10 +52,11 @@ impl From<serde_json::Error> for StateManagerError {
 }
 
 /// Agent state status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentStateStatus {
     /// Agent is currently running
+    #[default]
     Running,
     /// Agent is paused
     Paused,
@@ -65,12 +66,6 @@ pub enum AgentStateStatus {
     Failed,
     /// Agent was cancelled
     Cancelled,
-}
-
-impl Default for AgentStateStatus {
-    fn default() -> Self {
-        Self::Running
-    }
 }
 
 impl AgentStateStatus {
@@ -586,7 +581,7 @@ impl AgentStateManager {
             let path = entry.path();
 
             // Skip directories and non-JSON files
-            if path.is_dir() || path.extension().map_or(true, |ext| ext != "json") {
+            if path.is_dir() || path.extension().is_none_or(|ext| ext != "json") {
                 continue;
             }
 
@@ -650,7 +645,7 @@ impl AgentStateManager {
             let path = entry.path();
 
             // Skip directories and non-JSON files
-            if path.is_dir() || path.extension().map_or(true, |ext| ext != "json") {
+            if path.is_dir() || path.extension().is_none_or(|ext| ext != "json") {
                 continue;
             }
 
@@ -719,7 +714,7 @@ impl AgentStateManager {
             let path = entry.path();
 
             // Skip non-JSON files
-            if path.extension().map_or(true, |ext| ext != "json") {
+            if path.extension().is_none_or(|ext| ext != "json") {
                 continue;
             }
 
@@ -768,7 +763,7 @@ impl AgentStateManager {
 
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if !path.is_dir() && path.extension().map_or(false, |ext| ext == "json") {
+            if !path.is_dir() && path.extension().is_some_and(|ext| ext == "json") {
                 count += 1;
             }
         }

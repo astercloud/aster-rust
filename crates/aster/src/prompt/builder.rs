@@ -250,7 +250,7 @@ impl SystemPromptBuilder {
         }
         format!(
             "{}\n... [truncated, total {} chars]",
-            &content[..max_length],
+            content.get(..max_length).unwrap_or(content),
             content.len()
         )
     }

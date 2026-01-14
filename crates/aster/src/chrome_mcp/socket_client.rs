@@ -22,8 +22,10 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// 工具调用超时 (60秒)
 const TOOL_CALL_TIMEOUT: Duration = Duration::from_secs(60);
 /// 重连延迟 (1秒)
+#[allow(dead_code)]
 const RECONNECT_DELAY: Duration = Duration::from_secs(1);
 /// 最大重连次数
+#[allow(dead_code)]
 const MAX_RECONNECT_ATTEMPTS: u32 = 10;
 
 /// Socket 连接错误
@@ -151,7 +153,7 @@ impl SocketClient {
                 *self.writer.lock().await = Some(writer);
 
                 let state_clone = Arc::clone(&self.state);
-                let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
+                let (shutdown_tx, shutdown_rx) = mpsc::channel::<()>(1);
                 *self.shutdown_tx.lock().await = Some(shutdown_tx);
 
                 // 启动读取任务
@@ -315,7 +317,10 @@ impl SocketClient {
             }
         };
 
-        tracing::debug!("Received message: {}", &msg_str[..msg_str.len().min(300)]);
+        tracing::debug!(
+            "Received message: {}",
+            msg_str.get(..msg_str.len().min(300)).unwrap_or(msg_str)
+        );
 
         // 检查是否是工具调用响应
         if msg.get("result").is_some() || msg.get("error").is_some() {

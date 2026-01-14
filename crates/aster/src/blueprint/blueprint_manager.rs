@@ -22,6 +22,7 @@ use super::types::*;
 // ============================================================================
 
 /// 蓝图管理器
+#[allow(dead_code)]
 pub struct BlueprintManager {
     /// 蓝图存储
     blueprints: Arc<RwLock<HashMap<String, Blueprint>>>,
@@ -42,7 +43,7 @@ impl BlueprintManager {
     }
 
     /// 从默认目录创建
-    pub fn default() -> Self {
+    pub fn with_default_dir() -> Self {
         let storage_dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join(".aster")

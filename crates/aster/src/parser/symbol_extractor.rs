@@ -169,7 +169,7 @@ impl LspSymbolExtractor {
             .await;
 
         // 获取符号
-        let symbols = client.get_document_symbols(&uri).await?;
+        let _symbols = client.get_document_symbols(&uri).await?;
 
         // 关闭文档
         client.close_document(&uri).await;

@@ -42,21 +42,16 @@ pub enum ResumerError {
 }
 
 /// Resume point specification
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ResumePoint {
     /// Resume from the last saved state
+    #[default]
     Last,
     /// Resume from a specific checkpoint by ID
     Checkpoint(String),
     /// Resume from the beginning (restart)
     Beginning,
-}
-
-impl Default for ResumePoint {
-    fn default() -> Self {
-        Self::Last
-    }
 }
 
 /// Options for resuming an agent
@@ -319,13 +314,13 @@ impl AgentResumer {
         summary.push_str(&format!("# Resume Summary for Agent: {}\n\n", state.id));
 
         // Status
-        summary.push_str(&format!("## Status\n"));
+        summary.push_str("## Status\n");
         summary.push_str(&format!("- Current Status: {:?}\n", state.status));
         summary.push_str(&format!("- Can Resume: {}\n", state.can_resume()));
         summary.push_str(&format!("- Agent Type: {}\n\n", state.agent_type));
 
         // Progress
-        summary.push_str(&format!("## Progress\n"));
+        summary.push_str("## Progress\n");
         summary.push_str(&format!("- Current Step: {}\n", state.current_step));
         if let Some(total) = state.total_steps {
             summary.push_str(&format!("- Total Steps: {}\n", total));
@@ -338,14 +333,14 @@ impl AgentResumer {
 
         // Errors
         if state.error_count > 0 || state.retry_count > 0 {
-            summary.push_str(&format!("## Errors\n"));
+            summary.push_str("## Errors\n");
             summary.push_str(&format!("- Error Count: {}\n", state.error_count));
             summary.push_str(&format!("- Retry Count: {}\n", state.retry_count));
             summary.push_str(&format!("- Max Retries: {}\n\n", state.max_retries));
         }
 
         // Checkpoints
-        summary.push_str(&format!("## Checkpoints\n"));
+        summary.push_str("## Checkpoints\n");
         if state.checkpoints.is_empty() {
             summary.push_str("- No checkpoints available\n\n");
         } else {
@@ -357,11 +352,11 @@ impl AgentResumer {
                 let name = cp.name.as_deref().unwrap_or("unnamed");
                 summary.push_str(&format!("  {}. {} (step {})\n", i + 1, name, cp.step));
             }
-            summary.push_str("\n");
+            summary.push('\n');
         }
 
         // Timestamps
-        summary.push_str(&format!("## Timestamps\n"));
+        summary.push_str("## Timestamps\n");
         summary.push_str(&format!(
             "- Created: {}\n",
             state.created_at.format("%Y-%m-%d %H:%M:%S UTC")
@@ -372,16 +367,27 @@ impl AgentResumer {
         ));
 
         // Original prompt (truncated if too long)
-        summary.push_str(&format!("## Original Prompt\n"));
+        summary.push_str("## Original Prompt\n");
         let prompt_preview = if state.prompt.len() > 200 {
-            format!("{}...", &state.prompt[..200])
+            // Use char_indices to find a safe UTF-8 boundary
+            let truncate_at = state
+                .prompt
+                .char_indices()
+                .take_while(|(i, _)| *i < 200)
+                .last()
+                .map(|(i, c)| i + c.len_utf8())
+                .unwrap_or(0);
+            format!(
+                "{}...",
+                state.prompt.get(..truncate_at).unwrap_or(&state.prompt)
+            )
         } else {
             state.prompt.clone()
         };
         summary.push_str(&format!("{}\n\n", prompt_preview));
 
         // Recommendations
-        summary.push_str(&format!("## Recommendations\n"));
+        summary.push_str("## Recommendations\n");
         if !state.can_resume() {
             match state.status {
                 AgentStateStatus::Completed => {

@@ -32,7 +32,7 @@ pub struct LspLocation {
 }
 
 /// LSP 符号类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum LspSymbolKind {
     File = 1,
@@ -47,6 +47,7 @@ pub enum LspSymbolKind {
     Enum = 10,
     Interface = 11,
     Function = 12,
+    #[default]
     Variable = 13,
     Constant = 14,
     String = 15,
@@ -61,12 +62,6 @@ pub enum LspSymbolKind {
     Event = 24,
     Operator = 25,
     TypeParameter = 26,
-}
-
-impl Default for LspSymbolKind {
-    fn default() -> Self {
-        Self::Variable
-    }
 }
 
 /// LSP 文档符号

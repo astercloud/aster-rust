@@ -792,6 +792,7 @@ fn get_download_url() -> Option<String> {
 }
 
 /// 下载 vendored ripgrep
+#[allow(unexpected_cfgs)]
 pub async fn download_vendored_rg(target_dir: &Path) -> Result<PathBuf, String> {
     let binary_name = get_platform_binary_name().ok_or("不支持的平台")?;
     let download_url = get_download_url().ok_or("无法获取下载 URL")?;
@@ -804,7 +805,7 @@ pub async fn download_vendored_rg(target_dir: &Path) -> Result<PathBuf, String> 
     tracing::info!("下载 ripgrep: {} -> {:?}", download_url, target_path);
 
     // 使用 reqwest 下载（如果可用）或回退到 curl
-    #[cfg(feature = "reqwest")]
+    #[cfg(feature = "http")]
     {
         let response = reqwest::get(&download_url)
             .await
@@ -820,7 +821,7 @@ pub async fn download_vendored_rg(target_dir: &Path) -> Result<PathBuf, String> 
         std::fs::write(&target_path, &bytes).map_err(|e| format!("写入文件失败: {}", e))?;
     }
 
-    #[cfg(not(feature = "reqwest"))]
+    #[cfg(not(feature = "http"))]
     {
         // 使用 curl 下载
         let temp_file = std::env::temp_dir().join("rg_download.tar.gz");

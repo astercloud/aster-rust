@@ -434,7 +434,7 @@ impl LspTool {
 
         callback(operation, path.to_path_buf(), position)
             .await
-            .map_err(|e| ToolError::execution_failed(e))
+            .map_err(ToolError::execution_failed)
     }
 
     /// Go to definition

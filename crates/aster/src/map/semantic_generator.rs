@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 
 use super::types::ModuleNode;
 use super::types_enhanced::{
-    ArchitectureLayer, EnhancedAnalysisPhase, EnhancedAnalysisProgress, KeyConcept,
-    ProjectSemantic, SemanticInfo, SymbolEntry,
+    ArchitectureLayer, EnhancedAnalysisPhase, EnhancedAnalysisProgress, ProjectSemantic,
+    SemanticInfo, SymbolEntry,
 };
 
 /// 默认模型
@@ -103,7 +103,17 @@ impl SemanticGenerator {
 
         // 截断过长的代码
         let content = if content.len() > MAX_CODE_LENGTH {
-            format!("{}\n// ... (code truncated)", &content[..MAX_CODE_LENGTH])
+            // Find safe UTF-8 boundary for truncation
+            let truncate_at = content
+                .char_indices()
+                .take_while(|(i, _)| *i < MAX_CODE_LENGTH)
+                .last()
+                .map(|(i, c)| i + c.len_utf8())
+                .unwrap_or(0);
+            format!(
+                "{}\n// ... (code truncated)",
+                content.get(..truncate_at).unwrap_or(&content)
+            )
         } else {
             content
         };

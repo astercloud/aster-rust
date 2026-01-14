@@ -454,6 +454,7 @@ impl Agent {
     /// * `Err(String)` - Error message if permission denied or execution fails
     ///
     /// Requirements: 8.1, 8.2, 8.3, 8.4
+    #[allow(clippy::too_many_arguments)]
     pub async fn execute_tool_with_user_confirmation(
         registry: &ToolRegistry,
         permission_manager: Option<&ToolPermissionManager>,

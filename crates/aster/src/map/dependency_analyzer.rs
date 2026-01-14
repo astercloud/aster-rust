@@ -71,7 +71,7 @@ impl DependencyAnalyzer {
 
             // 也索引不带扩展名的路径
             if let Some(pos) = module.id.rfind('.') {
-                let without_ext = &module.id[..pos];
+                let without_ext = module.id.get(..pos).unwrap_or(&module.id);
                 self.module_index
                     .insert(without_ext.to_string(), module.clone());
             }

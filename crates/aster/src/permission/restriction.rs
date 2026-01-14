@@ -254,11 +254,7 @@ fn format_violation(restriction: &ParameterRestriction, value: &Value) -> String
             )
         }
         RestrictionType::Pattern => {
-            let pattern = restriction
-                .pattern
-                .as_ref()
-                .map(|p| p.as_str())
-                .unwrap_or("<none>");
+            let pattern = restriction.pattern.as_deref().unwrap_or("<none>");
             format!(
                 "Parameter '{}' value {} does not match pattern: {}",
                 param_name, value_str, pattern
@@ -279,11 +275,7 @@ fn format_violation(restriction: &ParameterRestriction, value: &Value) -> String
             )
         }
         RestrictionType::Validator => {
-            let desc = restriction
-                .description
-                .as_ref()
-                .map(|d| d.as_str())
-                .unwrap_or("custom validation");
+            let desc = restriction.description.as_deref().unwrap_or("custom validation");
             format!(
                 "Parameter '{}' value {} failed {}",
                 param_name, value_str, desc

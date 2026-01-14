@@ -103,10 +103,11 @@ pub enum RiskSeverity {
 }
 
 /// Risk category
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum RiskCategory {
     /// Technical risk - implementation challenges
+    #[default]
     Technical,
 
     /// Security risk - potential vulnerabilities
@@ -126,12 +127,6 @@ pub enum RiskCategory {
 
     /// Other risk
     Other(String),
-}
-
-impl Default for RiskCategory {
-    fn default() -> Self {
-        RiskCategory::Technical
-    }
 }
 
 /// A risk identified during planning
@@ -1723,10 +1718,10 @@ impl PlanAgent {
         ));
 
         summary.push_str(&format!(
-            "## Scope\n\n- {} critical files identified\n- {} risks assessed\n- Complexity: {} ({})\n\n",
+            "## Scope\n\n- {} critical files identified\n- {} risks assessed\n- Complexity: {:?} ({})\n\n",
             critical_files.len(),
             risks.len(),
-            format!("{:?}", complexity),
+            complexity,
             complexity.description()
         ));
 

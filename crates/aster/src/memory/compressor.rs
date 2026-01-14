@@ -246,8 +246,8 @@ impl MemoryCompressor {
         let mut parts = Vec::new();
 
         // 时间范围
-        let start_date = &start[..10];
-        let end_date = &end[..10];
+        let start_date = start.get(..10).unwrap_or(&start);
+        let end_date = end.get(..10).unwrap_or(&end);
         if start_date == end_date {
             parts.push(format!("{}：", start_date));
         } else {

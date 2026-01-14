@@ -2,7 +2,6 @@
 //!
 //! 负责插件的发现、加载、卸载、依赖管理等
 
-use super::context::PluginContext;
 use super::registry::PluginRegistry;
 use super::types::*;
 use super::version::VersionChecker;

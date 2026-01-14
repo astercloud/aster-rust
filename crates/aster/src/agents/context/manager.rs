@@ -362,7 +362,7 @@ impl AgentContextManager {
             }
 
             // Use the last working directory
-            if ctx.working_directory != PathBuf::from(".") {
+            if ctx.working_directory.as_os_str() != "." {
                 merged.working_directory = ctx.working_directory.clone();
             }
         }
@@ -555,8 +555,8 @@ impl AgentContextManager {
                 .collect::<Vec<_>>()
                 .join(" ");
 
-            let preview = if content_preview.len() > 100 {
-                format!("{}...", &content_preview[..100])
+            let preview = if content_preview.chars().count() > 100 {
+                format!("{}...", content_preview.chars().take(100).collect::<String>())
             } else {
                 content_preview
             };

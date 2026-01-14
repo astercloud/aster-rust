@@ -334,20 +334,18 @@ fn parse_json_output(output: &str) -> RipgrepResult {
             continue;
         }
 
-        if let Ok(msg) = serde_json::from_str::<RgJsonMessage>(line) {
-            if let RgJsonMessage::Match { data } = msg {
-                files.insert(data.path.text.clone());
+        if let Ok(RgJsonMessage::Match { data }) = serde_json::from_str::<RgJsonMessage>(line) {
+            files.insert(data.path.text.clone());
 
-                for submatch in &data.submatches {
-                    matches.push(RipgrepMatch {
-                        path: data.path.text.clone(),
-                        line_number: data.line_number,
-                        line_content: data.lines.text.trim_end_matches('\n').to_string(),
-                        match_start: submatch.start,
-                        match_end: submatch.end,
-                    });
-                    match_count += 1;
-                }
+            for submatch in &data.submatches {
+                matches.push(RipgrepMatch {
+                    path: data.path.text.clone(),
+                    line_number: data.line_number,
+                    line_content: data.lines.text.trim_end_matches('\n').to_string(),
+                    match_start: submatch.start,
+                    match_end: submatch.end,
+                });
+                match_count += 1;
             }
         }
     }

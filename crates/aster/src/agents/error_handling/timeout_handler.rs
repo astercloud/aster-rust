@@ -13,10 +13,11 @@ use std::time::Duration;
 use tokio::sync::{broadcast, RwLock};
 
 /// Timeout status for an agent
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TimeoutStatus {
     /// Agent is running normally
+    #[default]
     Running,
     /// Agent is approaching timeout (warning)
     Warning,
@@ -26,12 +27,6 @@ pub enum TimeoutStatus {
     Completed,
     /// Agent was cancelled
     Cancelled,
-}
-
-impl Default for TimeoutStatus {
-    fn default() -> Self {
-        Self::Running
-    }
 }
 
 impl std::fmt::Display for TimeoutStatus {
@@ -163,6 +158,7 @@ impl TimeoutEvent {
 
 /// Tracked agent information
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct TrackedAgent {
     agent_id: String,
     config: TimeoutConfig,
@@ -446,9 +442,11 @@ impl TimeoutHandler {
 }
 
 /// Thread-safe timeout handler wrapper
+#[allow(dead_code)]
 pub type SharedTimeoutHandler = Arc<RwLock<TimeoutHandler>>;
 
 /// Create a new shared timeout handler
+#[allow(dead_code)]
 pub fn new_shared_timeout_handler() -> SharedTimeoutHandler {
     Arc::new(RwLock::new(TimeoutHandler::new()))
 }

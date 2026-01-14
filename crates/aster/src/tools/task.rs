@@ -760,7 +760,7 @@ impl TaskManager {
             let completed = self.completed_tasks.read().await;
             completed
                 .iter()
-                .filter(|(_, state)| state.end_time.map_or(false, |end| end.elapsed() > max_age))
+                .filter(|(_, state)| state.end_time.is_some_and(|end| end.elapsed() > max_age))
                 .map(|(id, _)| id.clone())
                 .collect()
         };

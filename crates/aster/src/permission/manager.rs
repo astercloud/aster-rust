@@ -1026,13 +1026,14 @@ impl ToolPermissionManager {
             }
 
             // Range restrictions must have at least min or max
-            if restriction.restriction_type == RestrictionType::Range {
-                if restriction.min.is_none() && restriction.max.is_none() {
-                    anyhow::bail!(
-                        "Range restriction for parameter '{}' must have at least min or max",
-                        restriction.parameter
-                    );
-                }
+            if restriction.restriction_type == RestrictionType::Range
+                && restriction.min.is_none()
+                && restriction.max.is_none()
+            {
+                anyhow::bail!(
+                    "Range restriction for parameter '{}' must have at least min or max",
+                    restriction.parameter
+                );
             }
 
             // Pattern restrictions must have a pattern

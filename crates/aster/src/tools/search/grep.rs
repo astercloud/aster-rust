@@ -38,7 +38,7 @@ pub enum GrepOutputMode {
 
 impl GrepOutputMode {
     /// Parse from string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "content" => Some(Self::Content),
             "files_with_matches" | "files" | "l" => Some(Self::FilesWithMatches),
@@ -114,6 +114,7 @@ impl GrepTool {
     /// Search using ripgrep
     ///
     /// Requirements: 5.3
+    #[allow(clippy::too_many_arguments)]
     fn search_with_ripgrep(
         &self,
         pattern: &str,
@@ -385,7 +386,7 @@ impl GrepTool {
 
         let file = fs::File::open(path)?;
         let reader = BufReader::new(file);
-        let lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
+        let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
         let mut match_count = 0;
         let mut file_has_match = false;
@@ -458,6 +459,7 @@ impl GrepTool {
     }
 
     /// Main search method - chooses best available implementation
+    #[allow(clippy::too_many_arguments)]
     pub fn search(
         &self,
         pattern: &str,
@@ -511,10 +513,10 @@ impl GrepTool {
         if output.len() <= MAX_OUTPUT_SIZE {
             (output.to_string(), false)
         } else {
-            let truncated = &output[..MAX_OUTPUT_SIZE];
+            let truncated = output.get(..MAX_OUTPUT_SIZE).unwrap_or(output);
             // Find last newline to avoid cutting mid-line
-            let last_newline = truncated.rfind('\n').unwrap_or(MAX_OUTPUT_SIZE);
-            let clean_truncated = &truncated[..last_newline];
+            let last_newline = truncated.rfind('\n').unwrap_or(truncated.len());
+            let clean_truncated = truncated.get(..last_newline).unwrap_or(truncated);
             (
                 format!(
                     "{}\n\n[Output truncated. Showing first {} bytes of {} bytes total.]",
@@ -607,7 +609,7 @@ impl Tool for GrepTool {
         let mode = params
             .get("mode")
             .and_then(|v| v.as_str())
-            .and_then(GrepOutputMode::from_str)
+            .and_then(GrepOutputMode::parse)
             .unwrap_or_default();
 
         let context_before = params

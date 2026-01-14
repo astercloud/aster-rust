@@ -9,6 +9,30 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
+/// 文本回调类型
+pub(crate) type TextCallback = Box<dyn Fn(&str, &str) + Send + Sync>;
+
+/// 思考回调类型
+pub(crate) type ThinkingCallback = Box<dyn Fn(&str, &str) + Send + Sync>;
+
+/// JSON 输入回调类型
+pub(crate) type InputJsonCallback = Box<dyn Fn(&str, &serde_json::Value) + Send + Sync>;
+
+/// 引用回调类型
+pub(crate) type CitationCallback = Box<dyn Fn(&Citation, &[Citation]) + Send + Sync>;
+
+/// 签名回调类型
+pub(crate) type SignatureCallback = Box<dyn Fn(&str) + Send + Sync>;
+
+/// 内容块回调类型
+pub(crate) type ContentBlockCallback = Box<dyn Fn(&ContentBlock) + Send + Sync>;
+
+/// 消息回调类型
+pub(crate) type MessageCallback = Box<dyn Fn(&MessageState) + Send + Sync>;
+
+/// 错误回调类型
+pub(crate) type ErrorCallback = Box<dyn Fn(&StreamError) + Send + Sync>;
+
 /// Anthropic API standard stream event types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -180,14 +204,14 @@ impl Default for StreamOptions {
 /// Stream callbacks for event handling
 #[derive(Default)]
 pub struct StreamCallbacks {
-    pub on_text: Option<Box<dyn Fn(&str, &str) + Send + Sync>>,
-    pub on_thinking: Option<Box<dyn Fn(&str, &str) + Send + Sync>>,
-    pub on_input_json: Option<Box<dyn Fn(&str, &serde_json::Value) + Send + Sync>>,
-    pub on_citation: Option<Box<dyn Fn(&Citation, &[Citation]) + Send + Sync>>,
-    pub on_signature: Option<Box<dyn Fn(&str) + Send + Sync>>,
-    pub on_content_block: Option<Box<dyn Fn(&ContentBlock) + Send + Sync>>,
-    pub on_message: Option<Box<dyn Fn(&MessageState) + Send + Sync>>,
-    pub on_error: Option<Box<dyn Fn(&StreamError) + Send + Sync>>,
+    pub on_text: Option<TextCallback>,
+    pub on_thinking: Option<ThinkingCallback>,
+    pub on_input_json: Option<InputJsonCallback>,
+    pub on_citation: Option<CitationCallback>,
+    pub on_signature: Option<SignatureCallback>,
+    pub on_content_block: Option<ContentBlockCallback>,
+    pub on_message: Option<MessageCallback>,
+    pub on_error: Option<ErrorCallback>,
     pub on_abort: Option<Box<dyn Fn() + Send + Sync>>,
     pub on_complete: Option<Box<dyn Fn() + Send + Sync>>,
 }
@@ -242,7 +266,7 @@ pub fn parse_tolerant_json(json_str: &str) -> serde_json::Value {
     let quotes = fixed.matches('"').count();
 
     // Fix unclosed quotes
-    if quotes % 2 != 0 {
+    if !quotes.is_multiple_of(2) {
         fixed.push('"');
     }
 

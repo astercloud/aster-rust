@@ -55,7 +55,8 @@ impl PlanPersistenceManager {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
-        let random = Uuid::new_v4().to_string()[..8].to_string();
+        let uuid_str = Uuid::new_v4().to_string();
+        let random = uuid_str.get(..8).unwrap_or(&uuid_str);
         format!("plan-{:x}-{}", timestamp, random)
     }
 
@@ -188,7 +189,7 @@ impl PlanPersistenceManager {
         // 标签过滤
         if let Some(ref tags) = options.tags {
             plans.retain(|p| {
-                p.metadata.tags.as_ref().map_or(false, |plan_tags| {
+                p.metadata.tags.as_ref().is_some_and(|plan_tags| {
                     tags.iter().any(|t| plan_tags.contains(t))
                 })
             });
@@ -205,7 +206,7 @@ impl PlanPersistenceManager {
                 p.metadata
                     .priority
                     .as_ref()
-                    .map_or(false, |pr| priorities.contains(pr))
+                    .is_some_and(|pr| priorities.contains(pr))
             });
         }
 

@@ -161,7 +161,7 @@ impl SSEDecoder {
 /// Split string at first occurrence of separator
 fn split_first(s: &str, sep: char) -> Option<(&str, &str)> {
     let idx = s.find(sep)?;
-    Some((&s[..idx], &s[idx + 1..]))
+    Some((s.get(..idx)?, s.get(idx + 1..)?))
 }
 
 /// Newline Decoder for byte-level buffering

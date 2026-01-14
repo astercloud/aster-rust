@@ -239,6 +239,7 @@ impl McpServer {
     }
 
     /// 标准化内容格式
+    #[allow(dead_code)]
     fn normalize_content(&self, content: &serde_json::Value) -> Vec<McpContent> {
         // 处理字符串类型
         if let Some(s) = content.as_str() {

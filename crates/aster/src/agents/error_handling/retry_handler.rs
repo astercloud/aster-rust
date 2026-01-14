@@ -13,7 +13,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 
 /// Retry strategy types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum RetryStrategy {
     /// Fixed delay between retries
@@ -21,15 +21,10 @@ pub enum RetryStrategy {
     /// Linear backoff (delay * attempt)
     Linear,
     /// Exponential backoff (delay * 2^attempt)
+    #[default]
     Exponential,
     /// Exponential backoff with jitter
     ExponentialWithJitter,
-}
-
-impl Default for RetryStrategy {
-    fn default() -> Self {
-        Self::Exponential
-    }
 }
 
 impl std::fmt::Display for RetryStrategy {
@@ -447,9 +442,11 @@ impl RetryHandler {
 }
 
 /// Thread-safe retry handler wrapper
+#[allow(dead_code)]
 pub type SharedRetryHandler = Arc<RwLock<RetryHandler>>;
 
 /// Create a new shared retry handler
+#[allow(dead_code)]
 pub fn new_shared_retry_handler() -> SharedRetryHandler {
     Arc::new(RwLock::new(RetryHandler::new()))
 }
