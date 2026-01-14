@@ -870,6 +870,12 @@ impl TaskTreeManager {
     }
 }
 
+impl Default for TaskTreeManager {
+    fn default() -> Self {
+        Self::with_default_dir()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -286,6 +286,7 @@ pub fn run_diagnostics() -> Vec<DiagnosticCheck> {
 }
 
 /// 运行所有诊断检查（包括异步检查）
+#[allow(dead_code)]
 pub async fn run_diagnostics_async() -> Vec<DiagnosticCheck> {
     use super::network::NetworkChecker;
     use super::system::SystemChecker;

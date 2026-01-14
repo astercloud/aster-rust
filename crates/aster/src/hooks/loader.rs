@@ -10,12 +10,14 @@ use std::path::Path;
 use tracing::{error, warn};
 
 /// Hooks 配置文件结构（新格式）
+#[allow(dead_code)]
 #[derive(Debug, serde::Deserialize)]
 struct HooksConfigNew {
     hooks: HashMap<String, serde_json::Value>,
 }
 
 /// Hooks 配置文件结构（旧格式）
+#[allow(dead_code)]
 #[derive(Debug, serde::Deserialize)]
 struct HooksConfigLegacy {
     hooks: Vec<LegacyHookConfig>,

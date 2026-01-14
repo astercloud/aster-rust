@@ -40,9 +40,11 @@ pub const DEFAULT_FILE_CONTENT_MAX_CHARS: usize = 1500;
 const HEAD_RATIO: f64 = 0.6;
 
 /// Percentage of lines to keep from the tail (40%)
+#[allow(dead_code)]
 const TAIL_RATIO: f64 = 0.4;
 
 /// Omission marker for compressed content
+#[allow(dead_code)]
 const OMISSION_MARKER: &str = "\n... [content omitted] ...\n";
 
 /// Regex for detecting code blocks in markdown

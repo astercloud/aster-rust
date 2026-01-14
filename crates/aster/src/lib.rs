@@ -1,3 +1,10 @@
+//! Aster - AI Agent Framework
+//!
+//! This crate provides the core functionality for the Aster AI agent.
+
+// Allow dead code for now as some code is reserved for future use
+#![allow(dead_code)]
+
 pub mod action_required_manager;
 pub mod agents;
 pub mod aster_apps;

@@ -735,29 +735,29 @@ mod tests {
     }
 
     #[test]
-    fn test_grep_output_mode_from_str() {
+    fn test_grep_output_mode_parse() {
         assert_eq!(
-            GrepOutputMode::from_str("content"),
+            GrepOutputMode::parse("content"),
             Some(GrepOutputMode::Content)
         );
         assert_eq!(
-            GrepOutputMode::from_str("files_with_matches"),
+            GrepOutputMode::parse("files_with_matches"),
             Some(GrepOutputMode::FilesWithMatches)
         );
         assert_eq!(
-            GrepOutputMode::from_str("files"),
+            GrepOutputMode::parse("files"),
             Some(GrepOutputMode::FilesWithMatches)
         );
         assert_eq!(
-            GrepOutputMode::from_str("l"),
+            GrepOutputMode::parse("l"),
             Some(GrepOutputMode::FilesWithMatches)
         );
         assert_eq!(
-            GrepOutputMode::from_str("count"),
+            GrepOutputMode::parse("count"),
             Some(GrepOutputMode::Count)
         );
-        assert_eq!(GrepOutputMode::from_str("c"), Some(GrepOutputMode::Count));
-        assert_eq!(GrepOutputMode::from_str("invalid"), None);
+        assert_eq!(GrepOutputMode::parse("c"), Some(GrepOutputMode::Count));
+        assert_eq!(GrepOutputMode::parse("invalid"), None);
     }
 
     #[test]

@@ -680,6 +680,12 @@ impl EnhancedContextManager {
     }
 }
 
+impl Default for EnhancedContextManager {
+    fn default() -> Self {
+        Self::with_default_config()
+    }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================

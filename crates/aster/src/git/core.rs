@@ -154,11 +154,13 @@ pub fn get_git_status(cwd: &Path) -> Result<GitStatus, String> {
 }
 
 /// 检查是否有上游分支
+#[allow(dead_code)]
 pub fn has_upstream(cwd: &Path) -> bool {
     GitUtils::exec_git_ok(&["rev-parse", "@{u}"], cwd)
 }
 
 /// 获取领先上游的提交数
+#[allow(dead_code)]
 pub fn get_commits_ahead(cwd: &Path) -> u32 {
     GitUtils::exec_git(&["rev-list", "--count", "@{u}..HEAD"], cwd)
         .ok()
@@ -200,6 +202,7 @@ pub fn get_git_info(cwd: &Path) -> Option<GitInfo> {
 }
 
 /// 获取推送状态
+#[allow(dead_code)]
 pub fn get_push_status(cwd: &Path) -> PushStatus {
     let has_up = has_upstream(cwd);
     let commits_ahead = if has_up { get_commits_ahead(cwd) } else { 0 };
