@@ -1,6 +1,20 @@
-# Only auto-format desktop TS code if relevant files are modified
+#!/bin/sh
+
+# Rust 代码格式化
+if git diff --cached --name-only | grep -qE '\.(rs)$'; then
+  echo "🦀 Running cargo fmt..."
+  cargo fmt --check
+  if [ $? -ne 0 ]; then
+    echo "❌ Rust 代码格式检查失败，请运行 'cargo fmt' 修复"
+    exit 1
+  fi
+  echo "✅ Rust 格式检查通过"
+fi
+
+# TypeScript/Desktop 代码格式化
 if git diff --cached --name-only | grep -q "^ui/desktop/"; then
   if [ -d "ui/desktop" ]; then
+    echo "📦 Running lint-staged for desktop..."
     cd ui/desktop && npx lint-staged
   else
     echo "Warning: ui/desktop directory does not exist, skipping lint-staged"
