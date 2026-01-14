@@ -7,6 +7,7 @@ use proptest::prelude::*;
 use std::time::Duration;
 
 use super::alerts::AgentExecutionStatus;
+#[allow(unused_imports)]
 use super::metrics::{AgentMonitor, FullAgentMetrics, MonitorConfig, ToolCallMetric};
 
 /// Strategy for generating valid agent IDs
@@ -409,6 +410,7 @@ mod additional_tests {
 #[cfg(test)]
 mod persistence_tests {
     use super::*;
+    #[allow(unused_imports)]
     use std::path::PathBuf;
     use tempfile::TempDir;
 

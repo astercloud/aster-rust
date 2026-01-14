@@ -501,7 +501,7 @@ proptest! {
 
         // Conditions should be combined (at least 1, at most 2 if different)
         prop_assert!(
-            result.conditions.len() >= 1,
+            !result.conditions.is_empty(),
             "Merged result should have at least one condition"
         );
         prop_assert!(
@@ -741,7 +741,7 @@ proptest! {
 
         // Conditions should be combined
         prop_assert!(
-            result[0].conditions.len() >= 1,
+            !result[0].conditions.is_empty(),
             "Merged result should have conditions"
         );
     }

@@ -811,6 +811,7 @@ impl PerformanceAnalyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
     use crate::agents::monitor::alerts::AgentExecutionStatus;
 
     fn create_test_metrics(agent_id: &str) -> FullAgentMetrics {

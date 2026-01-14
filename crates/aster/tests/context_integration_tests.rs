@@ -216,10 +216,8 @@ fn test_priority_sorting_with_budget() {
 
     // Verify summary message has critical priority
     let summary_msg = prioritized.iter().find(|p| {
-        if let Some(text) = p.message.content.first() {
-            if let aster::conversation::message::MessageContent::Text(t) = text {
-                return t.text.contains("[Summary]");
-            }
+        if let Some(aster::conversation::message::MessageContent::Text(t)) = p.message.content.first() {
+            return t.text.contains("[Summary]");
         }
         false
     });
@@ -249,7 +247,7 @@ fn test_priority_sorting_with_budget() {
 fn test_cache_control_with_token_estimation() {
     // Create messages of varying sizes
     let short_message = Message::user().with_text("Hello");
-    let long_message = Message::user().with_text(&"x".repeat(5000)); // ~1400 tokens
+    let long_message = Message::user().with_text("x".repeat(5000)); // ~1400 tokens
 
     let messages = vec![short_message.clone(), long_message.clone()];
 

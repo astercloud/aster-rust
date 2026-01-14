@@ -437,8 +437,9 @@ proptest! {
         let mut manager = ToolPermissionManager::new(None);
 
         // High priority rule with failing condition - use wildcard pattern
+        let prefix: String = tool.chars().take(3).collect();
         let high_perm = ToolPermission {
-            tool: format!("{}*", &tool[..tool.len().min(3)]), // Use prefix wildcard
+            tool: format!("{}*", prefix), // Use prefix wildcard
             allowed: false,
             priority: 100,
             scope: PermissionScope::Global, // Same scope to avoid override
@@ -595,8 +596,9 @@ proptest! {
         let mut manager = ToolPermissionManager::new(None);
 
         // Add expired high-priority deny rule - use wildcard pattern
+        let prefix: String = tool.chars().take(3).collect();
         let expired_perm = ToolPermission {
-            tool: format!("{}*", &tool[..tool.len().min(3)]), // Use prefix wildcard
+            tool: format!("{}*", prefix), // Use prefix wildcard
             allowed: false,
             priority: 100,
             scope: PermissionScope::Global, // Same scope to avoid override

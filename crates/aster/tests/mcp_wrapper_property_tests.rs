@@ -189,7 +189,7 @@ proptest! {
         for (i, name) in names.iter().enumerate() {
             let wrapper = McpToolWrapper::new(
                 name,
-                &format!("Tool {}", i),
+                format!("Tool {}", i),
                 serde_json::json!({"type": "object"}),
                 &server_name,
             );
@@ -230,7 +230,7 @@ proptest! {
         for name in &names {
             let wrapper = McpToolWrapper::new(
                 name,
-                &format!("Description for {}", name),
+                format!("Description for {}", name),
                 serde_json::json!({"type": "object"}),
                 &server_name,
             );

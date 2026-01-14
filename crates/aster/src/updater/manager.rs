@@ -460,8 +460,8 @@ mod tests {
     fn test_update_manager_list_available_versions() {
         let manager = UpdateManager::default();
         let versions = manager.list_available_versions();
-        // 可能为空，但不应该 panic
-        assert!(versions.len() >= 0);
+        // 可能为空，但不应该 panic（versions.len() 是 usize，总是 >= 0）
+        let _ = versions;
     }
 
     #[test]
@@ -538,6 +538,7 @@ mod tests {
     #[test]
     fn test_list_versions_function() {
         let versions = list_versions();
-        assert!(versions.len() >= 0);
+        // versions.len() 是 usize，总是 >= 0
+        let _ = versions;
     }
 }

@@ -9,6 +9,7 @@
 //!
 //! **Feature: tool-alignment, Property 4: Safety Check Enforcement**
 
+#[allow(unused_imports)]
 use aster::tools::{BashTool, SafetyCheckResult, Tool, ToolContext, ToolError};
 use proptest::prelude::*;
 use std::path::PathBuf;

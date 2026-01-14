@@ -844,7 +844,7 @@ fn mixed_results_strategy(
     max_size: usize,
 ) -> impl Strategy<Value = Vec<AgentResult>> {
     prop::collection::vec(
-        prop::bool::ANY.prop_flat_map(|success| agent_result_strategy(success)),
+        prop::bool::ANY.prop_flat_map(agent_result_strategy),
         min_size..=max_size,
     )
     .prop_map(|results| {

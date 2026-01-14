@@ -296,7 +296,7 @@ proptest! {
 
         for name in &names_vec {
             prop_assert!(
-                listed.iter().any(|n| *n == name),
+                listed.contains(&name),
                 "list_templates should include '{}'", name
             );
         }

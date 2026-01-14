@@ -236,6 +236,7 @@ pub fn cleanup_old_summaries(max_age_days: u32) -> Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
     use tempfile::TempDir;
 
     #[test]

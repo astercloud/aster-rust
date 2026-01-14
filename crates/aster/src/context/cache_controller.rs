@@ -325,9 +325,11 @@ mod tests {
         // Create 5 long messages
         let messages: Vec<Message> = (0..5).map(|_| create_long_message()).collect();
 
-        let mut config = CacheConfig::default();
-        config.cache_recent_messages = 2;
-        config.min_tokens_for_cache = 100; // Lower threshold for testing
+        let config = CacheConfig {
+            cache_recent_messages: 2,
+            min_tokens_for_cache: 100, // Lower threshold for testing
+            ..Default::default()
+        };
 
         let (result, indices) = CacheController::add_cache_control(&messages, &config);
 
@@ -363,9 +365,11 @@ mod tests {
     fn test_get_cache_eligibility_with_long_messages() {
         let messages: Vec<Message> = (0..3).map(|_| create_long_message()).collect();
 
-        let mut config = CacheConfig::default();
-        config.min_tokens_for_cache = 100;
-        config.cache_recent_messages = 10;
+        let config = CacheConfig {
+            min_tokens_for_cache: 100,
+            cache_recent_messages: 10,
+            ..Default::default()
+        };
 
         let eligibility = CacheController::get_cache_eligibility(&messages, &config);
 
@@ -463,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_accumulate_cache_stats() {
-        let usages = vec![
+        let usages = [
             TokenUsage {
                 input_tokens: 1000,
                 output_tokens: 500,

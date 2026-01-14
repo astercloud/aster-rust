@@ -54,7 +54,7 @@ mod property_tests {
         .prop_map(move |parts| {
             let content = parts.join("");
             if content.len() > max_chars {
-                content[..max_chars].to_string()
+                content.chars().take(max_chars).collect()
             } else if content.len() < min_chars {
                 format!("{}{}", content, "x".repeat(min_chars - content.len()))
             } else {
@@ -67,15 +67,15 @@ mod property_tests {
     // Property 5: Code Block Compression
     // ============================================================================
 
-    /// **Property 5: Code Block Compression**
-    ///
-    /// *For any* code block exceeding max_lines, compression SHALL:
-    /// - Keep approximately 60% of head lines
-    /// - Keep approximately 40% of tail lines
-    /// - Include an omission marker indicating lines removed
-    /// - Result in exactly max_lines total (excluding marker)
-    ///
-    /// **Validates: Requirements 4.1, 4.2**
+    // **Property 5: Code Block Compression**
+    //
+    // *For any* code block exceeding max_lines, compression SHALL:
+    // - Keep approximately 60% of head lines
+    // - Keep approximately 40% of tail lines
+    // - Include an omission marker indicating lines removed
+    // - Result in exactly max_lines total (excluding marker)
+    //
+    // **Validates: Requirements 4.1, 4.2**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -237,15 +237,15 @@ mod property_tests {
     // Property 6: Tool Output Compression
     // ============================================================================
 
-    /// **Property 6: Tool Output Compression**
-    ///
-    /// *For any* tool output exceeding max_chars:
-    /// - Preserve head portion (approximately 70%)
-    /// - Preserve tail portion (approximately 30%)
-    /// - Include omission marker
-    /// - If contains code blocks, code SHALL be preserved with priority
-    ///
-    /// **Validates: Requirements 4.3, 4.4, 4.5**
+    // **Property 6: Tool Output Compression**
+    //
+    // *For any* tool output exceeding max_chars:
+    // - Preserve head portion (approximately 70%)
+    // - Preserve tail portion (approximately 30%)
+    // - Include omission marker
+    // - If contains code blocks, code SHALL be preserved with priority
+    //
+    // **Validates: Requirements 4.3, 4.4, 4.5**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -326,12 +326,12 @@ mod property_tests {
     // Property 7: Incremental Compression
     // ============================================================================
 
-    /// **Property 7: Incremental Compression**
-    ///
-    /// *For any* message added to context manager with incremental compression enabled,
-    /// if the message content exceeds thresholds, it SHALL be compressed before storage.
-    ///
-    /// **Validates: Requirements 4.6**
+    // **Property 7: Incremental Compression**
+    //
+    // *For any* message added to context manager with incremental compression enabled,
+    // if the message content exceeds thresholds, it SHALL be compressed before storage.
+    //
+    // **Validates: Requirements 4.6**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -411,8 +411,8 @@ mod property_tests {
             let result = MessageCompressor::truncate_messages(&messages, 100000, keep_first, keep_last);
 
             // First messages should be preserved
-            for i in 0..keep_first.min(result.len()) {
-                let text = result[i].as_concat_text();
+            for (i, msg) in result.iter().enumerate().take(keep_first.min(result.len())) {
+                let text = msg.as_concat_text();
                 prop_assert!(
                     text.contains(&format!("Message {}", i)),
                     "First message {} should be preserved", i

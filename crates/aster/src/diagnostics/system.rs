@@ -236,8 +236,9 @@ mod tests {
     fn test_calculate_dir_size() {
         let temp_dir = std::env::temp_dir();
         let size = SystemChecker::calculate_dir_size(&temp_dir);
-        // 临时目录应该有一些内容
-        assert!(size >= 0);
+        // 临时目录应该存在且可访问（size 是 u64，总是 >= 0）
+        // 这里只验证函数能正常执行
+        let _ = size;
     }
 
     #[test]

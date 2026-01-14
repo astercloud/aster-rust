@@ -1363,7 +1363,7 @@ mod tests {
         // Manually add to queue (bypassing expiration check in send)
         bus.message_queues
             .entry("agent-1".to_string())
-            .or_insert_with(BinaryHeap::new)
+            .or_default()
             .push(PrioritizedMessage { message: msg });
 
         assert_eq!(bus.queue_size("agent-1"), 1);

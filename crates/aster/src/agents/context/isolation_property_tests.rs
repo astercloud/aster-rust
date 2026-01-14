@@ -117,12 +117,12 @@ mod property_tests {
             )
     }
 
-    /// **Property 8: Sandbox Resource Limit Enforcement**
-    ///
-    /// *For any* sandbox with configured limits, exceeding any limit (tokens, files, tool results)
-    /// SHALL result in sandbox suspension.
-    ///
-    /// **Validates: Requirements 2.1, 2.2, 2.3, 2.5**
+    // **Property 8: Sandbox Resource Limit Enforcement**
+    //
+    // *For any* sandbox with configured limits, exceeding any limit (tokens, files, tool results)
+    // SHALL result in sandbox suspension.
+    //
+    // **Validates: Requirements 2.1, 2.2, 2.3, 2.5**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -255,12 +255,12 @@ mod property_tests {
         }
     }
 
-    /// **Property 9: Sandbox Tool Permission Enforcement**
-    ///
-    /// *For any* sandbox with allowed/denied tool lists, tool access checks SHALL correctly
-    /// allow or deny based on the configuration.
-    ///
-    /// **Validates: Requirements 2.4**
+    // **Property 9: Sandbox Tool Permission Enforcement**
+    //
+    // *For any* sandbox with allowed/denied tool lists, tool access checks SHALL correctly
+    // allow or deny based on the configuration.
+    //
+    // **Validates: Requirements 2.4**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -421,12 +421,12 @@ mod property_tests {
         ]
     }
 
-    /// **Property 10: Sandbox State Transitions**
-    ///
-    /// *For any* sandbox, state transitions SHALL follow valid paths:
-    /// active → suspended → terminated, and cleanup SHALL remove expired sandboxes.
-    ///
-    /// **Validates: Requirements 2.6, 2.7**
+    // **Property 10: Sandbox State Transitions**
+    //
+    // *For any* sandbox, state transitions SHALL follow valid paths:
+    // active → suspended → terminated, and cleanup SHALL remove expired sandboxes.
+    //
+    // **Validates: Requirements 2.6, 2.7**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 

@@ -371,7 +371,7 @@ proptest! {
 
         // Verify permissions were imported (note: HashMap deduplicates by tool name)
         let imported_perms = new_manager.get_permissions(Some(target_scope));
-        prop_assert!(imported_perms.len() > 0, "Should have at least one permission");
+        prop_assert!(!imported_perms.is_empty(), "Should have at least one permission");
     }
 
     /// **Feature: tool-permission-system, Property 13: Import/Export Round-Trip**

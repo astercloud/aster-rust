@@ -104,12 +104,12 @@ fn agent_state_strategy() -> impl Strategy<Value = AgentState> {
         )
 }
 
-/// **Property 33: Resume Capability Check**
-///
-/// *For any* agent state, resume capability check SHALL correctly identify
-/// resumable states (not completed/cancelled) and provide accurate resume point information.
-///
-/// **Validates: Requirements 12.1, 12.2**
+// **Property 33: Resume Capability Check**
+//
+// *For any* agent state, resume capability check SHALL correctly identify
+// resumable states (not completed/cancelled) and provide accurate resume point information.
+//
+// **Validates: Requirements 12.1, 12.2**
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -450,12 +450,12 @@ async fn property_33_resume_options_builder_consistency() {
     assert_eq!(options2.continue_from, ResumePoint::Beginning);
 }
 
-/// **Property 34: Agent Resume Behavior**
-///
-/// *For any* resumable agent, resuming SHALL restore state from the specified point
-/// (last or checkpoint), optionally reset errors, and include additional context.
-///
-/// **Validates: Requirements 12.3, 12.4, 12.5, 12.6**
+// **Property 34: Agent Resume Behavior**
+//
+// *For any* resumable agent, resuming SHALL restore state from the specified point
+// (last or checkpoint), optionally reset errors, and include additional context.
+//
+// **Validates: Requirements 12.3, 12.4, 12.5, 12.6**
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(100))]
 

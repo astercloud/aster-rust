@@ -1,8 +1,11 @@
 //! Media 模块测试
 
 use super::*;
+#[allow(unused_imports)]
 use std::fs;
+#[allow(unused_imports)]
 use std::path::PathBuf;
+#[allow(unused_imports)]
 use tempfile::TempDir;
 
 // ============ MIME Tests ============

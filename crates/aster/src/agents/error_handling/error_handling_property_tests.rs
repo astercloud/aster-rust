@@ -479,7 +479,7 @@ proptest! {
 
     #[test]
     fn property_41_warning_threshold_respected(
-        agent_id in agent_id_strategy(),
+        _agent_id in agent_id_strategy(),
         timeout_secs in 10u64..60,
         warning_threshold in 0.5f64..0.95,
     ) {
@@ -492,11 +492,7 @@ proptest! {
         let expected_warning = Duration::from_secs_f64(timeout_secs as f64 * warning_threshold);
 
         // Allow small floating point differences
-        let diff = if warning_duration > expected_warning {
-            warning_duration - expected_warning
-        } else {
-            expected_warning - warning_duration
-        };
+        let diff = warning_duration.abs_diff(expected_warning);
 
         prop_assert!(diff < Duration::from_millis(10),
             "Warning duration {:?} should be close to expected {:?}",
@@ -554,8 +550,8 @@ proptest! {
         }
 
         // Timeout some agents
-        for i in 0..num_to_timeout {
-            handler.mark_timed_out(&agent_ids[i]);
+        for agent_id in agent_ids.iter().take(num_to_timeout) {
+            handler.mark_timed_out(agent_id);
         }
 
         let timed_out = handler.get_timed_out_agents();
@@ -565,9 +561,9 @@ proptest! {
             "Should have {} timed out agents", num_to_timeout);
 
         // All timed out agents MUST be in the list
-        for i in 0..num_to_timeout {
-            prop_assert!(timed_out.contains(&agent_ids[i].as_str()),
-                "Agent {} should be in timed out list", agent_ids[i]);
+        for agent_id in agent_ids.iter().take(num_to_timeout) {
+            prop_assert!(timed_out.contains(&agent_id.as_str()),
+                "Agent {} should be in timed out list", agent_id);
         }
     }
 }

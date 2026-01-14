@@ -103,13 +103,13 @@ fn test_analyzer_new() {
     let analyzer = CodeMapAnalyzer::new("/tmp/test");
     let files = analyzer.discover_files();
     // 空目录应该返回空列表
-    assert!(files.is_empty() || !files.is_empty());
+    let _ = files; // 只验证函数能运行
 }
 
 #[test]
 fn test_create_analyzer() {
     let analyzer = create_analyzer("/tmp");
-    assert!(analyzer.discover_files().is_empty() || true);
+    let _ = analyzer.discover_files(); // 只验证函数能运行
 }
 
 // ============================================================================

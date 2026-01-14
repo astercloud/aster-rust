@@ -399,7 +399,8 @@ mod tests {
     #[tokio::test]
     async fn test_quick_health_check() {
         let (healthy, _issues) = crate::diagnostics::quick_health_check().await;
-        assert!(healthy || !healthy); // 只验证函数能运行
+        // 只验证函数能运行，不关心结果
+        let _ = healthy;
     }
 
     #[tokio::test]

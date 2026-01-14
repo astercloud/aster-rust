@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_connection_event_variants() {
-        let events = vec![
+        let events = [
             ConnectionEvent::Connected,
             ConnectionEvent::Disconnected,
             ConnectionEvent::Reconnecting { attempt: 1 },

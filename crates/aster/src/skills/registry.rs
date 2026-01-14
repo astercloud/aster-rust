@@ -219,7 +219,9 @@ pub fn global_registry() -> &'static SharedSkillRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
     use std::fs;
+    #[allow(unused_imports)]
     use tempfile::TempDir;
 
     fn create_test_skill(name: &str, source: SkillSource) -> SkillDefinition {

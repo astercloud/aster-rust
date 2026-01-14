@@ -355,8 +355,8 @@ mod tests {
     fn test_installer_list_backups() {
         let installer = Installer::new();
         let backups = installer.list_backups();
-        // 可能为空，但不应该 panic
-        assert!(backups.len() >= 0);
+        // 可能为空，但不应该 panic（backups.len() 是 usize，总是 >= 0）
+        let _ = backups;
     }
 
     #[test]

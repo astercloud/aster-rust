@@ -223,6 +223,7 @@ proptest! {
 
             // Try to edit without reading first
             // Use first 5 chars as old_str (should be unique in our generated content)
+            #[allow(clippy::string_slice)]
             let old_str = &content[0..5.min(content.len())];
             let params = serde_json::json!({
                 "path": file_path.to_str().unwrap(),

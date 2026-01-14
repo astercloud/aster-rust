@@ -950,7 +950,7 @@ mod tests {
         assert_eq!(get_json_type(&serde_json::Value::Null), "null");
         assert_eq!(get_json_type(&serde_json::json!(true)), "boolean");
         assert_eq!(get_json_type(&serde_json::json!(42)), "integer");
-        assert_eq!(get_json_type(&serde_json::json!(3.14)), "number");
+        assert_eq!(get_json_type(&serde_json::json!(3.15)), "number");
         assert_eq!(get_json_type(&serde_json::json!("hello")), "string");
         assert_eq!(get_json_type(&serde_json::json!([1, 2, 3])), "array");
         assert_eq!(

@@ -833,7 +833,7 @@ mod tests {
         let config = ContextConfig::default();
         let threshold = config.summarize_token_threshold();
         // 180000 * 0.7 = 126000, but floating point may give 125999
-        assert!(threshold >= 125999 && threshold <= 126000);
+        assert!((125999..=126000).contains(&threshold));
     }
 
     #[test]

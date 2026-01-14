@@ -10,10 +10,12 @@
 use proptest::prelude::*;
 use std::time::Duration;
 
-use super::alerts::AgentExecutionStatus;
+#[allow(unused_imports)]
+use crate::agents::monitor::alerts::AgentExecutionStatus;
 use super::analyzer::{
     BottleneckCategory, PerformanceAnalyzer, PerformanceRating, PerformanceScores,
 };
+#[allow(unused_imports)]
 use super::metrics::{FullAgentMetrics, PerformanceMetrics, ToolCallMetric};
 
 /// Strategy for generating valid agent IDs
@@ -34,7 +36,7 @@ fn agent_type_strategy() -> impl Strategy<Value = String> {
 
 /// Strategy for generating performance scores (0-100)
 fn score_strategy() -> impl Strategy<Value = f32> {
-    (0.0f32..=100.0f32)
+    0.0f32..=100.0f32
 }
 
 /// Strategy for generating API latency in milliseconds
@@ -63,6 +65,7 @@ fn cost_per_1k_strategy() -> impl Strategy<Value = f64> {
 }
 
 /// Create metrics with specific performance characteristics
+#[allow(clippy::too_many_arguments)]
 fn create_metrics_with_performance(
     agent_id: &str,
     agent_type: &str,
@@ -205,14 +208,14 @@ proptest! {
             }
             PerformanceRating::Good => {
                 prop_assert!(
-                    overall >= 60.0 && overall < 80.0,
+                    (60.0..80.0).contains(&overall),
                     "Good rating requires 60 <= score < 80, got {}",
                     overall
                 );
             }
             PerformanceRating::Fair => {
                 prop_assert!(
-                    overall >= 40.0 && overall < 60.0,
+                    (40.0..60.0).contains(&overall),
                     "Fair rating requires 40 <= score < 60, got {}",
                     overall
                 );

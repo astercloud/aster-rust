@@ -6,6 +6,7 @@
 use proptest::prelude::*;
 use std::time::Duration;
 
+#[allow(unused_imports)]
 use super::alerts::{
     AgentExecutionStatus, AgentMetrics, Alert, AlertManager, AlertSeverity, AlertThresholds,
     AlertType,
@@ -693,8 +694,8 @@ proptest! {
         }
 
         // Acknowledge some alerts
-        for i in 0..num_to_acknowledge {
-            manager.acknowledge(&alert_ids[i]);
+        for alert_id in alert_ids.iter().take(num_to_acknowledge) {
+            manager.acknowledge(alert_id);
         }
 
         let acknowledged_count = num_to_acknowledge;
@@ -720,14 +721,14 @@ proptest! {
             "All remaining alerts should be active");
 
         // Verify acknowledged alerts are gone
-        for i in 0..num_to_acknowledge {
-            prop_assert!(manager.get_alert(&alert_ids[i]).is_none(),
+        for (i, alert_id) in alert_ids.iter().enumerate().take(num_to_acknowledge) {
+            prop_assert!(manager.get_alert(alert_id).is_none(),
                 "Acknowledged alert {} should be removed", i);
         }
 
         // Verify unacknowledged alerts remain
-        for i in num_to_acknowledge..num_alerts {
-            prop_assert!(manager.get_alert(&alert_ids[i]).is_some(),
+        for (i, alert_id) in alert_ids.iter().enumerate().skip(num_to_acknowledge) {
+            prop_assert!(manager.get_alert(alert_id).is_some(),
                 "Unacknowledged alert {} should remain", i);
         }
     }
@@ -745,7 +746,7 @@ proptest! {
         let mut alert_ids = Vec::new();
         let mut expected_active_ids = Vec::new();
 
-        for i in 0..num_alerts {
+        for (i, should_acknowledge) in acknowledge_pattern.iter().enumerate().take(num_alerts) {
             let alert = Alert::new(
                 AlertType::CostThreshold,
                 AlertSeverity::High,
@@ -755,13 +756,13 @@ proptest! {
             let id = manager.add_alert(alert);
             alert_ids.push(id.clone());
 
-            if !acknowledge_pattern[i] {
+            if !should_acknowledge {
                 expected_active_ids.push(id);
             }
         }
 
         // Acknowledge based on pattern
-        for (i, should_acknowledge) in acknowledge_pattern.iter().take(num_alerts).enumerate() {
+        for (i, should_acknowledge) in acknowledge_pattern.iter().enumerate().take(num_alerts) {
             if *should_acknowledge {
                 manager.acknowledge(&alert_ids[i]);
             }
@@ -810,8 +811,8 @@ proptest! {
         }
 
         // Acknowledge some
-        for i in 0..num_to_acknowledge {
-            manager.acknowledge(&alert_ids[i]);
+        for alert_id in alert_ids.iter().take(num_to_acknowledge) {
+            manager.acknowledge(alert_id);
         }
 
         // Get all alerts

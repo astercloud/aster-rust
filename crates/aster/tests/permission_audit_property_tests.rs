@@ -102,7 +102,7 @@ fn arb_parameters() -> impl Strategy<Value = HashMap<String, Value>> {
     prop::collection::hash_map(
         "[a-z_]{3,10}",
         prop_oneof![
-            "[a-zA-Z0-9 ]{1,20}".prop_map(|s| Value::String(s)),
+            "[a-zA-Z0-9 ]{1,20}".prop_map(Value::String),
             (0i64..1000).prop_map(|n| Value::Number(n.into())),
             prop::bool::ANY.prop_map(Value::Bool),
         ],

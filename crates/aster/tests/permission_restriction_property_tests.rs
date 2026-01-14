@@ -341,7 +341,7 @@ proptest! {
     /// **Validates: Requirements 3.6**
     #[test]
     fn prop_check_restrictions_ok_when_all_pass(
-        allowed_value in "[a-z]{3,10}".prop_map(|s| Value::String(s))
+        allowed_value in "[a-z]{3,10}".prop_map(Value::String)
     ) {
         let restrictions = vec![
             ParameterRestriction {
@@ -377,8 +377,8 @@ proptest! {
     /// **Validates: Requirements 3.6**
     #[test]
     fn prop_check_restrictions_err_when_any_fail(
-        allowed_value in "[a-z]{3,10}".prop_map(|s| Value::String(s)),
-        denied_value in "[A-Z]{3,10}".prop_map(|s| Value::String(s))
+        allowed_value in "[a-z]{3,10}".prop_map(Value::String),
+        denied_value in "[A-Z]{3,10}".prop_map(Value::String)
     ) {
         let restrictions = vec![
             ParameterRestriction {

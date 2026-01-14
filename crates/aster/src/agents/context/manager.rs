@@ -1310,7 +1310,7 @@ mod property_tests {
             // Sensitive environment variables should be removed
             for key in &sensitive_env_keys {
                 prop_assert!(
-                    filtered.get_env(*key).is_none(),
+                    filtered.get_env(key).is_none(),
                     "Sensitive env var {} should be filtered",
                     key
                 );

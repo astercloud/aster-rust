@@ -107,16 +107,16 @@ mod property_tests {
     // Property 1: Token Estimation Accuracy
     // ============================================================================
 
-    /// **Property 1: Token Estimation Accuracy**
-    ///
-    /// *For any* text content, the token estimate SHALL be within a reasonable range
-    /// based on content type:
-    /// - Asian text: approximately length / 2 tokens
-    /// - Code: approximately length / 3 tokens
-    /// - English text: approximately length / 3.5 tokens
-    /// - Special characters and newlines SHALL add additional weight
-    ///
-    /// **Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7**
+    // **Property 1: Token Estimation Accuracy**
+    //
+    // *For any* text content, the token estimate SHALL be within a reasonable range
+    // based on content type:
+    // - Asian text: approximately length / 2 tokens
+    // - Code: approximately length / 3 tokens
+    // - English text: approximately length / 3.5 tokens
+    // - Special characters and newlines SHALL add additional weight
+    //
+    // **Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -127,9 +127,7 @@ mod property_tests {
         ) {
             let tokens = TokenEstimator::estimate_tokens(&text);
 
-            // Token count should always be non-negative
-            prop_assert!(tokens >= 0, "Token count should be non-negative");
-
+            // Token count should always be non-negative (usize is always >= 0)
             // Empty text should have 0 tokens
             if text.is_empty() {
                 prop_assert_eq!(tokens, 0, "Empty text should have 0 tokens");

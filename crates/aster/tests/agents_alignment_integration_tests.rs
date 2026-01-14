@@ -360,7 +360,6 @@ fn test_explore_agent_creation() {
 
     let _agent = ExploreAgent::new(options);
     // Agent should be created successfully
-    assert!(true);
 }
 
 /// Test plan agent with options
@@ -373,7 +372,6 @@ fn test_plan_agent_creation() {
 
     let _agent = PlanAgent::new(options);
     // Agent should be created successfully
-    assert!(true);
 }
 
 // ============================================================================

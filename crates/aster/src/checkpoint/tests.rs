@@ -242,7 +242,7 @@ mod diff_tests {
 
     #[test]
     fn test_diff_engine_default() {
-        let engine = DiffEngine::default();
+        let engine = DiffEngine;
         let _ = engine;
     }
 

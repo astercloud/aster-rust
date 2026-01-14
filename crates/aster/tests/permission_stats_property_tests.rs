@@ -18,21 +18,11 @@ use std::collections::HashMap;
 // Arbitrary Generators
 // ============================================================================
 
-/// Generate arbitrary tool name
-fn arb_tool_name() -> impl Strategy<Value = String> {
-    "[a-z_]{3,15}".prop_map(|s| s)
-}
-
-/// Generate arbitrary PermissionScope
-fn arb_permission_scope() -> impl Strategy<Value = PermissionScope> {
-    prop_oneof![
-        Just(PermissionScope::Global),
-        Just(PermissionScope::Project),
-        Just(PermissionScope::Session),
-    ]
-}
+// Note: The following generators are kept for potential future use but are
+// currently unused in the active tests.
 
 /// Generate arbitrary condition
+#[allow(dead_code)]
 fn arb_condition() -> impl Strategy<Value = PermissionCondition> {
     (
         prop_oneof![
@@ -53,6 +43,7 @@ fn arb_condition() -> impl Strategy<Value = PermissionCondition> {
 }
 
 /// Generate arbitrary parameter restriction
+#[allow(dead_code)]
 fn arb_restriction() -> impl Strategy<Value = ParameterRestriction> {
     "[a-z_]{3,10}".prop_map(|param| ParameterRestriction {
         parameter: param,
@@ -64,41 +55,6 @@ fn arb_restriction() -> impl Strategy<Value = ParameterRestriction> {
         max: None,
         required: false,
         description: None,
-    })
-}
-
-/// Generate arbitrary permission with configurable properties
-fn arb_permission(
-    tool: String,
-    allowed: bool,
-    has_conditions: bool,
-    has_restrictions: bool,
-    scope: PermissionScope,
-) -> impl Strategy<Value = ToolPermission> {
-    let conditions_strategy = if has_conditions {
-        prop::collection::vec(arb_condition(), 1..3).boxed()
-    } else {
-        Just(Vec::new()).boxed()
-    };
-
-    let restrictions_strategy = if has_restrictions {
-        prop::collection::vec(arb_restriction(), 1..3).boxed()
-    } else {
-        Just(Vec::new()).boxed()
-    };
-
-    (conditions_strategy, restrictions_strategy).prop_map(move |(conditions, restrictions)| {
-        ToolPermission {
-            tool: tool.clone(),
-            allowed,
-            priority: 0,
-            conditions,
-            parameter_restrictions: restrictions,
-            scope,
-            reason: None,
-            expires_at: None,
-            metadata: HashMap::new(),
-        }
     })
 }
 

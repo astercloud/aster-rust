@@ -56,12 +56,12 @@ mod property_tests {
         })
     }
 
-    /// **Property 11: Message Priority Ordering**
-    ///
-    /// *For any* set of messages with different priorities sent to the same agent,
-    /// dequeuing SHALL return messages in priority order (highest first).
-    ///
-    /// **Validates: Requirements 3.1, 3.3**
+    // **Property 11: Message Priority Ordering**
+    //
+    // *For any* set of messages with different priorities sent to the same agent,
+    // dequeuing SHALL return messages in priority order (highest first).
+    //
+    // **Validates: Requirements 3.1, 3.3**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -266,12 +266,12 @@ mod property_tests {
         }
     }
 
-    /// **Property 12: Message Broadcast Delivery**
-    ///
-    /// *For any* broadcast message, all agents subscribed to the message type
-    /// SHALL receive the message.
-    ///
-    /// **Validates: Requirements 3.2, 3.7**
+    // **Property 12: Message Broadcast Delivery**
+    //
+    // *For any* broadcast message, all agents subscribed to the message type
+    // SHALL receive the message.
+    //
+    // **Validates: Requirements 3.2, 3.7**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 

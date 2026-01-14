@@ -2,6 +2,8 @@
 //!
 //! 提供内置的 ripgrep 二进制文件支持
 
+#![allow(clippy::items_after_test_module)]
+
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

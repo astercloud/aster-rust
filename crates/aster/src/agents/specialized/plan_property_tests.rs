@@ -98,12 +98,12 @@ fn verify_no_modifications(
     before.len() == after.len()
 }
 
-/// **Property 39: Plan Read-Only Mode**
-///
-/// *For any* plan agent execution, no file modifications SHALL occur
-/// in the target directory.
-///
-/// **Validates: Requirements 14.1**
+// **Property 39: Plan Read-Only Mode**
+//
+// *For any* plan agent execution, no file modifications SHALL occur
+// in the target directory.
+//
+// **Validates: Requirements 14.1**
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(20))]
 
@@ -363,11 +363,11 @@ proptest! {
             let _ = agent.create_plan().await;
 
             // Verify files_read tracking works
-            let files_read = agent.files_read();
+            let _files_read = agent.files_read();
 
             // Should have tracked at least the existing code file
             prop_assert!(
-                !files_read.is_empty() || true, // May be empty if file doesn't exist
+                true, // May be empty if file doesn't exist
                 "files_read should track read operations"
             );
 

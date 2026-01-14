@@ -959,11 +959,7 @@ mod tests {
         let manager = create_test_manager(&temp_dir);
         let context = create_test_context();
 
-        let command = if cfg!(target_os = "windows") {
-            "echo hello"
-        } else {
-            "echo hello"
-        };
+        let command = "echo hello";
 
         let result = manager.start(command, &context).await;
         assert!(result.is_ok());

@@ -493,7 +493,7 @@ mod tests {
             create_tool_call_message(),                     // High (tool call)
         ];
 
-        let (critical, high, medium, low, minimal) =
+        let (critical, high, medium, low, _minimal) =
             PrioritySorter::get_priority_distribution(&messages);
 
         assert_eq!(critical, 1); // Summary message

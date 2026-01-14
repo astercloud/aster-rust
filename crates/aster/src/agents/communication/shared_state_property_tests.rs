@@ -49,12 +49,12 @@ mod property_tests {
         prop::collection::vec((key_strategy(), value_strategy()), min..max)
     }
 
-    /// **Property 15: Shared State Operations**
-    ///
-    /// *For any* key-value pair set in the shared state,
-    /// getting the key SHALL return the exact value that was set.
-    ///
-    /// **Validates: Requirements 4.1**
+    // **Property 15: Shared State Operations**
+    //
+    // *For any* key-value pair set in the shared state,
+    // getting the key SHALL return the exact value that was set.
+    //
+    // **Validates: Requirements 4.1**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -166,12 +166,12 @@ mod property_tests {
         }
     }
 
-    /// **Property 16: State Watch Notification**
-    ///
-    /// *For any* key with a registered watcher,
-    /// setting or deleting the value SHALL trigger the watcher callback.
-    ///
-    /// **Validates: Requirements 4.2, 4.4**
+    // **Property 16: State Watch Notification**
+    //
+    // *For any* key with a registered watcher,
+    // setting or deleting the value SHALL trigger the watcher callback.
+    //
+    // **Validates: Requirements 4.2, 4.4**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -321,12 +321,12 @@ mod property_tests {
         }
     }
 
-    /// **Property 17: Distributed Lock Exclusivity**
-    ///
-    /// *For any* key, only one holder can hold the lock at a time.
-    /// When a lock is released, the next waiter can acquire it.
-    ///
-    /// **Validates: Requirements 4.3, 4.5, 4.6**
+    // **Property 17: Distributed Lock Exclusivity**
+    //
+    // *For any* key, only one holder can hold the lock at a time.
+    // When a lock is released, the next waiter can acquire it.
+    //
+    // **Validates: Requirements 4.3, 4.5, 4.6**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -471,7 +471,7 @@ mod property_tests {
         }
     }
 
-    /// Additional property tests for atomic operations
+    // Additional property tests for atomic operations
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -563,7 +563,7 @@ mod property_tests {
         }
     }
 
-    /// Property tests for statistics
+    // Property tests for statistics
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(50))]
 

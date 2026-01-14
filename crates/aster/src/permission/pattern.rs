@@ -308,7 +308,8 @@ mod property_tests {
             // 带 ? 的模式
             tool_name_strategy().prop_map(|s| {
                 if s.len() > 1 {
-                    format!("{}?", &s[..s.len() - 1])
+                    let prefix: String = s.chars().take(s.len() - 1).collect();
+                    format!("{}?", prefix)
                 } else {
                     format!("{}?", s)
                 }

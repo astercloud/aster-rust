@@ -69,13 +69,13 @@ mod property_tests {
     // Property 4: Summary Length Reduction
     // ============================================================================
 
-    /// **Property 4: Summary Length Reduction**
-    ///
-    /// *For any* set of conversation turns, the generated summary SHALL be shorter
-    /// than the original content in token count, and collected messages SHALL not
-    /// exceed the specified budget.
-    ///
-    /// **Validates: Requirements 3.1, 3.5, 3.6**
+    // **Property 4: Summary Length Reduction**
+    //
+    // *For any* set of conversation turns, the generated summary SHALL be shorter
+    // than the original content in token count, and collected messages SHALL not
+    // exceed the specified budget.
+    //
+    // **Validates: Requirements 3.1, 3.5, 3.6**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 

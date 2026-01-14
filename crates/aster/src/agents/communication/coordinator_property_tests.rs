@@ -8,7 +8,7 @@
 #[cfg(test)]
 mod property_tests {
     use crate::agents::communication::coordinator::{
-        AgentCapabilities, AgentCoordinator, AgentStatus, AssignmentCriteria, DeadlockInfo,
+        AgentCapabilities, AgentCoordinator, AgentStatus, AssignmentCriteria,
         LoadBalanceStrategy, Task, TaskResult, TaskStatus,
     };
     use chrono::Utc;
@@ -110,12 +110,12 @@ mod property_tests {
         "[a-z][a-z0-9_]{0,10}".prop_map(|s| format!("resource_{}", s))
     }
 
-    /// **Property 18: Agent Selection by Criteria**
-    ///
-    /// *For any* set of registered agents and assignment criteria,
-    /// the selected agent SHALL match all required criteria (type, capabilities).
-    ///
-    /// **Validates: Requirements 5.1, 5.2, 5.3**
+    // **Property 18: Agent Selection by Criteria**
+    //
+    // *For any* set of registered agents and assignment criteria,
+    // the selected agent SHALL match all required criteria (type, capabilities).
+    //
+    // **Validates: Requirements 5.1, 5.2, 5.3**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -296,12 +296,12 @@ mod property_tests {
         }
     }
 
-    /// **Property 19: Deadlock Detection Accuracy**
-    ///
-    /// *For any* circular wait scenario in resource dependencies,
-    /// the deadlock detector SHALL identify the cycle.
-    ///
-    /// **Validates: Requirements 5.4**
+    // **Property 19: Deadlock Detection Accuracy**
+    //
+    // *For any* circular wait scenario in resource dependencies,
+    // the deadlock detector SHALL identify the cycle.
+    //
+    // **Validates: Requirements 5.4**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(50))]
 
@@ -420,12 +420,12 @@ mod property_tests {
         }
     }
 
-    /// **Property 20: Task Completion Tracking**
-    ///
-    /// *For any* task that is assigned and completed,
-    /// the coordinator SHALL correctly track its status and update agent load.
-    ///
-    /// **Validates: Requirements 5.5, 5.6, 5.7**
+    // **Property 20: Task Completion Tracking**
+    //
+    // *For any* task that is assigned and completed,
+    // the coordinator SHALL correctly track its status and update agent load.
+    //
+    // **Validates: Requirements 5.5, 5.6, 5.7**
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -591,7 +591,7 @@ mod property_tests {
         }
     }
 
-    /// Additional property tests for synchronization barriers
+    // Additional property tests for synchronization barriers
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(50))]
 

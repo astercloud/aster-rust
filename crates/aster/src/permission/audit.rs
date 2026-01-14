@@ -545,7 +545,7 @@ mod tests {
         assert_eq!(entry.parameters, params);
         assert_eq!(entry.context.session_id, context.session_id);
         assert!(entry.result.is_some());
-        assert_eq!(entry.result.unwrap().allowed, true);
+        assert!(entry.result.unwrap().allowed);
         assert_eq!(entry.duration_ms, Some(100));
         assert!(entry.metadata.contains_key("custom_field"));
     }

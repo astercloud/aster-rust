@@ -310,7 +310,7 @@ fn validate_args_standalone(
     let schema = &tool.input_schema;
 
     // If no schema or empty schema, accept any args
-    if schema.is_null() || (schema.is_object() && schema.as_object().map_or(true, |o| o.is_empty()))
+    if schema.is_null() || (schema.is_object() && schema.as_object().is_none_or(|o| o.is_empty()))
     {
         return ArgValidationResult::valid();
     }

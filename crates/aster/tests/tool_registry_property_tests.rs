@@ -140,6 +140,7 @@ fn arb_tool_context() -> impl Strategy<Value = ToolContext> {
 }
 
 /// Generate arbitrary permission behavior
+#[allow(dead_code)]
 fn arb_permission_behavior() -> impl Strategy<Value = PermissionBehavior> {
     prop_oneof![
         Just(PermissionBehavior::Allow),

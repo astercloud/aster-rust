@@ -80,12 +80,12 @@ fn create_nested_structure(dir: &std::path::Path, depth: usize, files_per_level:
     }
 }
 
-/// **Property 35: Explore Thoroughness Scaling**
-///
-/// *For any* explore operation, the number of results and depth of analysis
-/// SHALL scale with the configured thoroughness level.
-///
-/// **Validates: Requirements 13.1, 13.7**
+// **Property 35: Explore Thoroughness Scaling**
+//
+// *For any* explore operation, the number of results and depth of analysis
+// SHALL scale with the configured thoroughness level.
+//
+// **Validates: Requirements 13.1, 13.7**
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(20))]
 
@@ -227,12 +227,12 @@ proptest! {
     }
 }
 
-/// **Property 36: File Pattern Search Accuracy**
-///
-/// *For any* file pattern search, results SHALL match the specified pattern
-/// and be limited to the configured maximum.
-///
-/// **Validates: Requirements 13.2**
+// **Property 36: File Pattern Search Accuracy**
+//
+// *For any* file pattern search, results SHALL match the specified pattern
+// and be limited to the configured maximum.
+//
+// **Validates: Requirements 13.2**
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(20))]
 
@@ -449,12 +449,12 @@ proptest! {
     }
 }
 
-/// **Property 37: Code Content Search**
-///
-/// *For any* code search query, results SHALL contain the search term
-/// with appropriate context lines based on thoroughness.
-///
-/// **Validates: Requirements 13.3, 13.4**
+// **Property 37: Code Content Search**
+//
+// *For any* code search query, results SHALL contain the search term
+// with appropriate context lines based on thoroughness.
+//
+// **Validates: Requirements 13.3, 13.4**
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(20))]
 
@@ -624,12 +624,12 @@ proptest! {
     }
 }
 
-/// **Property 38: Structure Analysis Completeness**
-///
-/// *For any* analyzed file, structure analysis SHALL extract exports,
-/// imports, classes, functions, and interfaces where applicable.
-///
-/// **Validates: Requirements 13.5, 13.6**
+// **Property 38: Structure Analysis Completeness**
+//
+// *For any* analyzed file, structure analysis SHALL extract exports,
+// imports, classes, functions, and interfaces where applicable.
+//
+// **Validates: Requirements 13.5, 13.6**
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(20))]
 
@@ -825,7 +825,7 @@ proptest! {
         let agent = ExploreAgent::new(options);
         let analysis = agent.analyze_structure(&file_path).unwrap();
 
-        let expected_lang = match extension.as_ref() {
+        let expected_lang = match extension {
             "rs" => "rust",
             "py" => "python",
             "ts" => "typescript",

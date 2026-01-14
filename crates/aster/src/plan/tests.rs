@@ -147,8 +147,8 @@ fn test_delete_plan() {
 #[test]
 fn test_list_plans() {
     let plans = PlanPersistenceManager::list_plans(&PlanListOptions::default());
-    // 只验证不会崩溃
-    assert!(plans.len() >= 0);
+    // 只验证不会崩溃（plans.len() 是 usize，总是 >= 0）
+    let _ = plans;
 }
 
 #[test]
