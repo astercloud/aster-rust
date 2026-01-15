@@ -1,15 +1,15 @@
 This is a rust project with crates in the crates dir:
-goose: the main code for goose, contains all the core logic
-goose-bench: bench marking
-goose-cli: the command line interface, use goose crate
-goose-mcp: the mcp servers that ship with goose. the developer sub system is of special interest
-goose-server: the server that suports the desktop (electron) app. also known as goosed
+aster: the main code for aster, contains all the core logic
+aster-bench: bench marking
+aster-cli: the command line interface, use aster crate
+aster-mcp: the mcp servers that ship with aster. the developer sub system is of special interest
+aster-server: the server that suports the desktop (electron) app. also known as asterd
 
 
 ui/desktop has an electron app in typescript. 
 
-non trivial features should be implemented in the goose crate and then be called from the goose-cli crate for the cli. for the desktop, you want to add routes to 
-goose-server/src/routes. you can then run `just generate-openapi` to generate the openapi spec which will modify the ui/desktop/src/api files. once you have
+non trivial features should be implemented in the aster crate and then be called from the aster-cli crate for the cli. for the desktop, you want to add routes to 
+aster-server/src/routes. you can then run `just generate-openapi` to generate the openapi spec which will modify the ui/desktop/src/api files. once you have
 that you can call the functionality from the server from the typescript.
 
 tips: 

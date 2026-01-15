@@ -244,21 +244,21 @@ Ask the user if they want you to do that, and let them know they will manually n
 
 ```bash
 # Python example
-goose run --with-extension "python server.py" --text "EXAMPLE PROMPT HERE"
+aster run --with-extension "python server.py" --text "EXAMPLE PROMPT HERE"
 
 # TypeScript example
-goose run --with-extension "node server.js" --text "EXAMPLE PROMPT HERE"
+aster run --with-extension "node server.js" --text "EXAMPLE PROMPT HERE"
 
 # Kotlin example
-goose run --with-extension "java -jar build/libs/extension.jar" --text "EXAMPLE PROMPT HERE"
+aster run --with-extension "java -jar build/libs/extension.jar" --text "EXAMPLE PROMPT HERE"
 ```
 
 ### 2. Testing Tools and Resources
 
 Once the session starts successfully, guide users to test their implementation:
 
-- For tools, they should ask goose to use the tool directly
-- For resources, they should ask goose to access the relevant data
+- For tools, they should ask aster to use the tool directly
+- For resources, they should ask aster to access the relevant data
 
 Example prompts they can use:
 

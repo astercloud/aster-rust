@@ -2995,63 +2995,63 @@
     },
     {
       "provider": "databricks",
-      "model": "goose"
+      "model": "aster"
     },
     {
       "provider": "databricks",
-      "model": "goose-claude-3-5-sonnet"
+      "model": "aster-claude-3-5-sonnet"
     },
     {
       "provider": "databricks",
-      "model": "goose-claude-3-7-sonnet"
+      "model": "aster-claude-3-7-sonnet"
     },
     {
       "provider": "databricks",
-      "model": "goose-claude-4-5-sonnet"
+      "model": "aster-claude-4-5-sonnet"
     },
     {
       "provider": "databricks",
-      "model": "goose-claude-4-opus"
+      "model": "aster-claude-4-opus"
     },
     {
       "provider": "databricks",
-      "model": "goose-claude-4-sonnet"
+      "model": "aster-claude-4-sonnet"
     },
     {
       "provider": "databricks",
-      "model": "goose-claude-4-sonnet-bedrock"
+      "model": "aster-claude-4-sonnet-bedrock"
     },
     {
       "provider": "databricks",
-      "model": "goose-gemini-2-5-pro"
+      "model": "aster-gemini-2-5-pro"
     },
     {
       "provider": "databricks",
-      "model": "goose-gpt-4-1"
+      "model": "aster-gpt-4-1"
     },
     {
       "provider": "databricks",
-      "model": "goose-gpt-4o"
+      "model": "aster-gpt-4o"
     },
     {
       "provider": "databricks",
-      "model": "goose-gpt-5"
+      "model": "aster-gpt-5"
     },
     {
       "provider": "databricks",
-      "model": "goose-gpt-oss"
+      "model": "aster-gpt-oss"
     },
     {
       "provider": "databricks",
-      "model": "goose-o1"
+      "model": "aster-o1"
     },
     {
       "provider": "databricks",
-      "model": "goose-o3"
+      "model": "aster-o3"
     },
     {
       "provider": "databricks",
-      "model": "goose-o4-mini"
+      "model": "aster-o4-mini"
     },
     {
       "provider": "databricks",
@@ -3143,15 +3143,15 @@
     },
     {
       "provider": "databricks",
-      "model": "headless-goose"
+      "model": "headless-aster"
     },
     {
       "provider": "databricks",
-      "model": "headless-goose-claude-4-sonnet"
+      "model": "headless-aster-claude-4-sonnet"
     },
     {
       "provider": "databricks",
-      "model": "headless-goose-o3-mini"
+      "model": "headless-aster-o3-mini"
     },
     {
       "provider": "databricks",
@@ -3167,63 +3167,63 @@
     },
     {
       "provider": "databricks",
-      "model": "kgoose-cashapp-claude-4-sonnet"
+      "model": "kaster-cashapp-claude-4-sonnet"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-cashapp-claude-sonnet-4-5"
+      "model": "kaster-cashapp-claude-sonnet-4-5"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-claude-4-sonnet"
+      "model": "kaster-claude-4-sonnet"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-claude-haiku-4-5"
+      "model": "kaster-claude-haiku-4-5"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-claude-sonnet-4-5"
+      "model": "kaster-claude-sonnet-4-5"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-gemini-2-5-flash"
+      "model": "kaster-gemini-2-5-flash"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-gpt-4-1"
+      "model": "kaster-gpt-4-1"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-gpt-4-1-mini"
+      "model": "kaster-gpt-4-1-mini"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-gpt-4-1-nano"
+      "model": "kaster-gpt-4-1-nano"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-gpt-4o"
+      "model": "kaster-gpt-4o"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-gpt-5"
+      "model": "kaster-gpt-5"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-gpt-5-mini"
+      "model": "kaster-gpt-5-mini"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-gpt-5-nano"
+      "model": "kaster-gpt-5-nano"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-o3"
+      "model": "kaster-o3"
     },
     {
       "provider": "databricks",
-      "model": "kgoose-o4-mini"
+      "model": "kaster-o4-mini"
     },
     {
       "provider": "databricks",

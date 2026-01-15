@@ -522,7 +522,7 @@ pub fn create_request(
     let is_gpt_5 = model_name.starts_with("gpt-5") || model_name.starts_with("aster-gpt-5");
     let is_openai_reasoning_model = is_o1 || is_o3 || is_gpt_5;
     let is_claude_sonnet =
-        model_name.contains("claude-3-7-sonnet") || model_name.contains("claude-4-sonnet"); // can be goose- or databricks-
+        model_name.contains("claude-3-7-sonnet") || model_name.contains("claude-4-sonnet"); // can be aster- or databricks-
 
     // Only extract reasoning effort for O1/O3 models
     let (model_name, reasoning_effort) = if is_openai_reasoning_model {

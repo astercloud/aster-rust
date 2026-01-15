@@ -40,7 +40,7 @@ alias @aster='{aster_bin} term run'
 alias @g='{aster_bin} term run'
 
 aster_preexec() {
-    [[ "$1" =~ ^goose\ term ]] && return
+    [[ "$1" =~ ^aster\ term ]] && return
     [[ "$1" =~ ^(@aster|@g)($|[[:space:]]) ]] && return
     ('{aster_bin}' term log "$1" &) 2>/dev/null
 }
@@ -66,7 +66,7 @@ alias @aster='{aster_bin} term run'
 alias @g='{aster_bin} term run'
 
 aster_preexec() {
-    [[ "$1" =~ ^goose\ term ]] && return
+    [[ "$1" =~ ^aster\ term ]] && return
     [[ "$1" =~ ^(@aster|@g)($|[[:space:]]) ]] && return
     ('{aster_bin}' term log "$1" &) 2>/dev/null
 }

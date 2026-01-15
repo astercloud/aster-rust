@@ -26,7 +26,7 @@ Running benchmarks is a two-step process:
 First, run the benchmark evaluations with your configuration:
 
 ```bash
-goose bench run --config /path/to/your-config.json
+aster bench run --config /path/to/your-config.json
 ```
 
 This will execute all evaluations for all models specified in your configuration and create a benchmark directory with results.
@@ -36,7 +36,7 @@ This will execute all evaluations for all models specified in your configuration
 After the benchmarks complete, generate the leaderboard and aggregated metrics:
 
 ```bash
-goose bench generate-leaderboard --benchmark-dir /path/to/benchmark-output-directory
+aster bench generate-leaderboard --benchmark-dir /path/to/benchmark-output-directory
 ```
 
 The benchmark directory path will be shown in the output of the previous command, typically in the format `benchmark-YYYY-MM-DD-HH:MM:SS`.
@@ -85,12 +85,12 @@ Benchmark configuration is provided through a JSON file. Here's a sample configu
     },
     {
       "selector": "vibes:blog_summary",
-      "post_process_cmd": "/Users/ahau/Development/goose-1.0/goose/scripts/bench-postprocess-scripts/llm-judges/run_vibes_judge.sh",
+      "post_process_cmd": "/Users/ahau/Development/aster-1.0/aster/scripts/bench-postprocess-scripts/llm-judges/run_vibes_judge.sh",
       "parallel_safe": true
     },
     {
       "selector": "vibes:restaurant_research",
-      "post_process_cmd": "/Users/ahau/Development/goose-1.0/goose/scripts/bench-postprocess-scripts/llm-judges/run_vibes_judge.sh",
+      "post_process_cmd": "/Users/ahau/Development/aster-1.0/aster/scripts/bench-postprocess-scripts/llm-judges/run_vibes_judge.sh",
       "parallel_safe": true
     }
   ],
@@ -254,20 +254,20 @@ We recommend monitoring evaluation progress and checking for errors regularly, e
 
 ### List Evaluations
 ```bash
-goose bench selectors --config /path/to/config.json
+aster bench selectors --config /path/to/config.json
 ```
 
 ### Generate Initial Config
 ```bash
-goose bench init-config --name my-benchmark-config.json
+aster bench init-config --name my-benchmark-config.json
 ```
 
 ### Run Benchmarks
 ```bash
-goose bench run --config /path/to/config.json
+aster bench run --config /path/to/config.json
 ```
 
 ### Generate Leaderboard
 ```bash
-goose bench generate-leaderboard --benchmark-dir /path/to/benchmark-output
+aster bench generate-leaderboard --benchmark-dir /path/to/benchmark-output
 ```

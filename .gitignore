@@ -25,9 +25,9 @@ target/
 ./ui/desktop/node_modules
 ./ui/desktop/out
 
-# Generated goose DLLs (built at build time, not checked in)
-ui/desktop/src/bin/goose_ffi.dll
-ui/desktop/src/bin/goose_llm.dll
+# Generated aster DLLs (built at build time, not checked in)
+ui/desktop/src/bin/aster_ffi.dll
+ui/desktop/src/bin/aster_llm.dll
 
 # Hermit
 .hermit/
@@ -57,8 +57,8 @@ do_not_version/
 /temporal-service/temporal.db
 /ui/desktop/src/bin/temporal.db
 /temporal.db
-/ui/desktop/src/bin/goose-scheduler-executor
-/ui/desktop/src/bin/goose
+/ui/desktop/src/bin/aster-scheduler-executor
+/ui/desktop/src/bin/aster
 /.env
 
 /working_dir
@@ -70,6 +70,6 @@ crates.aster/tests/mcp_replays/*errors.txt
 # Nix build output
 result
 
-# Goose self-test artifacts
-gooseselftest/
+# aster self-test artifacts
+asterselftest/
 .kiro/

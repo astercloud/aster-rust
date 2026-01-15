@@ -1,27 +1,27 @@
 # aster Web Interface
 
-The `goose web` command provides a (preview) web-based chat interface for interacting with goose.
+The `aster web` command provides a (preview) web-based chat interface for interacting with aster.
 Do not expose this publicly - this is in a preview state as an option.
 
 ## Usage
 
 ```bash
 # Start the web server on default port (3000)
-goose web
+aster web
 
 # Start on a specific port
-goose web --port 8080
+aster web --port 8080
 
 # Start and automatically open in browser
-goose web --open
+aster web --open
 
 # Bind to a specific host
-goose web --host 0.0.0.0 --port 8080
+aster web --host 0.0.0.0 --port 8080
 ```
 
 ## Features
 
-- **Real-time chat interface**: Communicate with goose through a clean web UI
+- **Real-time chat interface**: Communicate with aster through a clean web UI
 - **WebSocket support**: Real-time message streaming
 - **Session management**: Each browser tab maintains its own session
 - **Responsive design**: Works on desktop and mobile devices
@@ -53,9 +53,9 @@ The web interface provides:
 - [ ] Code syntax highlighting
 - [ ] Export chat history
 
-### Integration with goose Agent
+### Integration with aster Agent
 
-The web server creates an instance of the goose Agent and processes messages through the same pipeline as the CLI. However, some features like:
+The web server creates an instance of the aster Agent and processes messages through the same pipeline as the CLI. However, some features like:
 - Extension management
 - Tool confirmations
 - File system interactions
@@ -75,4 +75,4 @@ If you encounter issues:
 
 1. **Port already in use**: Try a different port with `--port`
 2. **Cannot connect**: Ensure no firewall is blocking the port
-3. **Agent not configured**: Run `goose configure` first to set up a provider
+3. **Agent not configured**: Run `aster configure` first to set up a provider

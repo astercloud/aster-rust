@@ -1,6 +1,6 @@
 # Aster
 
-Aster 是一个 Rust AI Agent 框架，基于 goose 项目 fork 并改造。
+Aster 是一个 Rust AI Agent 框架，基于 aster 项目 fork 并改造。
 
 ## 特性
 

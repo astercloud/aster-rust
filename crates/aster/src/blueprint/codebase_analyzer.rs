@@ -1229,7 +1229,7 @@ impl CodebaseAnalyzer {
         if codebase
             .dependencies
             .iter()
-            .any(|d| d == "mongoose" || d == "prisma")
+            .any(|d| d == "monaster" || d == "prisma")
         {
             core_features.push("数据库操作".to_string());
         }
@@ -1664,7 +1664,7 @@ impl CodebaseAnalyzer {
                 if codebase.dependencies.iter().any(|d| d == "prisma") {
                     stack.push("Prisma".to_string());
                 }
-                if codebase.dependencies.iter().any(|d| d == "mongoose") {
+                if codebase.dependencies.iter().any(|d| d == "monaster") {
                     stack.push("MongoDB".to_string());
                 }
             }

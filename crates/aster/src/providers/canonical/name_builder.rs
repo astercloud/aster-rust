@@ -379,7 +379,7 @@ mod tests {
             Some("openai/gpt-4o".to_string())
         );
         assert_eq!(
-            map_to_canonical_model("databricks", "kgoose-gpt-4o", r),
+            map_to_canonical_model("databricks", "kaster-gpt-4o", r),
             Some("openai/gpt-4o".to_string())
         );
         assert_eq!(
@@ -393,11 +393,11 @@ mod tests {
             Some("openai/o1".to_string())
         );
         assert_eq!(
-            map_to_canonical_model("databricks", "kgoose-o3", r),
+            map_to_canonical_model("databricks", "kaster-o3", r),
             Some("openai/o3".to_string())
         );
         assert_eq!(
-            map_to_canonical_model("databricks", "headless-goose-o3-mini", r),
+            map_to_canonical_model("databricks", "headless-aster-o3-mini", r),
             Some("openai/o3-mini".to_string())
         );
 
@@ -453,7 +453,7 @@ mod tests {
             Some("x-ai/grok-4-fast".to_string())
         );
         assert_eq!(
-            map_to_canonical_model("databricks", "kgoose-grok-4-fast", r),
+            map_to_canonical_model("databricks", "kaster-grok-4-fast", r),
             Some("x-ai/grok-4-fast".to_string())
         );
 

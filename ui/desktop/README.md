@@ -1,13 +1,13 @@
 # Aster Desktop App
 
-Native desktop app for goose built with [Electron](https://www.electronjs.org/) and [ReactJS](https://react.dev/). 
+Native desktop app for aster built with [Electron](https://www.electronjs.org/) and [ReactJS](https://react.dev/). 
 
 # Building and running
-goose uses [Hermit](https://github.com/cashapp/hermit) to manage dependencies, so you will need to have it installed and activated.
+aster uses [Hermit](https://github.com/cashapp/hermit) to manage dependencies, so you will need to have it installed and activated.
 
 ```
-git clone git@github.com:block/goose.git
-cd goose
+git clone git@github.com:block/aster.git
+cd aster
 source ./bin/activate-hermit
 cd ui/desktop
 npm install
@@ -46,12 +46,12 @@ This is an electron forge app, using vite and react.js. `asterd` runs as multi p
 `npm run bundle:preconfigured` will make a aster.app/zip signed and notarized, but use the following:
 
 ```python
-            f"        process.env.ASTER_PROVIDER__TYPE = '{os.getenv("GOOSE_BUNDLE_TYPE")}';",
-            f"        process.env.ASTER_PROVIDER__HOST = '{os.getenv("GOOSE_BUNDLE_HOST")}';",
-            f"        process.env.ASTER_PROVIDER__MODEL = '{os.getenv("GOOSE_BUNDLE_MODEL")}';"
+            f"        process.env.ASTER_PROVIDER__TYPE = '{os.getenv("aster_BUNDLE_TYPE")}';",
+            f"        process.env.ASTER_PROVIDER__HOST = '{os.getenv("aster_BUNDLE_HOST")}';",
+            f"        process.env.ASTER_PROVIDER__MODEL = '{os.getenv("aster_BUNDLE_MODEL")}';"
 ```
 
-This allows you to set for example ASTER_PROVIDER__TYPE to be "databricks" by default if you want (so when people start aster.app - they will get that out of the box). There is no way to set an api key in that bundling as that would be a terrible idea, so only use providers that can do oauth (like databricks can), otherwise stick to default goose.
+This allows you to set for example ASTER_PROVIDER__TYPE to be "databricks" by default if you want (so when people start aster.app - they will get that out of the box). There is no way to set an api key in that bundling as that would be a terrible idea, so only use providers that can do oauth (like databricks can), otherwise stick to default aster.
 
 ### Linux
 For Linux builds, first ensure you have the required system dependencies installed (see above), then:
@@ -78,9 +78,9 @@ npm run make -- --targets=@electron-forge/maker-deb
 ```
 
 The built application will be available in:
-- ZIP: `out/make/zip/linux/x64/goose-linux-x64-{version}.zip`
-- DEB: `out/make/deb/x64/goose_{version}_amd64.deb`
-- Executable: `out/goose-linux-x64/goose`
+- ZIP: `out/make/zip/linux/x64/aster-linux-x64-{version}.zip`
+- DEB: `out/make/deb/x64/aster_{version}_amd64.deb`
+- Executable: `out/aster-linux-x64/aster`
 
 ### Windows
 Use the existing Windows build process as documented.

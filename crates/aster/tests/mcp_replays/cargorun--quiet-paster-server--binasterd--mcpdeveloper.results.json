@@ -4,7 +4,7 @@
       {
         "type": "resource",
         "resource": {
-          "uri": "file:///tmp/goose_test/aster.txt",
+          "uri": "file:///tmp/aster_test/aster.txt",
           "mimeType": "text",
           "text": "# aster\n"
         },
@@ -16,7 +16,7 @@
       },
       {
         "type": "text",
-        "text": "### /tmp/goose_test/aster.txt\n```\n1: # aster\n```\n",
+        "text": "### /tmp/aster_test/aster.txt\n```\n1: # aster\n```\n",
         "annotations": {
           "audience": [
             "user"
@@ -31,7 +31,7 @@
     "content": [
       {
         "type": "text",
-        "text": "The file /tmp/goose_test/aster.txt has been edited, and the section now reads:\n```\n# aster (modified by test)\n```\n\nReview the changes above for errors. Undo and edit the file again if necessary!\n",
+        "text": "The file /tmp/aster_test/aster.txt has been edited, and the section now reads:\n```\n# aster (modified by test)\n```\n\nReview the changes above for errors. Undo and edit the file again if necessary!\n",
         "annotations": {
           "audience": [
             "assistant"
@@ -79,7 +79,7 @@
     "content": [
       {
         "type": "text",
-        "text": "The file /tmp/goose_test/aster.txt has been edited, and the section now reads:\n```\n# aster\n```\n\nReview the changes above for errors. Undo and edit the file again if necessary!\n",
+        "text": "The file /tmp/aster_test/aster.txt has been edited, and the section now reads:\n```\n# aster\n```\n\nReview the changes above for errors. Undo and edit the file again if necessary!\n",
         "annotations": {
           "audience": [
             "assistant"
