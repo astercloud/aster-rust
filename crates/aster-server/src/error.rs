@@ -21,7 +21,7 @@ pub(crate) fn to_env_var(field_path: &str) -> String {
     };
 
     format!(
-        "GOOSE_{}",
+        "ASTER_{}",
         normalized_path.replace('.', "__").to_uppercase()
     )
 }
