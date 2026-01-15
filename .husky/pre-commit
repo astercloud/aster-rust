@@ -1,11 +1,20 @@
 #!/bin/sh
 
 # Rust 代码格式化
-if git diff --cached --name-only | grep -qE '\.(rs)$'; then
+if git diff --cached --name-only | grep -qE '\.rs$'; then
   echo "🦀 Running cargo fmt..."
+  cargo fmt
+  
+  # 检查是否有格式化的更改
+  if ! git diff --quiet; then
+    echo "📝 cargo fmt 已自动修复格式问题，正在添加更改..."
+    git diff --cached --name-only | grep -E '\.rs$' | xargs git add
+  fi
+  
+  # 最终检查
   cargo fmt --check
   if [ $? -ne 0 ]; then
-    echo "❌ Rust 代码格式检查失败，请运行 'cargo fmt' 修复"
+    echo "❌ Rust 代码格式检查失败"
     exit 1
   fi
   echo "✅ Rust 格式检查通过"
