@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 /// Parse frontmatter from skill content
 ///
-/// ```
+/// ```text
 /// function NV(A) {
 ///   let Q = /^---\s*\n([\s\S]*?)---\s*\n?/;
 ///   let B = A.match(Q);
