@@ -8,8 +8,8 @@
 #[cfg(test)]
 mod property_tests {
     use crate::agents::communication::coordinator::{
-        AgentCapabilities, AgentCoordinator, AgentStatus, AssignmentCriteria,
-        LoadBalanceStrategy, Task, TaskResult, TaskStatus,
+        AgentCapabilities, AgentCoordinator, AgentStatus, AssignmentCriteria, LoadBalanceStrategy,
+        Task, TaskResult, TaskStatus,
     };
     use chrono::Utc;
     use proptest::prelude::*;

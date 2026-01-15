@@ -8,10 +8,14 @@ use super::types::*;
 /// 获取当前平台
 pub fn get_platform() -> Platform {
     #[cfg(target_os = "macos")]
-    return Platform::MacOS;
+    {
+        Platform::MacOS
+    }
 
     #[cfg(target_os = "windows")]
-    return Platform::Windows;
+    {
+        Platform::Windows
+    }
 
     #[cfg(target_os = "linux")]
     {
@@ -23,11 +27,13 @@ pub fn get_platform() -> Platform {
                 return Platform::Wsl;
             }
         }
-        return Platform::Linux;
+        Platform::Linux
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-    return Platform::Unknown;
+    {
+        Platform::Unknown
+    }
 }
 
 /// 获取 Chrome Native Messaging Hosts 目录路径

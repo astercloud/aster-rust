@@ -216,7 +216,9 @@ fn test_priority_sorting_with_budget() {
 
     // Verify summary message has critical priority
     let summary_msg = prioritized.iter().find(|p| {
-        if let Some(aster::conversation::message::MessageContent::Text(t)) = p.message.content.first() {
+        if let Some(aster::conversation::message::MessageContent::Text(t)) =
+            p.message.content.first()
+        {
             return t.text.contains("[Summary]");
         }
         false

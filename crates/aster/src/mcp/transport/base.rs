@@ -293,7 +293,7 @@ pub enum TransportEvent {
     /// Transport encountered an error
     Error { error: String },
     /// Message received from transport
-    MessageReceived(McpMessage),
+    MessageReceived(Box<McpMessage>),
 }
 
 /// Transport trait for MCP communication

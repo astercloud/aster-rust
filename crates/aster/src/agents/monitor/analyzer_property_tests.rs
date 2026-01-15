@@ -10,13 +10,13 @@
 use proptest::prelude::*;
 use std::time::Duration;
 
-#[allow(unused_imports)]
-use crate::agents::monitor::alerts::AgentExecutionStatus;
 use super::analyzer::{
     BottleneckCategory, PerformanceAnalyzer, PerformanceRating, PerformanceScores,
 };
 #[allow(unused_imports)]
 use super::metrics::{FullAgentMetrics, PerformanceMetrics, ToolCallMetric};
+#[allow(unused_imports)]
+use crate::agents::monitor::alerts::AgentExecutionStatus;
 
 /// Strategy for generating valid agent IDs
 fn agent_id_strategy() -> impl Strategy<Value = String> {

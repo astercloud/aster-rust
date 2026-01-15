@@ -29,7 +29,7 @@ impl SystemChecker {
                 stdout: s.into_bytes(),
                 stderr: Vec::new(),
             })
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+            .map_err(std::io::Error::other);
 
         match load_result {
             Ok(output) => {

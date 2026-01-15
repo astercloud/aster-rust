@@ -150,8 +150,8 @@ impl StdioTransport {
         if let Ok(notification) = serde_json::from_str::<McpNotification>(message) {
             if let Some(tx) = event_tx.lock().await.as_ref() {
                 let _ = tx
-                    .send(TransportEvent::MessageReceived(McpMessage::Notification(
-                        notification,
+                    .send(TransportEvent::MessageReceived(Box::new(
+                        McpMessage::Notification(notification),
                     )))
                     .await;
             }
@@ -162,8 +162,8 @@ impl StdioTransport {
         if let Ok(request) = serde_json::from_str::<McpRequest>(message) {
             if let Some(tx) = event_tx.lock().await.as_ref() {
                 let _ = tx
-                    .send(TransportEvent::MessageReceived(McpMessage::Request(
-                        request,
+                    .send(TransportEvent::MessageReceived(Box::new(
+                        McpMessage::Request(request),
                     )))
                     .await;
             }

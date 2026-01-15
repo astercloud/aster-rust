@@ -165,9 +165,7 @@ mod tests {
     #[test]
     fn test_is_retryable() {
         assert!(ToolError::timeout(Duration::from_secs(1)).is_retryable());
-        assert!(
-            ToolError::Io(std::io::Error::other("test")).is_retryable()
-        );
+        assert!(ToolError::Io(std::io::Error::other("test")).is_retryable());
         assert!(!ToolError::not_found("test").is_retryable());
         assert!(!ToolError::permission_denied("test").is_retryable());
         assert!(!ToolError::safety_check_failed("test").is_retryable());
