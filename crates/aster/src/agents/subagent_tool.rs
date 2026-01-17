@@ -40,6 +40,13 @@ pub struct SubagentParams {
     pub settings: Option<SubagentSettings>,
     #[serde(default = "default_summary")]
     pub summary: bool,
+    pub images: Option<Vec<ImageData>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ImageData {
+    pub data: String,
+    pub mime_type: String,
 }
 
 fn default_summary() -> bool {
@@ -90,6 +97,18 @@ pub fn create_subagent_tool(sub_recipes: &[SubRecipe]) -> Tool {
                 "type": "boolean",
                 "default": true,
                 "description": "If true (default), return only the subagent's final summary."
+            },
+            "images": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "data": {"type": "string", "description": "Base64 encoded image data"},
+                        "mime_type": {"type": "string", "description": "MIME type of the image"}
+                    },
+                    "required": ["data", "mime_type"]
+                },
+                "description": "Images to include in the subagent task for multimodal analysis."
             }
         }
     });
@@ -267,6 +286,7 @@ async fn execute_subagent(
         task_config,
         params.summary,
         session.id,
+        params.images,
         cancellation_token,
     )
     .await;

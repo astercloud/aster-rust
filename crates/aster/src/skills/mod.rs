@@ -10,7 +10,7 @@
 
 mod loader;
 mod registry;
-mod tool;
+pub mod tool;
 mod types;
 
 pub use loader::*;

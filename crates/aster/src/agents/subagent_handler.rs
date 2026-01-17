@@ -32,10 +32,11 @@ pub async fn run_complete_subagent_task(
     task_config: TaskConfig,
     return_last_only: bool,
     session_id: String,
+    images: Option<Vec<crate::agents::subagent_tool::ImageData>>,
     cancellation_token: Option<CancellationToken>,
 ) -> Result<String, anyhow::Error> {
     let (messages, final_output) =
-        get_agent_messages(recipe, task_config, session_id, cancellation_token)
+        get_agent_messages(recipe, task_config, session_id, images, cancellation_token)
             .await
             .map_err(|e| {
                 ErrorData::new(
@@ -114,6 +115,7 @@ fn get_agent_messages(
     recipe: Recipe,
     task_config: TaskConfig,
     session_id: String,
+    images: Option<Vec<crate::agents::subagent_tool::ImageData>>,
     cancellation_token: Option<CancellationToken>,
 ) -> AgentMessagesFuture {
     Box::pin(async move {
@@ -172,7 +174,15 @@ fn get_agent_messages(
         .map_err(|e| anyhow!("Failed to render subagent system prompt: {}", e))?;
         agent.override_system_prompt(subagent_prompt).await;
 
-        let user_message = Message::user().with_text(user_task);
+        let mut user_message = Message::user().with_text(user_task);
+
+        // 添加图片内容到用户消息中
+        if let Some(images) = images {
+            for image in images {
+                user_message = user_message.with_image(image.data, image.mime_type);
+            }
+        }
+
         let mut conversation = Conversation::new_unvalidated(vec![user_message.clone()]);
 
         if let Some(activities) = recipe.activities {

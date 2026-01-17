@@ -47,6 +47,7 @@ serde_urlencoded = "0.7"
 jsonschema = "0.30.0"
 uuid = { version = "1.0", features = ["v4"] }
 regex = "1.11.1"
+scraper = "0.20"
 async-trait = "0.1.89"
 async-stream = "0.3"
 minijinja = { version = "2.12.0", features = ["loader"] }
@@ -141,6 +142,7 @@ test-case = "3.3"
 env-lock = "1.0.1"
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 proptest = "1.5"
+tempfile = "3.15.0"
 
 [[example]]
 name = "agent"

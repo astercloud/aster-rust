@@ -20,8 +20,17 @@ pub mod task;
 pub mod ask;
 pub mod bash;
 pub mod file;
+pub mod kill_shell_tool;
 pub mod lsp;
+pub mod notebook_edit_tool;
+pub mod plan_mode_tool;
 pub mod search;
+pub mod task_output_tool;
+pub mod task_tool;
+pub mod todo_write_tool;
+pub mod web;
+
+// Skills integration
 
 // =============================================================================
 // Core Type Exports
@@ -67,6 +76,20 @@ pub use lsp::{
     CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, HoverInfo, Location,
     LspCallback, LspOperation, LspResult, LspTool, Position, Range,
 };
+
+// Skill tool
+pub use crate::skills::SkillTool;
+
+// Task tools
+pub use kill_shell_tool::KillShellTool;
+pub use notebook_edit_tool::{NotebookCell, NotebookContent, NotebookEditInput, NotebookEditTool};
+pub use plan_mode_tool::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState, SavedPlan};
+pub use task_output_tool::TaskOutputTool;
+pub use task_tool::TaskTool;
+pub use todo_write_tool::{TodoItem, TodoStatus, TodoStorage, TodoWriteTool};
+
+// Web tools
+pub use web::{clear_web_caches, get_web_cache_stats, WebCache, WebFetchTool, WebSearchTool};
 
 // =============================================================================
 // Tool Registration (Requirements: 11.3)
@@ -145,6 +168,7 @@ impl ToolRegistrationConfig {
 /// - GrepTool: Content search with regex
 /// - AskTool: User interaction (if callback provided)
 /// - LSPTool: Code intelligence (if callback provided)
+/// - SkillTool: Skill execution and management
 ///
 /// # Arguments
 /// * `registry` - The ToolRegistry to register tools with
@@ -190,6 +214,24 @@ pub fn register_all_tools(
         registry.register(Box::new(lsp_tool));
     }
 
+    // Register SkillTool
+    registry.register(Box::new(SkillTool::new()));
+
+    // Register TaskTool and TaskOutputTool
+    registry.register(Box::new(TaskTool::new()));
+    registry.register(Box::new(TaskOutputTool::new()));
+    registry.register(Box::new(KillShellTool::new()));
+    registry.register(Box::new(TodoWriteTool::new()));
+    registry.register(Box::new(NotebookEditTool::new()));
+
+    // Register Plan Mode tools
+    registry.register(Box::new(EnterPlanModeTool::new()));
+    registry.register(Box::new(ExitPlanModeTool::new()));
+
+    // Register Web tools
+    registry.register(Box::new(WebFetchTool::new()));
+    registry.register(Box::new(WebSearchTool::new()));
+
     shared_history
 }
 
@@ -226,6 +268,16 @@ mod tests {
         assert!(registry.contains("edit"));
         assert!(registry.contains("glob"));
         assert!(registry.contains("grep"));
+        assert!(registry.contains("Skill"));
+        assert!(registry.contains("Task"));
+        assert!(registry.contains("TaskOutput"));
+        assert!(registry.contains("KillShell"));
+        assert!(registry.contains("TodoWrite"));
+        assert!(registry.contains("NotebookEdit"));
+        assert!(registry.contains("EnterPlanMode"));
+        assert!(registry.contains("ExitPlanMode"));
+        assert!(registry.contains("WebFetch"));
+        assert!(registry.contains("WebSearch"));
 
         // AskTool and LSPTool should not be registered without callbacks
         assert!(!registry.contains("ask"));
@@ -267,6 +319,16 @@ mod tests {
         assert!(registry.contains("grep"));
         assert!(registry.contains("ask"));
         assert!(registry.contains("lsp"));
+        assert!(registry.contains("Skill"));
+        assert!(registry.contains("Task"));
+        assert!(registry.contains("TaskOutput"));
+        assert!(registry.contains("KillShell"));
+        assert!(registry.contains("TodoWrite"));
+        assert!(registry.contains("NotebookEdit"));
+        assert!(registry.contains("EnterPlanMode"));
+        assert!(registry.contains("ExitPlanMode"));
+        assert!(registry.contains("WebFetch"));
+        assert!(registry.contains("WebSearch"));
     }
 
     #[test]
