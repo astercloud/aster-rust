@@ -95,7 +95,7 @@ const TEXT_EXTENSIONS: &[&str] = &[
 ];
 
 /// Line range for partial file reading
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct LineRange {
     /// Start line (1-indexed, inclusive)
     pub start: usize,
@@ -132,6 +132,17 @@ impl LineRange {
 /// - Jupyter notebooks
 ///
 /// Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+/// File analysis information for enhanced text reading
+#[derive(Debug)]
+struct TextFileInfo {
+    path: PathBuf,
+    extension: String,
+    language: Option<String>,
+    file_category: String,
+    size_bytes: u64,
+    total_lines: usize,
+}
+
 #[derive(Debug)]
 pub struct ReadTool {
     /// Shared file read history
@@ -578,32 +589,33 @@ impl ReadTool {
     ) -> Result<String, ToolError> {
         let full_path = self.resolve_path(path, context);
 
-        // Check file exists
-        if !full_path.exists() {
-            return Err(ToolError::execution_failed(format!(
-                "Notebook not found: {}",
-                full_path.display()
-            )));
-        }
-
-        // Read and parse JSON
-        let content = fs::read(&full_path)?;
-        let metadata = fs::metadata(&full_path)?;
-
-        let notebook: serde_json::Value = serde_json::from_slice(&content).map_err(|e| {
-            ToolError::execution_failed(format!("Failed to parse notebook JSON: {}", e))
-        })?;
-
+        // Check file exists and read content
+        let (content, metadata, notebook) = self.load_notebook_file(&full_path)?;
+        
         // Record the read
         self.record_file_read(&full_path, &content, &metadata)?;
 
-        // Extract cells
-        let cells = notebook
-            .get("cells")
-            .and_then(|c| c.as_array())
-            .ok_or_else(|| ToolError::execution_failed("Invalid notebook format: missing cells"))?;
+        // Extract cells and build output
+        let cells = self.extract_notebook_cells(&notebook)?;
+        let output = self.build_notebook_output(&full_path, &metadata, cells);
 
-        let mut output = Vec::new();
+        debug!(
+            "Enhanced notebook read: {} ({} cells)",
+            full_path.display(),
+            cells.len()
+        );
+
+        Ok(output.join("\n"))
+    }
+
+    /// Add notebook header and statistics
+    fn add_notebook_header(
+        &self,
+        output: &mut Vec<String>,
+        full_path: &Path,
+        metadata: &fs::Metadata,
+        cells: &[serde_json::Value],
+    ) {
         output.push(format!(
             "[Enhanced Notebook Analysis: {}]",
             full_path.display()
@@ -615,6 +627,61 @@ impl ReadTool {
         output.push(format!("Total cells: {}", cells.len()));
 
         // Analyze cell types
+        let (code_cells, markdown_cells, other_cells) = self.analyze_cell_types(cells);
+        output.push(format!(
+            "Code cells: {}, Markdown cells: {}, Other: {}",
+            code_cells, markdown_cells, other_cells
+        ));
+        output.push(String::new());
+    }
+
+    /// Load and parse notebook file
+    fn load_notebook_file(&self, full_path: &Path) -> Result<(Vec<u8>, fs::Metadata, serde_json::Value), ToolError> {
+        // Check file exists
+        if !full_path.exists() {
+            return Err(ToolError::execution_failed(format!(
+                "Notebook not found: {}",
+                full_path.display()
+            )));
+        }
+
+        // Read and parse JSON
+        let content = fs::read(full_path)?;
+        let metadata = fs::metadata(full_path)?;
+
+        let notebook: serde_json::Value = serde_json::from_slice(&content).map_err(|e| {
+            ToolError::execution_failed(format!("Failed to parse notebook JSON: {}", e))
+        })?;
+
+        Ok((content, metadata, notebook))
+    }
+
+    /// Extract cells from notebook JSON
+    fn extract_notebook_cells<'a>(&self, notebook: &'a serde_json::Value) -> Result<&'a Vec<serde_json::Value>, ToolError> {
+        notebook
+            .get("cells")
+            .and_then(|c| c.as_array())
+            .ok_or_else(|| ToolError::execution_failed("Invalid notebook format: missing cells"))
+    }
+
+    /// Build complete notebook output
+    fn build_notebook_output(&self, full_path: &Path, metadata: &fs::Metadata, cells: &[serde_json::Value]) -> Vec<String> {
+        let mut output = Vec::new();
+        
+        // Add header and statistics
+        self.add_notebook_header(&mut output, full_path, metadata, cells);
+        
+        // Add analysis capabilities
+        self.add_analysis_capabilities(&mut output);
+        
+        // Process each cell
+        self.process_notebook_cells(&mut output, cells);
+
+        output
+    }
+
+    /// Analyze cell types and return counts
+    fn analyze_cell_types(&self, cells: &[serde_json::Value]) -> (usize, usize, usize) {
         let mut code_cells = 0;
         let mut markdown_cells = 0;
         let mut other_cells = 0;
@@ -631,13 +698,11 @@ impl ReadTool {
             }
         }
 
-        output.push(format!(
-            "Code cells: {}, Markdown cells: {}, Other: {}",
-            code_cells, markdown_cells, other_cells
-        ));
-        output.push(String::new());
+        (code_cells, markdown_cells, other_cells)
+    }
 
-        // Add analysis capabilities
+    /// Add analysis capabilities description
+    fn add_analysis_capabilities(&self, output: &mut Vec<String>) {
         output.push("AI Analysis Capabilities:".to_string());
         output.push("- Code execution flow analysis".to_string());
         output.push("- Data visualization interpretation".to_string());
@@ -646,68 +711,70 @@ impl ReadTool {
         output.push("- Output and result interpretation".to_string());
         output.push("- Machine learning workflow analysis".to_string());
         output.push(String::new());
+    }
 
-        // Process each cell with enhanced formatting
+    /// Process all notebook cells
+    fn process_notebook_cells(&self, output: &mut Vec<String>, cells: &[serde_json::Value]) {
         for (i, cell) in cells.iter().enumerate() {
-            let cell_type = cell
-                .get("cell_type")
-                .and_then(|t| t.as_str())
-                .unwrap_or("unknown");
-
-            let source = cell
-                .get("source")
-                .map(|s| self.extract_cell_source(s))
-                .unwrap_or_default();
-
-            match cell_type {
-                "code" => {
-                    output.push(format!("## Cell {} [Code Cell] 🐍", i + 1));
-                    output.push("```python".to_string());
-                    output.push(source);
-                    output.push("```".to_string());
-
-                    // Include outputs if present with enhanced analysis
-                    if let Some(outputs) = cell.get("outputs").and_then(|o| o.as_array()) {
-                        if !outputs.is_empty() {
-                            output.push("### Execution Output:".to_string());
-                            for (out_idx, out) in outputs.iter().enumerate() {
-                                if let Some(text) = self.extract_output_text(out) {
-                                    output.push(format!(
-                                        "#### Output {} [{}]:",
-                                        out_idx + 1,
-                                        out.get("output_type")
-                                            .and_then(|t| t.as_str())
-                                            .unwrap_or("result")
-                                    ));
-                                    output.push("```".to_string());
-                                    output.push(text);
-                                    output.push("```".to_string());
-                                }
-                            }
-                        }
-                    }
-                }
-                "markdown" => {
-                    output.push(format!("## Cell {} [Markdown Cell] 📝", i + 1));
-                    output.push(source);
-                }
-                _ => {
-                    output.push(format!("## Cell {} [{}] ❓", i + 1, cell_type));
-                    output.push(source);
-                }
-            }
+            self.process_single_cell(output, cell, i + 1);
             output.push(String::new());
         }
+    }
 
-        debug!(
-            "Enhanced notebook read: {} ({} cells: {} code, {} markdown)",
-            full_path.display(),
-            cells.len(),
-            code_cells,
-            markdown_cells
-        );
+    /// Process a single notebook cell
+    fn process_single_cell(&self, output: &mut Vec<String>, cell: &serde_json::Value, cell_num: usize) {
+        let cell_type = cell
+            .get("cell_type")
+            .and_then(|t| t.as_str())
+            .unwrap_or("unknown");
 
-        Ok(output.join("\n"))
+        let source = cell
+            .get("source")
+            .map(|s| self.extract_cell_source(s))
+            .unwrap_or_default();
+
+        match cell_type {
+            "code" => {
+                output.push(format!("## Cell {} [Code Cell] 🐍", cell_num));
+                output.push("```python".to_string());
+                output.push(source);
+                output.push("```".to_string());
+
+                // Include outputs if present
+                self.process_cell_outputs(output, cell);
+            }
+            "markdown" => {
+                output.push(format!("## Cell {} [Markdown Cell] 📝", cell_num));
+                output.push(source);
+            }
+            _ => {
+                output.push(format!("## Cell {} [{}] ❓", cell_num, cell_type));
+                output.push(source);
+            }
+        }
+    }
+
+    /// Process cell outputs
+    fn process_cell_outputs(&self, output: &mut Vec<String>, cell: &serde_json::Value) {
+        if let Some(outputs) = cell.get("outputs").and_then(|o| o.as_array()) {
+            if !outputs.is_empty() {
+                output.push("### Execution Output:".to_string());
+                for (out_idx, out) in outputs.iter().enumerate() {
+                    if let Some(text) = self.extract_output_text(out) {
+                        output.push(format!(
+                            "#### Output {} [{}]:",
+                            out_idx + 1,
+                            out.get("output_type")
+                                .and_then(|t| t.as_str())
+                                .unwrap_or("result")
+                        ));
+                        output.push("```".to_string());
+                        output.push(text);
+                        output.push("```".to_string());
+                    }
+                }
+            }
+        }
     }
 
     /// Extract source from a cell (handles both string and array formats)
@@ -911,7 +978,53 @@ impl ReadTool {
     ) -> Result<String, ToolError> {
         let full_path = self.resolve_path(path, context);
 
-        // Check file exists
+        // Load and validate file
+        let (content, metadata, text) = self.load_text_file(&full_path)?;
+        
+        // Record the read
+        self.record_file_read(&full_path, &content, &metadata)?;
+
+        // Analyze and format content
+        let file_info = self.analyze_text_file(&full_path, &text, &metadata);
+        let formatted_content = self.format_text_with_lines(&text, range);
+        let output = self.build_text_analysis_output(&file_info, &formatted_content, range);
+
+        debug!(
+            "Enhanced text read: {} ({} lines, {}, {})",
+            full_path.display(),
+            file_info.total_lines,
+            file_info.file_category,
+            file_info.language.unwrap_or_else(|| "unknown".to_string())
+        );
+
+        Ok(output.join("\n"))
+    }
+
+    /// Analyze text file and extract metadata
+    fn analyze_text_file(&self, path: &Path, text: &str, metadata: &fs::Metadata) -> TextFileInfo {
+        let extension = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        let language = self.detect_programming_language(&extension, text);
+        let file_category = self.categorize_file_type(&extension);
+        let total_lines = text.lines().count();
+
+        TextFileInfo {
+            path: path.to_path_buf(),
+            extension,
+            language,
+            file_category,
+            size_bytes: metadata.len(),
+            total_lines,
+        }
+    }
+
+    /// Load and validate text file
+    fn load_text_file(&self, full_path: &Path) -> Result<(Vec<u8>, fs::Metadata, String), ToolError> {
+        // Check file exists and size
         if !full_path.exists() {
             return Err(ToolError::execution_failed(format!(
                 "File not found: {}",
@@ -919,8 +1032,7 @@ impl ReadTool {
             )));
         }
 
-        // Check file size
-        let metadata = fs::metadata(&full_path)?;
+        let metadata = fs::metadata(full_path)?;
         if metadata.len() > MAX_TEXT_FILE_SIZE {
             return Err(ToolError::execution_failed(format!(
                 "File too large: {} bytes (max: {} bytes)",
@@ -929,24 +1041,15 @@ impl ReadTool {
             )));
         }
 
-        // Read file content
-        let content = fs::read(&full_path)?;
-        let text = String::from_utf8_lossy(&content);
+        // Read and process file
+        let content = fs::read(full_path)?;
+        let text = String::from_utf8_lossy(&content).to_string();
 
-        // Record the read
-        self.record_file_read(&full_path, &content, &metadata)?;
+        Ok((content, metadata, text))
+    }
 
-        // Detect file type and language
-        let extension = full_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-
-        let language = self.detect_programming_language(&extension, &text);
-        let file_category = self.categorize_file_type(&extension);
-
-        // Format with line numbers
+    /// Format text content with line numbers
+    fn format_text_with_lines(&self, text: &str, range: Option<LineRange>) -> Vec<String> {
         let lines: Vec<&str> = text.lines().collect();
         let total_lines = lines.len();
 
@@ -959,41 +1062,75 @@ impl ReadTool {
             None => (0, total_lines),
         };
 
-        // Calculate line number width for formatting
         let line_width = (end.max(1)).to_string().len();
 
-        let formatted: Vec<String> = lines[start..end]
+        lines[start..end]
             .iter()
             .enumerate()
             .map(|(i, line)| {
                 let line_num = start + i + 1;
                 format!("{:>width$} | {}", line_num, line, width = line_width)
             })
-            .collect();
+            .collect()
+    }
 
-        // Build enhanced output with analysis information
+    /// Build enhanced text analysis output
+    fn build_text_analysis_output(
+        &self,
+        file_info: &TextFileInfo,
+        formatted_content: &[String],
+        range: Option<LineRange>,
+    ) -> Vec<String> {
         let mut output = Vec::new();
-        output.push(format!("[Enhanced Text Analysis: {}]", full_path.display()));
-        output.push(format!("File type: {} ({})", file_category, extension));
-        if let Some(lang) = &language {
+        
+        // Add header information
+        output.push(format!("[Enhanced Text Analysis: {}]", file_info.path.display()));
+        output.push(format!("File type: {} ({})", file_info.file_category, file_info.extension));
+        if let Some(lang) = &file_info.language {
             output.push(format!("Programming language: {}", lang));
         }
         output.push(format!(
             "Size: {} KB ({} bytes)",
-            (metadata.len() as f64 / 1024.0).round() as u64,
-            metadata.len()
+            (file_info.size_bytes as f64 / 1024.0).round() as u64,
+            file_info.size_bytes
         ));
+
+        // Add line information
+        let (start, end) = self.get_display_range(file_info.total_lines, range);
         output.push(format!(
             "Lines: {} total, showing {}-{}",
-            total_lines,
-            start + 1,
+            file_info.total_lines,
+            start,
             end
         ));
         output.push(String::new());
 
-        // Add analysis capabilities based on file type
+        // Add analysis capabilities
+        self.add_text_analysis_capabilities(&mut output, &file_info.file_category);
+        
+        // Add formatted content
+        output.push("File Content:".to_string());
+        output.extend_from_slice(formatted_content);
+
+        output
+    }
+
+    /// Get display range for line information
+    fn get_display_range(&self, total_lines: usize, range: Option<LineRange>) -> (usize, usize) {
+        match range {
+            Some(r) => {
+                let start = r.start.min(total_lines + 1);
+                let end = r.end.map(|e| e.min(total_lines)).unwrap_or(total_lines);
+                (start, end)
+            }
+            None => (1, total_lines),
+        }
+    }
+
+    /// Add analysis capabilities based on file type
+    fn add_text_analysis_capabilities(&self, output: &mut Vec<String>, file_category: &str) {
         output.push("AI Analysis Capabilities:".to_string());
-        match file_category.as_str() {
+        match file_category {
             "Source Code" => {
                 output.push("- Code structure and syntax analysis".to_string());
                 output.push("- Function and class identification".to_string());
@@ -1021,20 +1158,6 @@ impl ReadTool {
             }
         }
         output.push(String::new());
-
-        // Add the formatted content
-        output.push("File Content:".to_string());
-        output.extend(formatted);
-
-        debug!(
-            "Enhanced text read: {} ({} lines, {}, {})",
-            full_path.display(),
-            total_lines,
-            file_category,
-            language.unwrap_or_else(|| "unknown".to_string())
-        );
-
-        Ok(output.join("\n"))
     }
 
     /// Detect programming language from extension and content
