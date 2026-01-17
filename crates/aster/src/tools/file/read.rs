@@ -591,7 +591,7 @@ impl ReadTool {
 
         // Check file exists and read content
         let (content, metadata, notebook) = self.load_notebook_file(&full_path)?;
-        
+
         // Record the read
         self.record_file_read(&full_path, &content, &metadata)?;
 
@@ -636,7 +636,10 @@ impl ReadTool {
     }
 
     /// Load and parse notebook file
-    fn load_notebook_file(&self, full_path: &Path) -> Result<(Vec<u8>, fs::Metadata, serde_json::Value), ToolError> {
+    fn load_notebook_file(
+        &self,
+        full_path: &Path,
+    ) -> Result<(Vec<u8>, fs::Metadata, serde_json::Value), ToolError> {
         // Check file exists
         if !full_path.exists() {
             return Err(ToolError::execution_failed(format!(
@@ -657,7 +660,10 @@ impl ReadTool {
     }
 
     /// Extract cells from notebook JSON
-    fn extract_notebook_cells<'a>(&self, notebook: &'a serde_json::Value) -> Result<&'a Vec<serde_json::Value>, ToolError> {
+    fn extract_notebook_cells<'a>(
+        &self,
+        notebook: &'a serde_json::Value,
+    ) -> Result<&'a Vec<serde_json::Value>, ToolError> {
         notebook
             .get("cells")
             .and_then(|c| c.as_array())
@@ -665,15 +671,20 @@ impl ReadTool {
     }
 
     /// Build complete notebook output
-    fn build_notebook_output(&self, full_path: &Path, metadata: &fs::Metadata, cells: &[serde_json::Value]) -> Vec<String> {
+    fn build_notebook_output(
+        &self,
+        full_path: &Path,
+        metadata: &fs::Metadata,
+        cells: &[serde_json::Value],
+    ) -> Vec<String> {
         let mut output = Vec::new();
-        
+
         // Add header and statistics
         self.add_notebook_header(&mut output, full_path, metadata, cells);
-        
+
         // Add analysis capabilities
         self.add_analysis_capabilities(&mut output);
-        
+
         // Process each cell
         self.process_notebook_cells(&mut output, cells);
 
@@ -722,7 +733,12 @@ impl ReadTool {
     }
 
     /// Process a single notebook cell
-    fn process_single_cell(&self, output: &mut Vec<String>, cell: &serde_json::Value, cell_num: usize) {
+    fn process_single_cell(
+        &self,
+        output: &mut Vec<String>,
+        cell: &serde_json::Value,
+        cell_num: usize,
+    ) {
         let cell_type = cell
             .get("cell_type")
             .and_then(|t| t.as_str())
@@ -980,7 +996,7 @@ impl ReadTool {
 
         // Load and validate file
         let (content, metadata, text) = self.load_text_file(&full_path)?;
-        
+
         // Record the read
         self.record_file_read(&full_path, &content, &metadata)?;
 
@@ -1023,7 +1039,10 @@ impl ReadTool {
     }
 
     /// Load and validate text file
-    fn load_text_file(&self, full_path: &Path) -> Result<(Vec<u8>, fs::Metadata, String), ToolError> {
+    fn load_text_file(
+        &self,
+        full_path: &Path,
+    ) -> Result<(Vec<u8>, fs::Metadata, String), ToolError> {
         // Check file exists and size
         if !full_path.exists() {
             return Err(ToolError::execution_failed(format!(
@@ -1082,10 +1101,16 @@ impl ReadTool {
         range: Option<LineRange>,
     ) -> Vec<String> {
         let mut output = Vec::new();
-        
+
         // Add header information
-        output.push(format!("[Enhanced Text Analysis: {}]", file_info.path.display()));
-        output.push(format!("File type: {} ({})", file_info.file_category, file_info.extension));
+        output.push(format!(
+            "[Enhanced Text Analysis: {}]",
+            file_info.path.display()
+        ));
+        output.push(format!(
+            "File type: {} ({})",
+            file_info.file_category, file_info.extension
+        ));
         if let Some(lang) = &file_info.language {
             output.push(format!("Programming language: {}", lang));
         }
@@ -1099,15 +1124,13 @@ impl ReadTool {
         let (start, end) = self.get_display_range(file_info.total_lines, range);
         output.push(format!(
             "Lines: {} total, showing {}-{}",
-            file_info.total_lines,
-            start,
-            end
+            file_info.total_lines, start, end
         ));
         output.push(String::new());
 
         // Add analysis capabilities
         self.add_text_analysis_capabilities(&mut output, &file_info.file_category);
-        
+
         // Add formatted content
         output.push("File Content:".to_string());
         output.extend_from_slice(formatted_content);

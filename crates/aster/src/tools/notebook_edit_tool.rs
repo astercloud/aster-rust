@@ -138,7 +138,9 @@ impl NotebookEditTool {
             let cell_type = cell
                 .get("cell_type")
                 .and_then(|t| t.as_str())
-                .ok_or_else(|| format!("Invalid cell at index {}: missing or invalid cell_type", i))?;
+                .ok_or_else(|| {
+                    format!("Invalid cell at index {}: missing or invalid cell_type", i)
+                })?;
 
             if !["code", "markdown", "raw"].contains(&cell_type) {
                 return Err(format!(
@@ -186,8 +188,12 @@ impl NotebookEditTool {
     fn clear_cell_outputs(&self, cell: &mut serde_json::Value) {
         if let Some(cell_type) = cell.get("cell_type").and_then(|t| t.as_str()) {
             if cell_type == "code" {
-                cell.as_object_mut().unwrap().insert("outputs".to_string(), serde_json::json!([]));
-                cell.as_object_mut().unwrap().insert("execution_count".to_string(), serde_json::Value::Null);
+                cell.as_object_mut()
+                    .unwrap()
+                    .insert("outputs".to_string(), serde_json::json!([]));
+                cell.as_object_mut()
+                    .unwrap()
+                    .insert("execution_count".to_string(), serde_json::Value::Null);
             } else {
                 // 对于非 code 单元格，移除 outputs 和 execution_count 字段
                 if let Some(obj) = cell.as_object_mut() {
@@ -293,9 +299,10 @@ impl Tool for NotebookEditTool {
         }
 
         // 检查是否是文件（不是目录）
-        let metadata = fs::metadata(&notebook_path)
-            .map_err(|e| ToolError::execution_failed(format!("Failed to read file metadata: {}", e)))?;
-        
+        let metadata = fs::metadata(&notebook_path).map_err(|e| {
+            ToolError::execution_failed(format!("Failed to read file metadata: {}", e))
+        })?;
+
         if !metadata.is_file() {
             return Ok(ToolResult::error(format!(
                 "Path is not a file: {}",
@@ -307,16 +314,21 @@ impl Tool for NotebookEditTool {
         if notebook_path.extension().is_none_or(|ext| ext != "ipynb") {
             return Ok(ToolResult::error(format!(
                 "File must be a Jupyter notebook (.ipynb), got: {}",
-                notebook_path.extension().unwrap_or_default().to_string_lossy()
+                notebook_path
+                    .extension()
+                    .unwrap_or_default()
+                    .to_string_lossy()
             )));
         }
 
         // 读取并解析 notebook
-        let content = fs::read_to_string(&notebook_path)
-            .map_err(|e| ToolError::execution_failed(format!("Failed to read notebook file: {}", e)))?;
+        let content = fs::read_to_string(&notebook_path).map_err(|e| {
+            ToolError::execution_failed(format!("Failed to read notebook file: {}", e))
+        })?;
 
-        let mut notebook: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| ToolError::execution_failed(format!("Failed to parse notebook JSON: {}", e)))?;
+        let mut notebook: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+            ToolError::execution_failed(format!("Failed to parse notebook JSON: {}", e))
+        })?;
 
         // 验证 notebook 格式
         if let Err(error) = self.validate_notebook_format(&notebook) {
@@ -324,14 +336,22 @@ impl Tool for NotebookEditTool {
         }
 
         // 提前获取 nbformat 信息，避免借用冲突
-        let nbformat = notebook.get("nbformat").and_then(|n| n.as_u64()).unwrap_or(4);
-        let nbformat_minor = notebook.get("nbformat_minor").and_then(|n| n.as_u64()).unwrap_or(0);
+        let nbformat = notebook
+            .get("nbformat")
+            .and_then(|n| n.as_u64())
+            .unwrap_or(4);
+        let nbformat_minor = notebook
+            .get("nbformat_minor")
+            .and_then(|n| n.as_u64())
+            .unwrap_or(0);
 
         // 获取单元格数组
         let cells = notebook
             .get_mut("cells")
             .and_then(|c| c.as_array_mut())
-            .ok_or_else(|| ToolError::execution_failed("Invalid notebook format: missing cells".to_string()))?;
+            .ok_or_else(|| {
+                ToolError::execution_failed("Invalid notebook format: missing cells".to_string())
+            })?;
 
         // 找到目标单元格索引
         let mut cell_index: i32 = 0;
@@ -353,13 +373,15 @@ impl Tool for NotebookEditTool {
                     } else {
                         return Ok(ToolResult::error(format!(
                             "Cell not found with ID: {}. Available cells: {}",
-                            cell_id, cells.len()
+                            cell_id,
+                            cells.len()
                         )));
                     }
                 } else {
                     return Ok(ToolResult::error(format!(
                         "Cell not found with ID: {}. Available cells: {}",
-                        cell_id, cells.len()
+                        cell_id,
+                        cells.len()
                     )));
                 }
             }
@@ -372,14 +394,16 @@ impl Tool for NotebookEditTool {
 
         // delete 模式必须指定 cell_id
         if edit_mode == "delete" && input.cell_id.is_none() {
-            return Ok(ToolResult::error("cell_id is required for delete mode".to_string()));
+            return Ok(ToolResult::error(
+                "cell_id is required for delete mode".to_string(),
+            ));
         }
 
         // 执行编辑操作
         let result_message = match edit_mode {
             "replace" => {
                 let cell_index = cell_index as usize;
-                
+
                 // 特殊处理：如果索引超出范围，自动转为 insert
                 if cell_index >= cells.len() {
                     let final_cell_type = input.cell_type.as_deref().unwrap_or("code");
@@ -391,35 +415,61 @@ impl Tool for NotebookEditTool {
 
                     // 初始化 code 单元格的输出
                     if final_cell_type == "code" {
-                        new_cell.as_object_mut().unwrap().insert("outputs".to_string(), serde_json::json!([]));
-                        new_cell.as_object_mut().unwrap().insert("execution_count".to_string(), serde_json::Value::Null);
+                        new_cell
+                            .as_object_mut()
+                            .unwrap()
+                            .insert("outputs".to_string(), serde_json::json!([]));
+                        new_cell
+                            .as_object_mut()
+                            .unwrap()
+                            .insert("execution_count".to_string(), serde_json::Value::Null);
                     }
 
                     // 只在 nbformat 4.5+ 生成 ID
                     if nbformat > 4 || (nbformat == 4 && nbformat_minor >= 5) {
-                        new_cell.as_object_mut().unwrap().insert("id".to_string(), serde_json::json!(self.generate_cell_id()));
+                        new_cell
+                            .as_object_mut()
+                            .unwrap()
+                            .insert("id".to_string(), serde_json::json!(self.generate_cell_id()));
                     }
 
                     cells.push(new_cell);
-                    format!("Inserted new {} cell at position {} (converted from replace)", final_cell_type, cell_index)
+                    format!(
+                        "Inserted new {} cell at position {} (converted from replace)",
+                        final_cell_type, cell_index
+                    )
                 } else {
                     let cell = &mut cells[cell_index];
-                    let old_type = cell.get("cell_type").and_then(|t| t.as_str()).unwrap_or("unknown").to_string();
+                    let old_type = cell
+                        .get("cell_type")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("unknown")
+                        .to_string();
 
                     // 更新源代码
-                    cell.as_object_mut().unwrap().insert("source".to_string(), serde_json::json!(input.new_source));
+                    cell.as_object_mut()
+                        .unwrap()
+                        .insert("source".to_string(), serde_json::json!(input.new_source));
 
                     // 如果指定了 cell_type，更新类型
                     if let Some(new_type) = &input.cell_type {
-                        cell.as_object_mut().unwrap().insert("cell_type".to_string(), serde_json::json!(new_type));
+                        cell.as_object_mut()
+                            .unwrap()
+                            .insert("cell_type".to_string(), serde_json::json!(new_type));
                     }
 
                     // 清除输出（对于 code 单元格）
                     self.clear_cell_outputs(cell);
 
-                    let current_type = cell.get("cell_type").and_then(|t| t.as_str()).unwrap_or("unknown");
+                    let current_type = cell
+                        .get("cell_type")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("unknown");
                     if old_type != current_type {
-                        format!("Replaced cell {} (changed type from {} to {})", cell_index, old_type, current_type)
+                        format!(
+                            "Replaced cell {} (changed type from {} to {})",
+                            cell_index, old_type, current_type
+                        )
                     } else {
                         format!("Replaced cell {}", cell_index)
                     }
@@ -437,13 +487,22 @@ impl Tool for NotebookEditTool {
 
                 // 初始化 code 单元格的输出
                 if final_cell_type == "code" {
-                    new_cell.as_object_mut().unwrap().insert("outputs".to_string(), serde_json::json!([]));
-                    new_cell.as_object_mut().unwrap().insert("execution_count".to_string(), serde_json::Value::Null);
+                    new_cell
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("outputs".to_string(), serde_json::json!([]));
+                    new_cell
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("execution_count".to_string(), serde_json::Value::Null);
                 }
 
                 // 只在 nbformat 4.5+ 生成 ID
                 if nbformat > 4 || (nbformat == 4 && nbformat_minor >= 5) {
-                    new_cell.as_object_mut().unwrap().insert("id".to_string(), serde_json::json!(self.generate_cell_id()));
+                    new_cell
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("id".to_string(), serde_json::json!(self.generate_cell_id()));
                 }
 
                 // 插入新单元格
@@ -453,21 +512,34 @@ impl Tool for NotebookEditTool {
                     cells.push(new_cell);
                 }
 
-                format!("Inserted new {} cell at position {}", final_cell_type, cell_index)
+                format!(
+                    "Inserted new {} cell at position {}",
+                    final_cell_type, cell_index
+                )
             }
             "delete" => {
                 let cell_index = cell_index as usize;
                 if cell_index >= cells.len() {
                     return Ok(ToolResult::error(format!(
                         "Cell index out of range: {} (total cells: {})",
-                        cell_index, cells.len()
+                        cell_index,
+                        cells.len()
                     )));
                 }
 
-                let deleted_type = cells[cell_index].get("cell_type").and_then(|t| t.as_str()).unwrap_or("unknown").to_string();
+                let deleted_type = cells[cell_index]
+                    .get("cell_type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
                 cells.remove(cell_index);
 
-                format!("Deleted {} cell at position {} ({} cells remaining)", deleted_type, cell_index, cells.len())
+                format!(
+                    "Deleted {} cell at position {} ({} cells remaining)",
+                    deleted_type,
+                    cell_index,
+                    cells.len()
+                )
             }
             _ => {
                 return Ok(ToolResult::error(format!(
@@ -478,11 +550,13 @@ impl Tool for NotebookEditTool {
         };
 
         // 写回文件（使用美化的 JSON 格式，缩进 1 空格）
-        let formatted_json = serde_json::to_string_pretty(&notebook)
-            .map_err(|e| ToolError::execution_failed(format!("Failed to serialize notebook: {}", e)))?;
-        
+        let formatted_json = serde_json::to_string_pretty(&notebook).map_err(|e| {
+            ToolError::execution_failed(format!("Failed to serialize notebook: {}", e))
+        })?;
+
         // 手动调整缩进为 1 空格（serde_json::to_string_pretty 使用 2 空格）
-        let formatted_json = formatted_json.lines()
+        let formatted_json = formatted_json
+            .lines()
             .map(|line| {
                 let leading_spaces = line.len() - line.trim_start().len();
                 let adjusted_spaces = leading_spaces / 2; // 从 2 空格缩进改为 1 空格
@@ -491,11 +565,18 @@ impl Tool for NotebookEditTool {
             .collect::<Vec<_>>()
             .join("\n");
 
-        fs::write(&notebook_path, format!("{}\n", formatted_json))
-            .map_err(|e| ToolError::execution_failed(format!("Failed to write notebook file: {}", e)))?;
+        fs::write(&notebook_path, format!("{}\n", formatted_json)).map_err(|e| {
+            ToolError::execution_failed(format!("Failed to write notebook file: {}", e))
+        })?;
 
-        let filename = notebook_path.file_name().unwrap_or_default().to_string_lossy();
-        Ok(ToolResult::success(format!("{} in {}", result_message, filename)))
+        let filename = notebook_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        Ok(ToolResult::success(format!(
+            "{} in {}",
+            result_message, filename
+        )))
     }
 
     /// Check permissions before execution
@@ -508,7 +589,7 @@ impl Tool for NotebookEditTool {
         match serde_json::from_value::<NotebookEditInput>(params.clone()) {
             Ok(input) => {
                 let notebook_path = PathBuf::from(&input.notebook_path);
-                
+
                 // Check if path is absolute
                 if !notebook_path.is_absolute() {
                     return PermissionCheckResult::deny(format!(
@@ -521,7 +602,10 @@ impl Tool for NotebookEditTool {
                 if notebook_path.extension().is_none_or(|ext| ext != "ipynb") {
                     return PermissionCheckResult::deny(format!(
                         "File must be a Jupyter notebook (.ipynb), got: {}",
-                        notebook_path.extension().unwrap_or_default().to_string_lossy()
+                        notebook_path
+                            .extension()
+                            .unwrap_or_default()
+                            .to_string_lossy()
                     ));
                 }
 
@@ -535,7 +619,9 @@ impl Tool for NotebookEditTool {
 
                 // delete 模式必须指定 cell_id
                 if input.edit_mode == "delete" && input.cell_id.is_none() {
-                    return PermissionCheckResult::deny("cell_id is required for delete mode".to_string());
+                    return PermissionCheckResult::deny(
+                        "cell_id is required for delete mode".to_string(),
+                    );
                 }
 
                 PermissionCheckResult::allow()
@@ -581,7 +667,7 @@ mod tests {
                     "execution_count": null
                 },
                 {
-                    "id": "cell-2", 
+                    "id": "cell-2",
                     "cell_type": "markdown",
                     "source": "# Test Markdown",
                     "metadata": {}
@@ -620,8 +706,14 @@ mod tests {
         assert_eq!(schema["type"], "object");
         assert!(schema["properties"]["notebook_path"].is_object());
         assert!(schema["properties"]["new_source"].is_object());
-        assert!(schema["required"].as_array().unwrap().contains(&serde_json::json!("notebook_path")));
-        assert!(schema["required"].as_array().unwrap().contains(&serde_json::json!("new_source")));
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("notebook_path")));
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("new_source")));
     }
 
     #[test]
@@ -664,7 +756,9 @@ mod tests {
         });
         let result = tool.validate_notebook_format(&notebook);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Unsupported notebook format version"));
+        assert!(result
+            .unwrap_err()
+            .contains("Unsupported notebook format version"));
     }
 
     #[test]
@@ -691,7 +785,7 @@ mod tests {
         let tool = NotebookEditTool::new();
         let notebook = create_test_notebook();
         let cells = notebook.get("cells").unwrap().as_array().unwrap();
-        
+
         assert_eq!(tool.find_cell_index(cells, "cell-1"), 0);
         assert_eq!(tool.find_cell_index(cells, "cell-2"), 1);
         assert_eq!(tool.find_cell_index(cells, "nonexistent"), -1);
@@ -702,7 +796,7 @@ mod tests {
         let tool = NotebookEditTool::new();
         let notebook = create_test_notebook();
         let cells = notebook.get("cells").unwrap().as_array().unwrap();
-        
+
         assert_eq!(tool.find_cell_index(cells, "0"), 0);
         assert_eq!(tool.find_cell_index(cells, "1"), 1);
         assert_eq!(tool.find_cell_index(cells, "2"), -1); // Out of range
@@ -719,9 +813,9 @@ mod tests {
             "outputs": [{"output_type": "stream", "text": "test"}],
             "execution_count": 5
         });
-        
+
         tool.clear_cell_outputs(&mut cell);
-        
+
         assert_eq!(cell["outputs"], serde_json::json!([]));
         assert_eq!(cell["execution_count"], serde_json::Value::Null);
     }
@@ -733,9 +827,9 @@ mod tests {
             "cell_type": "markdown",
             "source": "# Test"
         });
-        
+
         tool.clear_cell_outputs(&mut cell);
-        
+
         // Markdown cells should not have outputs added
         assert!(!cell.as_object().unwrap().contains_key("outputs"));
         assert!(!cell.as_object().unwrap().contains_key("execution_count"));
@@ -746,11 +840,11 @@ mod tests {
         let tool = NotebookEditTool::new();
         let id1 = tool.generate_cell_id();
         let id2 = tool.generate_cell_id();
-        
+
         assert_eq!(id1.len(), 8);
         assert_eq!(id2.len(), 8);
         assert_ne!(id1, id2); // Should be different
-        
+
         // Should only contain lowercase letters and numbers
         for c in id1.chars() {
             assert!(c.is_ascii_lowercase() || c.is_ascii_digit());
@@ -798,7 +892,10 @@ mod tests {
 
         let result = tool.check_permissions(&params, &context).await;
         assert!(result.is_denied());
-        assert!(result.message.unwrap().contains("must be a Jupyter notebook"));
+        assert!(result
+            .message
+            .unwrap()
+            .contains("must be a Jupyter notebook"));
     }
 
     #[tokio::test]
@@ -828,7 +925,10 @@ mod tests {
 
         let result = tool.check_permissions(&params, &context).await;
         assert!(result.is_denied());
-        assert!(result.message.unwrap().contains("cell_id is required for delete mode"));
+        assert!(result
+            .message
+            .unwrap()
+            .contains("cell_id is required for delete mode"));
     }
 
     #[tokio::test]
@@ -857,7 +957,10 @@ mod tests {
         assert!(result.is_ok());
         let tool_result = result.unwrap();
         assert!(tool_result.is_error());
-        assert!(tool_result.error.unwrap().contains("Notebook file not found"));
+        assert!(tool_result
+            .error
+            .unwrap()
+            .contains("Notebook file not found"));
     }
 
     #[tokio::test]
@@ -895,7 +998,10 @@ mod tests {
 
         let result = tool.execute(params, &context).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Failed to parse notebook JSON"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to parse notebook JSON"));
     }
 
     #[tokio::test]
@@ -904,7 +1010,7 @@ mod tests {
         let context = create_test_context();
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.ipynb");
-        
+
         let notebook = create_test_notebook();
         fs::write(&file_path, serde_json::to_string(&notebook).unwrap()).unwrap();
 
@@ -936,7 +1042,7 @@ mod tests {
         let context = create_test_context();
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.ipynb");
-        
+
         let notebook = create_test_notebook();
         fs::write(&file_path, serde_json::to_string(&notebook).unwrap()).unwrap();
 
@@ -952,7 +1058,10 @@ mod tests {
         assert!(result.is_ok());
         let tool_result = result.unwrap();
         assert!(tool_result.is_success());
-        assert!(tool_result.output.unwrap().contains("Inserted new markdown cell at position 1"));
+        assert!(tool_result
+            .output
+            .unwrap()
+            .contains("Inserted new markdown cell at position 1"));
 
         // Verify the file was updated
         let updated_content = fs::read_to_string(&file_path).unwrap();
@@ -969,7 +1078,7 @@ mod tests {
         let context = create_test_context();
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.ipynb");
-        
+
         let notebook = create_test_notebook();
         fs::write(&file_path, serde_json::to_string(&notebook).unwrap()).unwrap();
 
@@ -984,7 +1093,10 @@ mod tests {
         assert!(result.is_ok());
         let tool_result = result.unwrap();
         assert!(tool_result.is_success());
-        assert!(tool_result.output.unwrap().contains("Deleted code cell at position 0"));
+        assert!(tool_result
+            .output
+            .unwrap()
+            .contains("Deleted code cell at position 0"));
 
         // Verify the file was updated
         let updated_content = fs::read_to_string(&file_path).unwrap();
@@ -1000,7 +1112,7 @@ mod tests {
         let context = create_test_context();
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.ipynb");
-        
+
         let notebook = create_test_notebook();
         fs::write(&file_path, serde_json::to_string(&notebook).unwrap()).unwrap();
 
@@ -1015,7 +1127,10 @@ mod tests {
         assert!(result.is_ok());
         let tool_result = result.unwrap();
         assert!(tool_result.is_error());
-        assert!(tool_result.error.unwrap().contains("Cell not found with ID: nonexistent"));
+        assert!(tool_result
+            .error
+            .unwrap()
+            .contains("Cell not found with ID: nonexistent"));
     }
 
     #[tokio::test]
@@ -1024,7 +1139,7 @@ mod tests {
         let context = create_test_context();
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.ipynb");
-        
+
         let notebook = create_test_notebook();
         fs::write(&file_path, serde_json::to_string(&notebook).unwrap()).unwrap();
 
@@ -1039,7 +1154,10 @@ mod tests {
         assert!(result.is_ok());
         let tool_result = result.unwrap();
         assert!(tool_result.is_success());
-        assert!(tool_result.output.unwrap().contains("Inserted new code cell"));
+        assert!(tool_result
+            .output
+            .unwrap()
+            .contains("Inserted new code cell"));
 
         // Verify the file was updated
         let updated_content = fs::read_to_string(&file_path).unwrap();
@@ -1067,7 +1185,7 @@ mod tests {
         let context = create_test_context();
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.ipynb");
-        
+
         let notebook = create_test_notebook();
         fs::write(&file_path, serde_json::to_string(&notebook).unwrap()).unwrap();
 
@@ -1083,7 +1201,10 @@ mod tests {
         assert!(result.is_ok());
         let tool_result = result.unwrap();
         assert!(tool_result.is_success());
-        assert!(tool_result.output.unwrap().contains("changed type from code to markdown"));
+        assert!(tool_result
+            .output
+            .unwrap()
+            .contains("changed type from code to markdown"));
 
         // Verify the file was updated
         let updated_content = fs::read_to_string(&file_path).unwrap();
@@ -1093,6 +1214,9 @@ mod tests {
         assert_eq!(cells[0]["cell_type"], "markdown");
         // Should not have outputs or execution_count for markdown
         assert!(!cells[0].as_object().unwrap().contains_key("outputs"));
-        assert!(!cells[0].as_object().unwrap().contains_key("execution_count"));
+        assert!(!cells[0]
+            .as_object()
+            .unwrap()
+            .contains_key("execution_count"));
     }
 }

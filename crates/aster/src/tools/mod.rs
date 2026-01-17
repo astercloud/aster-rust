@@ -13,6 +13,7 @@
 pub mod base;
 pub mod context;
 pub mod error;
+pub mod hooks;
 pub mod registry;
 pub mod task;
 
@@ -27,6 +28,7 @@ pub mod plan_mode_tool;
 pub mod search;
 pub mod task_output_tool;
 pub mod task_tool;
+pub mod three_files_tool;
 pub mod todo_write_tool;
 pub mod web;
 
@@ -47,6 +49,12 @@ pub use base::{PermissionBehavior, PermissionCheckResult, Tool};
 
 // Registry types
 pub use registry::{McpToolWrapper, PermissionRequestCallback, ToolRegistry};
+
+// Hook system types
+pub use hooks::{
+    ErrorTrackingHook, FileOperationHook, HookContext, HookTrigger, LoggingHook, ToolHook,
+    ToolHookManager,
+};
 
 // Task management types
 pub use task::{
@@ -86,6 +94,9 @@ pub use notebook_edit_tool::{NotebookCell, NotebookContent, NotebookEditInput, N
 pub use plan_mode_tool::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState, SavedPlan};
 pub use task_output_tool::TaskOutputTool;
 pub use task_tool::TaskTool;
+pub use three_files_tool::{
+    DecisionInfo, ErrorInfo, PhaseUpdate, ThreeStageWorkflowTool, WorkflowParams,
+};
 pub use todo_write_tool::{TodoItem, TodoStatus, TodoStorage, TodoWriteTool};
 
 // Web tools
@@ -104,6 +115,8 @@ pub struct ToolRegistrationConfig {
     pub lsp_callback: Option<LspCallback>,
     /// Whether to enable PDF reading in ReadTool
     pub pdf_enabled: bool,
+    /// Whether to enable hook system
+    pub hooks_enabled: bool,
 }
 
 impl std::fmt::Debug for ToolRegistrationConfig {
@@ -118,6 +131,7 @@ impl std::fmt::Debug for ToolRegistrationConfig {
                 &self.lsp_callback.as_ref().map(|_| "<callback>"),
             )
             .field("pdf_enabled", &self.pdf_enabled)
+            .field("hooks_enabled", &self.hooks_enabled)
             .finish()
     }
 }
@@ -128,6 +142,7 @@ impl Clone for ToolRegistrationConfig {
             ask_callback: self.ask_callback.clone(),
             lsp_callback: self.lsp_callback.clone(),
             pdf_enabled: self.pdf_enabled,
+            hooks_enabled: self.hooks_enabled,
         }
     }
 }
@@ -155,6 +170,12 @@ impl ToolRegistrationConfig {
         self.pdf_enabled = enabled;
         self
     }
+
+    /// Enable hook system
+    pub fn with_hooks_enabled(mut self, enabled: bool) -> Self {
+        self.hooks_enabled = enabled;
+        self
+    }
 }
 
 /// Register all native tools with the registry
@@ -175,15 +196,29 @@ impl ToolRegistrationConfig {
 /// * `config` - Configuration for tool registration
 ///
 /// # Returns
-/// The shared file read history used by file tools
+/// A tuple containing (shared file read history, hook manager)
 ///
 /// Requirements: 11.3
 pub fn register_all_tools(
     registry: &mut ToolRegistry,
     config: ToolRegistrationConfig,
-) -> SharedFileReadHistory {
+) -> (SharedFileReadHistory, Option<ToolHookManager>) {
     // Create shared file read history for file tools
     let shared_history = create_shared_history();
+
+    // Initialize hook manager if enabled
+    let hook_manager = if config.hooks_enabled {
+        let manager = ToolHookManager::new(true);
+        // Register default hooks in a blocking context
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                manager.register_default_hooks().await;
+            })
+        });
+        Some(manager)
+    } else {
+        None
+    };
 
     // Register BashTool
     registry.register(Box::new(BashTool::new()));
@@ -232,7 +267,10 @@ pub fn register_all_tools(
     registry.register(Box::new(WebFetchTool::new()));
     registry.register(Box::new(WebSearchTool::new()));
 
-    shared_history
+    // Register Three-Stage Workflow tool
+    registry.register(Box::new(ThreeStageWorkflowTool::default()));
+
+    (shared_history, hook_manager)
 }
 
 /// Register all native tools with default configuration
@@ -244,10 +282,12 @@ pub fn register_all_tools(
 /// * `registry` - The ToolRegistry to register tools with
 ///
 /// # Returns
-/// The shared file read history used by file tools
+/// A tuple containing (shared file read history, hook manager)
 ///
 /// Requirements: 11.3
-pub fn register_default_tools(registry: &mut ToolRegistry) -> SharedFileReadHistory {
+pub fn register_default_tools(
+    registry: &mut ToolRegistry,
+) -> (SharedFileReadHistory, Option<ToolHookManager>) {
     register_all_tools(registry, ToolRegistrationConfig::default())
 }
 
@@ -259,7 +299,7 @@ mod tests {
     #[test]
     fn test_register_default_tools() {
         let mut registry = ToolRegistry::new();
-        let _history = register_default_tools(&mut registry);
+        let (_history, _hook_manager) = register_default_tools(&mut registry);
 
         // Verify core tools are registered
         assert!(registry.contains("bash"));
@@ -278,6 +318,7 @@ mod tests {
         assert!(registry.contains("ExitPlanMode"));
         assert!(registry.contains("WebFetch"));
         assert!(registry.contains("WebSearch"));
+        assert!(registry.contains("three_stage_workflow"));
 
         // AskTool and LSPTool should not be registered without callbacks
         assert!(!registry.contains("ask"));
@@ -308,7 +349,7 @@ mod tests {
             .with_lsp_callback(lsp_callback)
             .with_pdf_enabled(true);
 
-        let _history = register_all_tools(&mut registry, config);
+        let (_history, _hook_manager) = register_all_tools(&mut registry, config);
 
         // Verify all tools are registered
         assert!(registry.contains("bash"));
@@ -329,12 +370,13 @@ mod tests {
         assert!(registry.contains("ExitPlanMode"));
         assert!(registry.contains("WebFetch"));
         assert!(registry.contains("WebSearch"));
+        assert!(registry.contains("three_stage_workflow"));
     }
 
     #[test]
     fn test_shared_history_is_shared() {
         let mut registry = ToolRegistry::new();
-        let history = register_default_tools(&mut registry);
+        let (history, _hook_manager) = register_default_tools(&mut registry);
 
         // The history should be empty initially
         assert!(history.read().unwrap().is_empty());

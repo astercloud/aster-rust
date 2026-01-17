@@ -244,13 +244,11 @@ impl PlanPersistenceManager {
         }
 
         let plan_file = plans_dir.join(format!("{}.json", plan.metadata.id));
-        let plan_json = serde_json::to_string_pretty(plan).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to serialize plan: {}", e))
-        })?;
+        let plan_json = serde_json::to_string_pretty(plan)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to serialize plan: {}", e)))?;
 
-        fs::write(&plan_file, plan_json).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to write plan file: {}", e))
-        })?;
+        fs::write(&plan_file, plan_json)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write plan file: {}", e)))?;
 
         Ok(true)
     }
@@ -261,15 +259,11 @@ impl PlanPersistenceManager {
         let plan_file = plans_dir.join(format!("{}.json", plan_id));
 
         if !plan_file.exists() {
-            return Err(ToolError::NotFound(format!(
-                "Plan not found: {}",
-                plan_id
-            )));
+            return Err(ToolError::NotFound(format!("Plan not found: {}", plan_id)));
         }
 
-        let plan_json = fs::read_to_string(&plan_file).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to read plan file: {}", e))
-        })?;
+        let plan_json = fs::read_to_string(&plan_file)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read plan file: {}", e)))?;
 
         let plan: SavedPlan = serde_json::from_str(&plan_json).map_err(|e| {
             ToolError::ExecutionFailed(format!("Failed to deserialize plan: {}", e))
@@ -284,7 +278,7 @@ impl PlanPersistenceManager {
 // =============================================================================
 
 /// 进入计划模式工具
-/// 
+///
 /// 基于 Claude Agent SDK 的 EnterPlanModeTool 完全复刻
 /// 用于复杂任务的规划和探索阶段
 pub struct EnterPlanModeTool;
@@ -424,7 +418,9 @@ User: "What files handle routing?"
     ) -> Result<ToolResult, ToolError> {
         // 检查是否已经在计划模式中
         if GLOBAL_STATE.is_plan_mode_active() {
-            return Ok(ToolResult::error("Already in plan mode. Use ExitPlanMode to exit first."));
+            return Ok(ToolResult::error(
+                "Already in plan mode. Use ExitPlanMode to exit first.",
+            ));
         }
 
         // 生成计划 ID 和文件路径
@@ -513,7 +509,8 @@ Focus on understanding the problem before proposing solutions."#,
             plan_id
         );
 
-        Ok(ToolResult::success(output).with_metadata("plan_id", json!(plan_id))
+        Ok(ToolResult::success(output)
+            .with_metadata("plan_id", json!(plan_id))
             .with_metadata("plan_file", json!(plan_path.to_string_lossy()))
             .with_metadata("mode", json!("plan")))
     }
@@ -528,7 +525,7 @@ Focus on understanding the problem before proposing solutions."#,
 pub struct ExitPlanModeInput {}
 
 /// 退出计划模式工具
-/// 
+///
 /// 基于 Claude Agent SDK 的 ExitPlanModeTool 完全复刻
 /// 用于完成计划并等待用户批准
 pub struct ExitPlanModeTool;
@@ -570,7 +567,8 @@ impl ExitPlanModeTool {
             },
             summary: self.extract_summary(content),
             requirements_analysis: RequirementsAnalysis {
-                functional_requirements: self.extract_requirements(content, "Functional Requirements"),
+                functional_requirements: self
+                    .extract_requirements(content, "Functional Requirements"),
                 non_functional_requirements: self
                     .extract_requirements(content, "Non-Functional Requirements"),
                 technical_constraints: self.extract_requirements(content, "Technical Constraints"),
@@ -618,7 +616,9 @@ impl ExitPlanModeTool {
                     .lines()
                     .filter_map(|line| {
                         let trimmed = line.trim();
-                        trimmed.strip_prefix("- ").map(|stripped| stripped.trim().to_string())
+                        trimmed
+                            .strip_prefix("- ")
+                            .map(|stripped| stripped.trim().to_string())
                     })
                     .filter(|line| !line.is_empty())
                     .collect();
@@ -629,7 +629,7 @@ impl ExitPlanModeTool {
 
     fn extract_steps(&self, content: &str) -> Vec<PlanStep> {
         let mut steps = vec![];
-        
+
         // 使用简单的字符串匹配而不是正则表达式
         for line in content.lines() {
             if line.starts_with("### Step ") {
@@ -659,9 +659,7 @@ impl ExitPlanModeTool {
             let after_header = content.get(start..).unwrap_or("");
             if let Some(content_start) = after_header.find('\n') {
                 let content_part = after_header.get(content_start + 1..).unwrap_or("");
-                let end = content_part
-                    .find("\n##")
-                    .unwrap_or(content_part.len());
+                let end = content_part.find("\n##").unwrap_or(content_part.len());
                 let section_content = content_part.get(..end).unwrap_or("");
 
                 for line in section_content.lines() {
@@ -692,9 +690,7 @@ impl ExitPlanModeTool {
             if let Some(content_start) = after_header.find('\n') {
                 let content_part = after_header.get(content_start + 1..).unwrap_or("");
                 // 寻找下一个 ## 标题，如果没有找到就读取到末尾
-                let end = content_part
-                    .find("\n## ")
-                    .unwrap_or(content_part.len());
+                let end = content_part.find("\n## ").unwrap_or(content_part.len());
                 let section_content = content_part.get(..end).unwrap_or("");
 
                 // 按 ### 分割风险块
@@ -714,7 +710,7 @@ impl ExitPlanModeTool {
                             } else {
                                 description
                             };
-                            
+
                             risks.push(Risk {
                                 category: "technical".to_string(),
                                 level: "medium".to_string(),
@@ -798,7 +794,9 @@ Before using this tool, ensure your plan is clear and unambiguous. If there are 
     ) -> Result<ToolResult, ToolError> {
         // 检查是否在计划模式中
         if !GLOBAL_STATE.is_plan_mode_active() {
-            return Ok(ToolResult::error("Not in plan mode. Use EnterPlanMode first."));
+            return Ok(ToolResult::error(
+                "Not in plan mode. Use EnterPlanMode first.",
+            ));
         }
 
         // 获取计划文件信息
@@ -900,14 +898,18 @@ mod tests {
     #[test]
     fn test_global_state_manager() {
         let manager = GlobalStateManager::new();
-        
+
         // 初始状态
         assert!(!manager.is_plan_mode_active());
         assert!(manager.get_plan_file().is_none());
         assert!(manager.get_current_plan_id().is_none());
 
         // 设置计划模式
-        manager.set_plan_mode(true, Some("test.md".to_string()), Some("test-id".to_string()));
+        manager.set_plan_mode(
+            true,
+            Some("test.md".to_string()),
+            Some("test-id".to_string()),
+        );
         assert!(manager.is_plan_mode_active());
         assert_eq!(manager.get_plan_file(), Some("test.md".to_string()));
         assert_eq!(manager.get_current_plan_id(), Some("test-id".to_string()));
@@ -923,7 +925,7 @@ mod tests {
     fn test_plan_persistence_manager() {
         let _temp_dir = TempDir::new().unwrap();
         let _plans_dir = _temp_dir.path().join("plans");
-        
+
         // 创建测试计划
         let plan_id = "test-plan-id";
         let now = SystemTime::now()
@@ -1000,7 +1002,11 @@ mod tests {
         let result = tool.execute(input, &context).await.unwrap();
         assert!(result.success);
         assert!(result.output.is_some());
-        assert!(result.output.as_ref().unwrap().contains("Entered plan mode"));
+        assert!(result
+            .output
+            .as_ref()
+            .unwrap()
+            .contains("Entered plan mode"));
         assert!(!result.metadata.is_empty());
 
         // 验证状态已更新
@@ -1029,7 +1035,11 @@ mod tests {
         let input = json!({});
 
         // 设置计划模式
-        GLOBAL_STATE.set_plan_mode(true, Some("test.md".to_string()), Some("test-id".to_string()));
+        GLOBAL_STATE.set_plan_mode(
+            true,
+            Some("test.md".to_string()),
+            Some("test-id".to_string()),
+        );
 
         let result = tool.execute(input, &context).await.unwrap();
         assert!(result.success);
@@ -1083,9 +1093,12 @@ Need to validate inputs properly.
 "#;
 
         let plan = tool.parse_plan_content("test-id", content);
-        
+
         assert_eq!(plan.metadata.title, "Test Implementation Plan");
-        assert_eq!(plan.summary, "This is a test plan for implementing a new feature.");
+        assert_eq!(
+            plan.summary,
+            "This is a test plan for implementing a new feature."
+        );
         assert_eq!(plan.requirements_analysis.functional_requirements.len(), 2);
         assert_eq!(plan.requirements_analysis.technical_constraints.len(), 1);
         assert_eq!(plan.steps.len(), 2);
@@ -1104,7 +1117,7 @@ Need to validate inputs properly.
 
         assert_eq!(enter_def.name, "EnterPlanMode");
         assert_eq!(exit_def.name, "ExitPlanMode");
-        
+
         // 验证输入模式
         assert!(enter_def.input_schema.get("type").is_some());
         assert!(exit_def.input_schema.get("type").is_some());

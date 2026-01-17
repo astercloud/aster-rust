@@ -164,7 +164,7 @@ impl Agent {
 
         // Initialize ToolRegistry with all native tools (Requirements: 11.3, 11.4)
         let mut tool_registry = ToolRegistry::new();
-        let file_read_history = register_default_tools(&mut tool_registry);
+        let (file_read_history, _hook_manager) = register_default_tools(&mut tool_registry);
 
         Self {
             provider: provider.clone(),
@@ -201,7 +201,8 @@ impl Agent {
 
         // Initialize ToolRegistry with configured tools
         let mut tool_registry = ToolRegistry::new();
-        let file_read_history = crate::tools::register_all_tools(&mut tool_registry, config);
+        let (file_read_history, _hook_manager) =
+            crate::tools::register_all_tools(&mut tool_registry, config);
 
         Self {
             provider: provider.clone(),

@@ -122,9 +122,18 @@ impl TodoStorage {
         storage
             .iter()
             .map(|(agent_id, todos)| {
-                let pending = todos.iter().filter(|t| t.status == TodoStatus::Pending).count();
-                let in_progress = todos.iter().filter(|t| t.status == TodoStatus::InProgress).count();
-                let completed = todos.iter().filter(|t| t.status == TodoStatus::Completed).count();
+                let pending = todos
+                    .iter()
+                    .filter(|t| t.status == TodoStatus::Pending)
+                    .count();
+                let in_progress = todos
+                    .iter()
+                    .filter(|t| t.status == TodoStatus::InProgress)
+                    .count();
+                let completed = todos
+                    .iter()
+                    .filter(|t| t.status == TodoStatus::Completed)
+                    .count();
                 (agent_id.clone(), (pending, in_progress, completed))
             })
             .collect()
@@ -334,7 +343,10 @@ impl Tool for TodoWriteTool {
             .with_metadata("agent_id", serde_json::json!(agent_id))
             .with_metadata("old_todos", serde_json::json!(old_todos))
             .with_metadata("new_todos", serde_json::json!(input.todos))
-            .with_metadata("auto_cleared", serde_json::json!(new_todos.is_empty() && !input.todos.is_empty())))
+            .with_metadata(
+                "auto_cleared",
+                serde_json::json!(new_todos.is_empty() && !input.todos.is_empty()),
+            ))
     }
 
     /// Check permissions before execution
@@ -396,7 +408,8 @@ mod tests {
 
     #[test]
     fn test_todo_item_with_status() {
-        let todo = TodoItem::with_status("Build project", "Building project", TodoStatus::InProgress);
+        let todo =
+            TodoItem::with_status("Build project", "Building project", TodoStatus::InProgress);
         assert_eq!(todo.content, "Build project");
         assert_eq!(todo.active_form, "Building project");
         assert_eq!(todo.status, TodoStatus::InProgress);
@@ -438,8 +451,14 @@ mod tests {
         let agent2 = "agent-2";
 
         // Add todos for different agents
-        storage.set_todos(agent1, vec![TodoItem::new("Agent 1 Task", "Doing agent 1 task")]);
-        storage.set_todos(agent2, vec![TodoItem::new("Agent 2 Task", "Doing agent 2 task")]);
+        storage.set_todos(
+            agent1,
+            vec![TodoItem::new("Agent 1 Task", "Doing agent 1 task")],
+        );
+        storage.set_todos(
+            agent2,
+            vec![TodoItem::new("Agent 2 Task", "Doing agent 2 task")],
+        );
 
         // Verify isolation
         let todos1 = storage.get_todos(agent1);
@@ -458,8 +477,16 @@ mod tests {
 
         let todos = vec![
             TodoItem::new("Pending task", "Doing pending task"),
-            TodoItem::with_status("In progress task", "Doing in progress task", TodoStatus::InProgress),
-            TodoItem::with_status("Completed task", "Doing completed task", TodoStatus::Completed),
+            TodoItem::with_status(
+                "In progress task",
+                "Doing in progress task",
+                TodoStatus::InProgress,
+            ),
+            TodoItem::with_status(
+                "Completed task",
+                "Doing completed task",
+                TodoStatus::Completed,
+            ),
         ];
         storage.set_todos(agent_id, todos);
 
@@ -488,7 +515,10 @@ mod tests {
         let schema = tool.input_schema();
         assert_eq!(schema["type"], "object");
         assert!(schema["properties"]["todos"].is_object());
-        assert!(schema["required"].as_array().unwrap().contains(&serde_json::json!("todos")));
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("todos")));
     }
 
     #[test]
@@ -532,7 +562,9 @@ mod tests {
         ];
         let result = tool.validate_todos(&todos);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Only one task can be in_progress"));
+        assert!(result
+            .unwrap_err()
+            .contains("Only one task can be in_progress"));
     }
 
     #[test]
@@ -550,7 +582,9 @@ mod tests {
         let todos = vec![TodoItem::new("Do something", "")];
         let result = tool.validate_todos(&todos);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Task active_form cannot be empty"));
+        assert!(result
+            .unwrap_err()
+            .contains("Task active_form cannot be empty"));
     }
 
     #[test]
@@ -656,7 +690,10 @@ mod tests {
         assert!(result.is_ok());
         let tool_result = result.unwrap();
         assert!(tool_result.is_success());
-        assert!(tool_result.output.unwrap().contains("modified successfully"));
+        assert!(tool_result
+            .output
+            .unwrap()
+            .contains("modified successfully"));
 
         // Verify todos were saved
         let saved_todos = storage.get_todos("test-session");
@@ -697,7 +734,10 @@ mod tests {
         assert!(saved_todos.is_empty());
 
         // Check metadata
-        assert_eq!(tool_result.metadata.get("auto_cleared"), Some(&serde_json::json!(true)));
+        assert_eq!(
+            tool_result.metadata.get("auto_cleared"),
+            Some(&serde_json::json!(true))
+        );
     }
 
     #[tokio::test]
@@ -723,7 +763,10 @@ mod tests {
         assert!(result.is_ok());
         let tool_result = result.unwrap();
         assert!(tool_result.is_error());
-        assert!(tool_result.error.unwrap().contains("Only one task can be in_progress"));
+        assert!(tool_result
+            .error
+            .unwrap()
+            .contains("Only one task can be in_progress"));
     }
 
     #[tokio::test]
@@ -763,9 +806,15 @@ mod tests {
         assert!(tool_result.is_success());
 
         // Check metadata
-        assert_eq!(tool_result.metadata.get("agent_id"), Some(&serde_json::json!("test-session")));
+        assert_eq!(
+            tool_result.metadata.get("agent_id"),
+            Some(&serde_json::json!("test-session"))
+        );
         assert!(tool_result.metadata.contains_key("old_todos"));
         assert!(tool_result.metadata.contains_key("new_todos"));
-        assert_eq!(tool_result.metadata.get("auto_cleared"), Some(&serde_json::json!(false)));
+        assert_eq!(
+            tool_result.metadata.get("auto_cleared"),
+            Some(&serde_json::json!(false))
+        );
     }
 }
