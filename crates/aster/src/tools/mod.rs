@@ -31,6 +31,7 @@ pub mod task_tool;
 pub mod three_files_tool;
 pub mod todo_write_tool;
 pub mod web;
+pub mod workflow_integration;
 
 // Skills integration
 
@@ -101,6 +102,9 @@ pub use todo_write_tool::{TodoItem, TodoStatus, TodoStorage, TodoWriteTool};
 
 // Web tools
 pub use web::{clear_web_caches, get_web_cache_stats, WebCache, WebFetchTool, WebSearchTool};
+
+// Workflow integration
+pub use workflow_integration::{WorkflowIntegratedTool, WorkflowIntegratedToolBuilder};
 
 // =============================================================================
 // Tool Registration (Requirements: 11.3)

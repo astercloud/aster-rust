@@ -290,6 +290,22 @@ impl ToolResult {
             self.error.as_deref()
         }
     }
+
+    /// Get the content (output or error message)
+    pub fn content(&self) -> &str {
+        self.message().unwrap_or("")
+    }
+
+    /// Create a new result with updated content
+    pub fn with_content(mut self, content: impl Into<String>) -> Self {
+        let content = content.into();
+        if self.success {
+            self.output = Some(content);
+        } else {
+            self.error = Some(content);
+        }
+        self
+    }
 }
 
 /// Serde helper for Duration serialization

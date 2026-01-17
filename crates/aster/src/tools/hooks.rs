@@ -496,13 +496,13 @@ mod tests {
         let hook = FileOperationHook::new("file_hook".to_string(), vec!["Write".to_string()]);
 
         let context = create_test_context();
-        assert!(hook.should_execute(&context)); // TestTool 不匹配
+        assert!(!hook.should_execute(&context)); // TestTool 不包含 "Write"，应该不匹配
 
         let write_context = HookContext::new(
             "WriteTool".to_string(),
             serde_json::json!({"path": "/test/file.txt"}),
             ToolContext::new(PathBuf::from("/tmp")),
         );
-        assert!(hook.should_execute(&write_context));
+        assert!(hook.should_execute(&write_context)); // WriteTool 包含 "Write"，应该匹配
     }
 }
