@@ -542,15 +542,23 @@ proptest! {
         num_to_timeout in 0usize..5,
     ) {
         let mut handler = TimeoutHandler::new();
-        let num_to_timeout = num_to_timeout.min(agent_ids.len());
+        
+        // Deduplicate agent_ids to avoid counting issues with HashMap
+        let unique_agent_ids: Vec<String> = agent_ids
+            .into_iter()
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        
+        let num_to_timeout = num_to_timeout.min(unique_agent_ids.len());
 
         // Start tracking all agents
-        for agent_id in &agent_ids {
+        for agent_id in &unique_agent_ids {
             handler.start_tracking(agent_id);
         }
 
         // Timeout some agents
-        for agent_id in agent_ids.iter().take(num_to_timeout) {
+        for agent_id in unique_agent_ids.iter().take(num_to_timeout) {
             handler.mark_timed_out(agent_id);
         }
 
@@ -561,7 +569,7 @@ proptest! {
             "Should have {} timed out agents", num_to_timeout);
 
         // All timed out agents MUST be in the list
-        for agent_id in agent_ids.iter().take(num_to_timeout) {
+        for agent_id in unique_agent_ids.iter().take(num_to_timeout) {
             prop_assert!(timed_out.contains(&agent_id.as_str()),
                 "Agent {} should be in timed out list", agent_id);
         }

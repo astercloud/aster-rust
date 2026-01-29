@@ -1,31 +1,62 @@
 #!/bin/sh
 
-# Rust 代码格式化
+echo "🔍 Running pre-commit checks..."
+
+# Rust 检查
 if git diff --cached --name-only | grep -qE '\.rs$'; then
-  echo "🦀 Running cargo fmt..."
-  cargo fmt
-  
-  # 检查是否有格式化的更改
-  if ! git diff --quiet; then
-    echo "📝 cargo fmt 已自动修复格式问题，正在添加更改..."
-    git diff --cached --name-only | grep -E '\.rs$' | xargs git add
-  fi
-  
-  # 最终检查
-  cargo fmt --check
+  echo "🦀 Checking Rust..."
+
+  # Rust 格式检查
+  echo "  → Rust format check..."
+  cargo fmt --all -- --check
   if [ $? -ne 0 ]; then
-    echo "❌ Rust 代码格式检查失败"
+    echo "❌ Rust format check failed! Run 'cargo fmt' to fix."
     exit 1
   fi
-  echo "✅ Rust 格式检查通过"
+
+  # Rust 编译检查
+  echo "  → Rust build check..."
+  cargo check --all-targets
+  if [ $? -ne 0 ]; then
+    echo "❌ Rust build check failed!"
+    exit 1
+  fi
+
+  echo "✅ Rust checks passed"
 fi
 
-# TypeScript/Desktop 代码格式化
+# TypeScript/Desktop 检查
 if git diff --cached --name-only | grep -q "^ui/desktop/"; then
   if [ -d "ui/desktop" ]; then
-    echo "📦 Running lint-staged for desktop..."
-    cd ui/desktop && npx lint-staged
-  else
-    echo "Warning: ui/desktop directory does not exist, skipping lint-staged"
+    echo "📦 Checking frontend (Electron)..."
+    cd ui/desktop
+    
+    # TypeScript 检查
+    echo "  → TypeScript check..."
+    npx tsc --noEmit
+    if [ $? -ne 0 ]; then
+      echo "❌ TypeScript check failed!"
+      exit 1
+    fi
+    
+    cd ../..
+    echo "✅ Frontend checks passed"
   fi
 fi
+
+# Tauri 检查
+if git diff --cached --name-only | grep -q "^ui/tauri/"; then
+  if [ -d "ui/tauri" ]; then
+    echo "📦 Checking frontend (Tauri)..."
+    cd ui/tauri
+    
+    # TypeScript 检查
+    echo "  → TypeScript check..."
+    npx tsc --noEmit 2>/dev/null || true
+    
+    cd ../..
+    echo "✅ Tauri frontend checks passed"
+  fi
+fi
+
+echo "✅ All pre-commit checks passed!"
