@@ -542,14 +542,14 @@ proptest! {
         num_to_timeout in 0usize..5,
     ) {
         let mut handler = TimeoutHandler::new();
-        
+
         // Deduplicate agent_ids to avoid counting issues with HashMap
         let unique_agent_ids: Vec<String> = agent_ids
             .into_iter()
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .collect();
-        
+
         let num_to_timeout = num_to_timeout.min(unique_agent_ids.len());
 
         // Start tracking all agents
