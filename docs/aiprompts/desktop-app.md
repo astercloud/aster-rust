@@ -174,3 +174,65 @@ const sessions = await ipcRenderer.invoke('get-sessions');
 - CLI 直接调用核心库
 - Desktop 通过 asterd 服务通信
 - 两者共享相同的会话和配置
+
+
+---
+
+## Tauri 版本 (新增)
+
+基于 Tauri 2.0 的轻量级桌面应用。
+
+**路径**: `ui/tauri/`
+
+### 目录结构
+
+```
+ui/tauri/
+├── src/                # Rust 后端
+│   ├── main.rs        # 入口点
+│   ├── lib.rs         # 库定义
+│   ├── commands.rs    # Tauri 命令
+│   ├── state.rs       # 应用状态
+│   └── tray.rs        # 系统托盘
+├── src/                # 前端 (React)
+│   ├── main.tsx       # React 入口
+│   ├── App.tsx        # 主组件
+│   └── components/    # UI 组件
+├── tauri.conf.json    # Tauri 配置
+├── Cargo.toml         # Rust 依赖
+└── package.json       # 前端依赖
+```
+
+### Electron vs Tauri 对比
+
+| 特性 | Electron | Tauri |
+|------|----------|-------|
+| 二进制大小 | ~150MB | ~10MB |
+| 内存占用 | ~200MB | ~50MB |
+| 后端语言 | Node.js | Rust |
+| 渲染引擎 | Chromium | 系统 WebView |
+| 启动速度 | 较慢 | 快 |
+
+### 开发命令
+
+```bash
+cd ui/tauri
+npm install
+npm run tauri:dev    # 开发模式
+npm run tauri:build  # 构建
+```
+
+### Tauri 命令示例
+
+```rust
+#[tauri::command]
+async fn send_message(session_id: String, content: String) -> Result<Message, String> {
+    // 调用 aster 核心库
+    Ok(message)
+}
+```
+
+## 源码位置
+
+- Electron: `ui/desktop/`
+- Tauri: `ui/tauri/`

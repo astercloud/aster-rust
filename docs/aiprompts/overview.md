@@ -166,7 +166,8 @@ src/
 
 ### 应用入口
 - [cli-usage.md](cli-usage.md) - CLI 使用指南
-- [desktop-app.md](desktop-app.md) - Electron 桌面应用
+- [desktop-app.md](desktop-app.md) - 桌面应用 (Electron/Tauri)
+- [tauri.md](tauri.md) - Tauri 桌面应用
 - [server.md](server.md) - Aster Server (asterd)
 - [bench.md](bench.md) - 基准测试系统
 
