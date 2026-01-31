@@ -324,7 +324,7 @@ impl ReadTool {
         }
 
         // Use enhanced image processing from media module
-        let image_result = crate::media::read_image_file_sync(&full_path)
+        let image_result = crate::media::read_image_file_enhanced(&full_path)
             .map_err(|e| ToolError::execution_failed(format!("Failed to read image: {}", e)))?;
 
         // Record the read

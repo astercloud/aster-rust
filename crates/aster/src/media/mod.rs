@@ -12,6 +12,10 @@ pub use mime::*;
 pub use pdf::*;
 pub use svg::*;
 
+// 重新导出增强函数
+pub use image::estimate_image_dimensions;
+pub use image::read_image_file_enhanced;
+
 use std::path::Path;
 
 /// 媒体文件类型
