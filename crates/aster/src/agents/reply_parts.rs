@@ -400,8 +400,13 @@ mod tests {
     use crate::model::ModelConfig;
     use crate::providers::base::{Provider, ProviderUsage, Usage};
     use crate::providers::errors::ProviderError;
+    use crate::scheduler::{ScheduledJob, SchedulerError};
+    use crate::scheduler_trait::SchedulerTrait;
+    use crate::session::Session;
     use async_trait::async_trait;
+    use chrono::{DateTime, Utc};
     use rmcp::object;
+    use std::path::PathBuf;
 
     #[derive(Clone)]
     struct MockProvider {
@@ -436,9 +441,77 @@ mod tests {
         }
     }
 
+    /// Mock scheduler for testing
+    struct MockScheduler;
+
+    #[async_trait]
+    impl SchedulerTrait for MockScheduler {
+        async fn add_scheduled_job(
+            &self,
+            _job: ScheduledJob,
+            _copy_recipe: bool,
+        ) -> Result<(), SchedulerError> {
+            Ok(())
+        }
+        async fn schedule_recipe(
+            &self,
+            _recipe_path: PathBuf,
+            _cron_schedule: Option<String>,
+        ) -> anyhow::Result<(), SchedulerError> {
+            Ok(())
+        }
+        async fn list_scheduled_jobs(&self) -> Vec<ScheduledJob> {
+            vec![]
+        }
+        async fn remove_scheduled_job(
+            &self,
+            _id: &str,
+            _remove_recipe: bool,
+        ) -> Result<(), SchedulerError> {
+            Ok(())
+        }
+        async fn pause_schedule(&self, _id: &str) -> Result<(), SchedulerError> {
+            Ok(())
+        }
+        async fn unpause_schedule(&self, _id: &str) -> Result<(), SchedulerError> {
+            Ok(())
+        }
+        async fn run_now(&self, _id: &str) -> Result<String, SchedulerError> {
+            Ok("mock-session".to_string())
+        }
+        async fn sessions(
+            &self,
+            _sched_id: &str,
+            _limit: usize,
+        ) -> Result<Vec<(String, Session)>, SchedulerError> {
+            Ok(vec![])
+        }
+        async fn update_schedule(
+            &self,
+            _sched_id: &str,
+            _new_cron: String,
+        ) -> Result<(), SchedulerError> {
+            Ok(())
+        }
+        async fn kill_running_job(&self, _sched_id: &str) -> Result<(), SchedulerError> {
+            Ok(())
+        }
+        async fn get_running_job_info(
+            &self,
+            _sched_id: &str,
+        ) -> Result<Option<(String, DateTime<Utc>)>, SchedulerError> {
+            Ok(None)
+        }
+    }
+
     #[tokio::test]
     async fn prepare_tools_sorts_and_includes_frontend_and_list_tools() -> anyhow::Result<()> {
         let agent = crate::agents::Agent::new();
+
+        // 设置 mock scheduler 以便 platform__ 工具可用
+        agent
+            .set_scheduler(std::sync::Arc::new(MockScheduler))
+            .await;
 
         let session = SessionManager::create_session(
             std::path::PathBuf::default(),
