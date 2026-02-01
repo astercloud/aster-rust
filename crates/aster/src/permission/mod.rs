@@ -10,6 +10,7 @@ pub mod manager;
 pub mod merger;
 pub mod migration;
 pub mod pattern;
+pub mod policy;
 pub mod restriction;
 pub mod templates;
 pub mod types;
@@ -82,3 +83,13 @@ pub use permission_judge::{check_tool_permissions, detect_read_only_tools, Permi
 
 // Permission store
 pub use permission_store::ToolPermissionStore;
+
+// =============================================================================
+// Tool Policy System Exports (New)
+// =============================================================================
+
+// Policy types (Requirements: 1.1, 3.1)
+pub use policy::{
+    MergedPolicy, PolicyDecision, PolicyError, PolicyLayer, PolicyMerger, ProfileConfig,
+    ProfileManager, ToolGroups, ToolPolicy, ToolPolicyManager, ToolProfile, PolicyMigration,
+};

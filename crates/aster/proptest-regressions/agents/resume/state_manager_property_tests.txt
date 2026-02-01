@@ -1,7 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc b0973c894b7bf147161fccf4e5b32bcdbffc01583a271ab77dd852ff39b82a0b # shrinks to states = [AgentState { id: "r", agent_type: "explore", status: Running, created_at: 2026-01-12T23:17:26.864188Z, updated_at: 2026-01-12T23:17:26.864189Z, prompt: ".", messages: [], tool_calls: [], results: [], checkpoint: None, checkpoints: [], current_step: 0, total_steps: None, error_count: 0, retry_count: 0, max_retries: 3, metadata: {} }, AgentState { id: "r", agent_type: "explore", status: Running, created_at: 2026-01-12T23:17:26.864192Z, updated_at: 2026-01-12T23:17:26.864192Z, prompt: " ", messages: [], tool_calls: [], results: [], checkpoint: None, checkpoints: [], current_step: 0, total_steps: None, error_count: 0, retry_count: 0, max_retries: 3, metadata: {} }]

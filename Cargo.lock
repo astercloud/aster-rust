@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "aster"
-version = "0.4.6"
+version = "0.5.0"
 dependencies = [
  "agent-client-protocol-schema",
  "ahash",
@@ -222,8 +222,10 @@ dependencies = [
  "boa_engine",
  "boa_gc",
  "chrono",
+ "chrono-tz",
  "clap",
  "criterion",
+ "cron",
  "ctor",
  "dashmap",
  "dirs 5.0.1",
@@ -234,6 +236,7 @@ dependencies = [
  "futures",
  "glob",
  "hex",
+ "hmac",
  "hostname",
  "ignore",
  "include_dir",
@@ -305,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "aster-bench"
-version = "0.4.6"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "aster",
@@ -328,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "aster-cli"
-version = "0.4.6"
+version = "0.5.0"
 dependencies = [
  "agent-client-protocol-schema",
  "anstream",
@@ -383,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "aster-mcp"
-version = "0.4.6"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -448,7 +451,7 @@ dependencies = [
 
 [[package]]
 name = "aster-server"
-version = "0.4.6"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "aster",
@@ -494,7 +497,7 @@ dependencies = [
 
 [[package]]
 name = "aster-test"
-version = "0.4.6"
+version = "0.5.0"
 dependencies = [
  "clap",
  "serde_json",
@@ -1664,6 +1667,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono-tz"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6139a8597ed92cf816dfb33f5dd6cf0bb93a6adc938f11039f371bc5bcd26c3"
+dependencies = [
+ "chrono",
+ "phf 0.12.1",
+]
+
+[[package]]
 name = "ciborium"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1880,7 +1893,7 @@ dependencies = [
  "serde_core",
  "serde_json",
  "toml 0.9.11+spec-1.1.0",
- "winnow",
+ "winnow 0.7.14",
  "yaml-rust2",
 ]
 
@@ -2103,6 +2116,17 @@ checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
 dependencies = [
  "cast",
  "itertools 0.10.5",
+]
+
+[[package]]
+name = "cron"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5877d3fbf742507b66bc2a1945106bd30dd8504019d596901ddd012a4dd01740"
+dependencies = [
+ "chrono",
+ "once_cell",
+ "winnow 0.6.26",
 ]
 
 [[package]]
@@ -5613,6 +5637,15 @@ dependencies = [
 
 [[package]]
 name = "phf"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "913273894cec178f401a31ec4b656318d95473527be05c0752cc41cdc32be8b7"
+dependencies = [
+ "phf_shared 0.12.1",
+]
+
+[[package]]
+name = "phf"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1562dc717473dbaa4c1f85a36410e03c047b2e7df7f45ee938fbef64ae7fadf"
@@ -5711,6 +5744,15 @@ name = "phf_shared"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67eabc2ef2a60eb7faa00097bd1ffdb5bd28e62bf39990626a582201b7a754e5"
+dependencies = [
+ "siphasher 1.0.1",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06005508882fb681fd97892ecff4b7fd0fee13ef1aa569f8695dae7ab9099981"
 dependencies = [
  "siphasher 1.0.1",
 ]
@@ -8294,7 +8336,7 @@ dependencies = [
  "serde_spanned 1.0.4",
  "toml_datetime 0.7.5+spec-1.1.0",
  "toml_parser",
- "winnow",
+ "winnow 0.7.14",
 ]
 
 [[package]]
@@ -8326,7 +8368,7 @@ dependencies = [
  "serde_spanned 0.6.9",
  "toml_datetime 0.6.11",
  "toml_write",
- "winnow",
+ "winnow 0.7.14",
 ]
 
 [[package]]
@@ -8338,7 +8380,7 @@ dependencies = [
  "indexmap 2.13.0",
  "toml_datetime 0.7.5+spec-1.1.0",
  "toml_parser",
- "winnow",
+ "winnow 0.7.14",
 ]
 
 [[package]]
@@ -8347,7 +8389,7 @@ version = "1.0.6+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3198b4b0a8e11f09dd03e133c0280504d0801269e9afa46362ffde1cbeebf44"
 dependencies = [
- "winnow",
+ "winnow 0.7.14",
 ]
 
 [[package]]
@@ -9802,6 +9844,15 @@ name = "windows_x86_64_msvc"
 version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
+
+[[package]]
+name = "winnow"
+version = "0.6.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e90edd2ac1aa278a5c4599b1d89cf03074b610800f866d4026dc199d7929a28"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "winnow"

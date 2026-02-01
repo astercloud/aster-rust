@@ -1,4 +1,0 @@
-expected:
-{"id":0,"jsonrpc":"2.0","method":"initialize","params":{"capabilities":{"elicitation":{},"sampling":{}},"clientInfo":{"name":"aster","version":"0.0.0"},"protocolVersion":"2025-03-26"}}
-got:
-{"id":0,"jsonrpc":"2.0","method":"initialize","params":{"capabilities":{"elicitation":{},"sampling":{}},"clientInfo":{"name":"aster","version":"0.0.0"},"protocolVersion":"2025-03-26"}}

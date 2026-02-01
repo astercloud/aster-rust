@@ -15,6 +15,7 @@
 use super::condition::check_conditions;
 use super::merger::merge_permissions;
 use super::pattern::match_pattern;
+use super::policy::ToolPolicyManager;
 use super::restriction::check_parameter_restrictions;
 use super::types::{
     PermissionContext, PermissionInheritance, PermissionResult, PermissionScope, RestrictionType,
@@ -75,6 +76,9 @@ pub struct ToolPermissionManager {
     /// Custom template registry
     /// Requirements: 7.5
     template_registry: HashMap<String, Vec<ToolPermission>>,
+    /// Tool Policy Manager (optional, for new policy system)
+    /// Requirements: 5.1, 5.3
+    policy_manager: Option<ToolPolicyManager>,
 }
 
 impl ToolPermissionManager {
@@ -95,7 +99,36 @@ impl ToolPermissionManager {
             inheritance: PermissionInheritance::default(),
             config_dir,
             template_registry: HashMap::new(),
+            policy_manager: None,
         }
+    }
+
+    /// Enable the new Tool Policy system
+    ///
+    /// # Arguments
+    /// * `policy_manager` - The ToolPolicyManager to use
+    ///
+    /// Requirements: 5.1, 5.3
+    pub fn with_policy_manager(mut self, policy_manager: ToolPolicyManager) -> Self {
+        self.policy_manager = Some(policy_manager);
+        self
+    }
+
+    /// Set the policy manager
+    ///
+    /// Requirements: 5.1, 5.3
+    pub fn set_policy_manager(&mut self, policy_manager: ToolPolicyManager) {
+        self.policy_manager = Some(policy_manager);
+    }
+
+    /// Get the policy manager
+    pub fn policy_manager(&self) -> Option<&ToolPolicyManager> {
+        self.policy_manager.as_ref()
+    }
+
+    /// Get mutable policy manager
+    pub fn policy_manager_mut(&mut self) -> Option<&mut ToolPolicyManager> {
+        self.policy_manager.as_mut()
     }
 
     /// Get the configuration directory
@@ -142,23 +175,42 @@ impl ToolPermissionManager {
     /// A PermissionResult containing the decision and details
     ///
     /// # Behavior
-    /// 1. Merge permissions from all scopes according to inheritance config
-    /// 2. Find matching rules by tool name (supports wildcards)
-    /// 3. Sort by priority (highest first)
-    /// 4. For each rule:
+    /// 1. If policy_manager is set, check it first (new system takes precedence)
+    /// 2. Merge permissions from all scopes according to inheritance config
+    /// 3. Find matching rules by tool name (supports wildcards)
+    /// 4. Sort by priority (highest first)
+    /// 5. For each rule:
     ///    - Skip if expired
     ///    - Evaluate conditions
     ///    - If conditions pass, check parameter restrictions
     ///    - Return result based on rule's allowed flag
-    /// 5. If no rules match, allow by default
+    /// 6. If no rules match, allow by default
     ///
-    /// Requirements: 2.3, 2.4, 5.1, 5.2
+    /// Requirements: 2.3, 2.4, 5.1, 5.2, 5.3
     pub fn is_allowed(
         &self,
         tool: &str,
         params: &HashMap<String, Value>,
         context: &PermissionContext,
     ) -> PermissionResult {
+        // Step 0: Check policy manager first if enabled (Requirements: 5.1, 5.3)
+        if let Some(policy_manager) = &self.policy_manager {
+            let decision = policy_manager.is_allowed(tool);
+            if !decision.allowed {
+                return PermissionResult {
+                    allowed: false,
+                    reason: Some(decision.reason),
+                    restricted: false,
+                    suggestions: vec![format!(
+                        "Tool denied by policy layer: {:?}",
+                        decision.source_layer
+                    )],
+                    matched_rule: None,
+                    violations: Vec::new(),
+                };
+            }
+        }
+
         // Step 1: Merge permissions from all scopes
         let global_perms: Vec<ToolPermission> = self.global_permissions.values().cloned().collect();
         let project_perms: Vec<ToolPermission> =

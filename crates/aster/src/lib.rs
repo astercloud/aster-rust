@@ -7,6 +7,7 @@
 
 pub mod action_required_manager;
 pub mod agents;
+pub mod auto_reply;
 pub mod aster_apps;
 pub mod background;
 pub mod blueprint;

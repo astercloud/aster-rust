@@ -1,3 +1,16 @@
+// 调度器增强子模块
+#[path = "scheduler/types.rs"]
+pub mod types;
+
+#[path = "scheduler/migration.rs"]
+pub mod migration;
+
+#[path = "scheduler/executor.rs"]
+pub mod executor;
+
+#[path = "scheduler/delivery.rs"]
+pub mod delivery;
+
 use std::collections::HashMap;
 use std::fs;
 use std::io;

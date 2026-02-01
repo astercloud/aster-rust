@@ -95,19 +95,19 @@ impl AnalyzeImageTool {
         let magic = &data[..4];
 
         // PNG
-        if magic == &[0x89, 0x50, 0x4E, 0x47] {
+        if magic == [0x89, 0x50, 0x4E, 0x47] {
             return "image/png".to_string();
         }
         // JPEG
-        if magic == &[0xFF, 0xD8, 0xFF] {
+        if magic[..3] == [0xFF, 0xD8, 0xFF] {
             return "image/jpeg".to_string();
         }
         // GIF
-        if magic == &[0x47, 0x49, 0x46, 0x38] {
+        if magic == [0x47, 0x49, 0x46, 0x38] {
             return "image/gif".to_string();
         }
         // WebP
-        if magic == &[0x52, 0x49, 0x46, 0x46] {
+        if magic == [0x52, 0x49, 0x46, 0x46] {
             return "image/webp".to_string();
         }
 
