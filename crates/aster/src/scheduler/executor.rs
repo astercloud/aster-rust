@@ -49,7 +49,8 @@ use super::types::{
 /// # 示例
 ///
 /// ```rust
-/// use aster::scheduler::executor::{ExecutionResult, JobStatus};
+/// use aster::scheduler::executor::ExecutionResult;
+/// use aster::scheduler::types::JobStatus;
 ///
 /// // 成功的执行结果
 /// let success = ExecutionResult {
