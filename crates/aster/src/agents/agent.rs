@@ -737,8 +737,11 @@ impl Agent {
             .unwrap_or_default();
 
         let subagents_enabled = self.subagents_enabled().await;
+        // 只在 scheduler 服务可用时才暴露 schedule 工具
         if extension_name.is_none() || extension_name.as_deref() == Some("platform") {
-            prefixed_tools.push(platform_tools::manage_schedule_tool());
+            if self.scheduler_service.lock().await.is_some() {
+                prefixed_tools.push(platform_tools::manage_schedule_tool());
+            }
         }
 
         if extension_name.is_none() {
