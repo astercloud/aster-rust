@@ -90,6 +90,6 @@ pub use permission_store::ToolPermissionStore;
 
 // Policy types (Requirements: 1.1, 3.1)
 pub use policy::{
-    MergedPolicy, PolicyDecision, PolicyError, PolicyLayer, PolicyMerger, ProfileConfig,
-    ProfileManager, ToolGroups, ToolPolicy, ToolPolicyManager, ToolProfile, PolicyMigration,
+    MergedPolicy, PolicyDecision, PolicyError, PolicyLayer, PolicyMerger, PolicyMigration,
+    ProfileConfig, ProfileManager, ToolGroups, ToolPolicy, ToolPolicyManager, ToolProfile,
 };

@@ -119,7 +119,7 @@ pub async fn refresh_custom_providers() -> Result<()> {
 async fn get_from_registry(name: &str) -> Result<ProviderEntry> {
     // 将各种 Provider 名称映射到 Aster 支持的 Provider
     let mapped_name = map_provider_alias(name);
-    
+
     let guard = get_registry().await.read().unwrap();
     guard
         .entries
@@ -129,12 +129,12 @@ async fn get_from_registry(name: &str) -> Result<ProviderEntry> {
 }
 
 /// 将各种 Provider 名称映射到 Aster 支持的 Provider
-/// 
+///
 /// Aster 原生支持的 Provider:
 /// - openai, anthropic, google, azure, bedrock, ollama, gcpvertexai
 /// - openrouter, litellm, databricks, codex, xai, venice, tetrate
 /// - snowflake, sagemaker_tgi, githubcopilot, gemini_cli, cursor_agent, claude_code
-/// 
+///
 /// 其他 Provider 会映射到兼容的 Provider
 fn map_provider_alias(name: &str) -> &str {
     match name.to_lowercase().as_str() {
@@ -153,7 +153,7 @@ fn map_provider_alias(name: &str) -> &str {
         "spark" | "讯飞" | "xunfei" => "openai",
         "hunyuan" | "混元" => "openai",
         "ernie" | "文心" | "wenxin" => "openai",
-        
+
         // 国际 AI 服务（OpenAI 兼容）
         "groq" => "openai",
         "together" | "togetherai" => "openai",
@@ -165,29 +165,29 @@ fn map_provider_alias(name: &str) -> &str {
         "siliconflow" => "openai",
         "mistral" => "openai",
         "cohere" => "openai",
-        
+
         // API 聚合服务
         "oneapi" | "one-api" | "one_api" => "openai",
         "newapi" | "new-api" | "new_api" => "openai",
         "vercel" | "vercel_ai" | "vercel-ai" => "openai",
-        
+
         // 自定义/通用 OpenAI 兼容
         "custom" | "custom_openai" | "openai_compatible" => "openai",
-        
+
         // ========== Anthropic 兼容格式 ==========
         "claude" => "anthropic",
         "anthropic_compatible" | "anthropic-compatible" => "anthropic",
-        
+
         // ========== Google/Gemini 格式 ==========
         "gemini" | "gemini_api_key" => "google",
         "antigravity" => "google",
-        
+
         // ========== 其他已支持的 Provider（保持原名） ==========
         "azure" | "azure_openai" | "azure-openai" => "azure",
         "vertex" | "vertexai" | "vertex_ai" => "gcpvertexai",
         "aws_bedrock" | "aws-bedrock" => "bedrock",
-        "kiro" => "bedrock",  // Kiro 使用 CodeWhisperer API
-        
+        "kiro" => "bedrock", // Kiro 使用 CodeWhisperer API
+
         // 默认返回原名称（让 Aster 原生处理）
         _ => name,
     }

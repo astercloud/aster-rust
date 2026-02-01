@@ -237,9 +237,10 @@ impl ProfileManager {
     ///
     /// - 4.3: 保存到配置目录
     pub fn save_profile(&self, name: &str, policy: &ToolPolicy) -> Result<(), PolicyError> {
-        let config_dir = self.config_dir.as_ref().ok_or_else(|| {
-            PolicyError::ConfigReadError("Config directory not set".to_string())
-        })?;
+        let config_dir = self
+            .config_dir
+            .as_ref()
+            .ok_or_else(|| PolicyError::ConfigReadError("Config directory not set".to_string()))?;
 
         // 确保目录存在
         std::fs::create_dir_all(config_dir)?;
@@ -262,9 +263,10 @@ impl ProfileManager {
     ///
     /// - 4.2: 从配置目录加载
     pub fn load_profile(&self, name: &str) -> Result<ProfileConfig, PolicyError> {
-        let config_dir = self.config_dir.as_ref().ok_or_else(|| {
-            PolicyError::ConfigReadError("Config directory not set".to_string())
-        })?;
+        let config_dir = self
+            .config_dir
+            .as_ref()
+            .ok_or_else(|| PolicyError::ConfigReadError("Config directory not set".to_string()))?;
 
         let path = config_dir.join(format!("{}.json", name));
         if !path.exists() {
@@ -306,9 +308,10 @@ impl ProfileManager {
 
     /// 列出所有已保存的 Profile
     pub fn list_profiles(&self) -> Result<Vec<String>, PolicyError> {
-        let config_dir = self.config_dir.as_ref().ok_or_else(|| {
-            PolicyError::ConfigReadError("Config directory not set".to_string())
-        })?;
+        let config_dir = self
+            .config_dir
+            .as_ref()
+            .ok_or_else(|| PolicyError::ConfigReadError("Config directory not set".to_string()))?;
 
         if !config_dir.exists() {
             return Ok(Vec::new());

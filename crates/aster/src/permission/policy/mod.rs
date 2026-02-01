@@ -53,9 +53,7 @@ mod property_tests;
 // =============================================================================
 
 // 核心类型导出 (Requirements: 1.1, 3.1)
-pub use types::{
-    MergedPolicy, PolicyDecision, PolicyError, PolicyLayer, ToolPolicy, ToolProfile,
-};
+pub use types::{MergedPolicy, PolicyDecision, PolicyError, PolicyLayer, ToolPolicy, ToolProfile};
 
 // 工具分组导出 (Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7)
 pub use groups::ToolGroups;

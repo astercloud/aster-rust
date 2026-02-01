@@ -26,7 +26,6 @@ pub struct CooldownTracker {
     type_cooldowns: HashMap<TriggerType, Duration>,
 }
 
-
 impl CooldownTracker {
     /// 创建新的冷却追踪器
     pub fn new(default_cooldown: Duration) -> Self {
@@ -38,11 +37,7 @@ impl CooldownTracker {
     }
 
     /// 检查用户是否在冷却中
-    pub fn check_cooldown(
-        &self,
-        user_id: &str,
-        trigger_type: TriggerType,
-    ) -> CooldownCheckResult {
+    pub fn check_cooldown(&self, user_id: &str, trigger_type: TriggerType) -> CooldownCheckResult {
         let cooldown = self
             .type_cooldowns
             .get(&trigger_type)
@@ -64,10 +59,10 @@ impl CooldownTracker {
         }
     }
 
-
     /// 记录触发时间
     pub fn record_trigger(&mut self, user_id: &str) {
-        self.last_trigger.insert(user_id.to_string(), Instant::now());
+        self.last_trigger
+            .insert(user_id.to_string(), Instant::now());
     }
 
     /// 设置特定触发类型的冷却时间
@@ -437,7 +432,7 @@ mod tests {
         assert!(tracker.has_trigger_record("user2"));
     }
 
-    /// Requirement 4.2: WHEN a user triggers within cooldown period, 
+    /// Requirement 4.2: WHEN a user triggers within cooldown period,
     /// THE Auto_Reply_Manager SHALL reject the trigger
     #[test]
     fn test_reject_trigger_within_cooldown() {

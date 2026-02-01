@@ -200,7 +200,6 @@ impl PolicyMerger {
     }
 }
 
-
 // =============================================================================
 // 单元测试
 // =============================================================================
@@ -221,8 +220,7 @@ mod tests {
     #[test]
     fn test_set_and_get_policy() {
         let mut merger = PolicyMerger::default();
-        let policy = ToolPolicy::new(PolicyLayer::Global)
-            .with_allow(vec!["bash".to_string()]);
+        let policy = ToolPolicy::new(PolicyLayer::Global).with_allow(vec!["bash".to_string()]);
 
         merger.set_policy(PolicyLayer::Global, policy.clone());
 
@@ -260,13 +258,11 @@ mod tests {
         let mut merger = PolicyMerger::default();
 
         // Profile 层允许 bash
-        let profile = ToolPolicy::new(PolicyLayer::Profile)
-            .with_allow(vec!["bash".to_string()]);
+        let profile = ToolPolicy::new(PolicyLayer::Profile).with_allow(vec!["bash".to_string()]);
         merger.set_policy(PolicyLayer::Profile, profile);
 
         // Global 层拒绝 bash
-        let global = ToolPolicy::new(PolicyLayer::Global)
-            .with_deny(vec!["bash".to_string()]);
+        let global = ToolPolicy::new(PolicyLayer::Global).with_deny(vec!["bash".to_string()]);
         merger.set_policy(PolicyLayer::Global, global);
 
         let merged = merger.merge();
@@ -281,13 +277,11 @@ mod tests {
         let mut merger = PolicyMerger::default();
 
         // Global 层拒绝 bash
-        let global = ToolPolicy::new(PolicyLayer::Global)
-            .with_deny(vec!["bash".to_string()]);
+        let global = ToolPolicy::new(PolicyLayer::Global).with_deny(vec!["bash".to_string()]);
         merger.set_policy(PolicyLayer::Global, global);
 
         // Session 层允许 bash
-        let session = ToolPolicy::new(PolicyLayer::Session)
-            .with_allow(vec!["bash".to_string()]);
+        let session = ToolPolicy::new(PolicyLayer::Session).with_allow(vec!["bash".to_string()]);
         merger.set_policy(PolicyLayer::Session, session);
 
         let merged = merger.merge();
@@ -319,8 +313,7 @@ mod tests {
     #[test]
     fn test_allow_all() {
         let mut merger = PolicyMerger::default();
-        let policy = ToolPolicy::new(PolicyLayer::Profile)
-            .with_allow(vec!["*".to_string()]);
+        let policy = ToolPolicy::new(PolicyLayer::Profile).with_allow(vec!["*".to_string()]);
 
         merger.set_policy(PolicyLayer::Profile, policy);
 
@@ -331,8 +324,8 @@ mod tests {
     #[test]
     fn test_group_expansion_in_merge() {
         let mut merger = PolicyMerger::default();
-        let policy = ToolPolicy::new(PolicyLayer::Profile)
-            .with_allow(vec!["group:runtime".to_string()]);
+        let policy =
+            ToolPolicy::new(PolicyLayer::Profile).with_allow(vec!["group:runtime".to_string()]);
 
         merger.set_policy(PolicyLayer::Profile, policy);
         let merged = merger.merge();
@@ -346,18 +339,13 @@ mod tests {
     fn test_get_policy_source() {
         let mut merger = PolicyMerger::default();
 
-        let profile = ToolPolicy::new(PolicyLayer::Profile)
-            .with_allow(vec!["bash".to_string()]);
+        let profile = ToolPolicy::new(PolicyLayer::Profile).with_allow(vec!["bash".to_string()]);
         merger.set_policy(PolicyLayer::Profile, profile);
 
-        let global = ToolPolicy::new(PolicyLayer::Global)
-            .with_allow(vec!["file_read".to_string()]);
+        let global = ToolPolicy::new(PolicyLayer::Global).with_allow(vec!["file_read".to_string()]);
         merger.set_policy(PolicyLayer::Global, global);
 
-        assert_eq!(
-            merger.get_policy_source("bash"),
-            Some(PolicyLayer::Profile)
-        );
+        assert_eq!(merger.get_policy_source("bash"), Some(PolicyLayer::Profile));
         assert_eq!(
             merger.get_policy_source("file_read"),
             Some(PolicyLayer::Global)

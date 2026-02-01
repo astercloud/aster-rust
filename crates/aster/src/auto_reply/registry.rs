@@ -36,7 +36,6 @@ fn default_priority() -> u32 {
     100
 }
 
-
 /// 触发器注册表
 pub struct TriggerRegistry {
     /// 已注册的触发器
@@ -70,7 +69,6 @@ impl TriggerRegistry {
             None
         }
     }
-
 
     /// 获取所有启用的触发器（按优先级排序）
     pub fn get_enabled_triggers(&self) -> Vec<&AutoReplyTrigger> {
@@ -111,7 +109,6 @@ impl TriggerRegistry {
         self.triggers.is_empty()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -295,8 +292,7 @@ mod tests {
         let trigger = create_mention_trigger("mention-1", 5);
 
         let json = serde_json::to_string(&trigger).expect("Should serialize");
-        let parsed: AutoReplyTrigger =
-            serde_json::from_str(&json).expect("Should deserialize");
+        let parsed: AutoReplyTrigger = serde_json::from_str(&json).expect("Should deserialize");
 
         assert_eq!(parsed.id, trigger.id);
         assert_eq!(parsed.name, trigger.name);
@@ -383,17 +379,23 @@ mod tests {
 
     /// 生成单个触发器
     fn arb_trigger() -> impl Strategy<Value = AutoReplyTrigger> {
-        (arb_trigger_id(), arb_priority(), any::<bool>(), arb_trigger_config()).prop_map(
-            |(id, priority, enabled, (trigger_type, config))| AutoReplyTrigger {
-                id,
-                name: "Test Trigger".to_string(),
-                enabled,
-                trigger_type,
-                config,
-                priority,
-                response_template: None,
-            },
+        (
+            arb_trigger_id(),
+            arb_priority(),
+            any::<bool>(),
+            arb_trigger_config(),
         )
+            .prop_map(
+                |(id, priority, enabled, (trigger_type, config))| AutoReplyTrigger {
+                    id,
+                    name: "Test Trigger".to_string(),
+                    enabled,
+                    trigger_type,
+                    config,
+                    priority,
+                    response_template: None,
+                },
+            )
     }
 
     /// 生成具有唯一 ID 的触发器列表
@@ -429,7 +431,7 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 6: 触发器评估优先级
             // Validates: Requirements 6.1-6.3
-            
+
             let mut registry = TriggerRegistry::new();
             for trigger in &triggers {
                 registry.register(trigger.clone());
@@ -467,7 +469,7 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 6: 触发器评估优先级
             // Validates: Requirements 6.1-6.3
-            
+
             let mut registry = TriggerRegistry::new();
             for trigger in &triggers {
                 registry.register(trigger.clone());
@@ -496,7 +498,7 @@ mod tests {
         fn prop_empty_registry_returns_empty_list(_seed in any::<u64>()) {
             // Feature: auto-reply-mechanism, Property 6: 触发器评估优先级
             // Validates: Requirements 6.1-6.3
-            
+
             let registry = TriggerRegistry::new();
             let enabled = registry.get_enabled_triggers();
 
@@ -515,9 +517,9 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 6: 触发器评估优先级
             // Validates: Requirements 6.1-6.3
-            
+
             let mut registry = TriggerRegistry::new();
-            
+
             // 注册所有触发器，但全部禁用
             for (i, mut trigger) in triggers.into_iter().enumerate() {
                 trigger.id = format!("trigger_{}", i); // 确保 ID 唯一
@@ -543,14 +545,14 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 6: 触发器评估优先级
             // Validates: Requirements 6.1-6.3
-            
+
             let mut registry = TriggerRegistry::new();
             for trigger in &triggers {
                 registry.register(trigger.clone());
             }
 
             let enabled = registry.get_enabled_triggers();
-            
+
             // 找到所有启用触发器中的最小优先级
             let min_priority = triggers
                 .iter()
@@ -578,7 +580,7 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 6: 触发器评估优先级
             // Validates: Requirements 6.1-6.3
-            
+
             // 正序注册
             let mut registry1 = TriggerRegistry::new();
             for trigger in &triggers {
@@ -620,9 +622,9 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 6: 触发器评估优先级
             // Validates: Requirements 6.1-6.3
-            
+
             let mut registry = TriggerRegistry::new();
-            
+
             // 创建多个相同优先级的触发器
             for i in 0..count {
                 let trigger = AutoReplyTrigger {
@@ -669,9 +671,9 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 6: 触发器评估优先级
             // Validates: Requirements 6.1-6.3
-            
+
             let mut registry = TriggerRegistry::new();
-            
+
             // 注册启用的触发器
             for (i, priority) in enabled_priorities.iter().enumerate() {
                 let trigger = AutoReplyTrigger {

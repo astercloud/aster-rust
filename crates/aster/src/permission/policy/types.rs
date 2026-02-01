@@ -97,7 +97,9 @@ impl ToolProfile {
 /// # Requirements
 ///
 /// - 3.1: 支持四层策略
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 pub enum PolicyLayer {
     /// Profile 预设策略（最低优先级）
     #[default]
@@ -349,17 +351,20 @@ mod tests {
     }
 
     #[test]
-    fn test_tool_profile_from_str() {
-        assert_eq!(ToolProfile::from_str("minimal").unwrap(), ToolProfile::Minimal);
-        assert_eq!(ToolProfile::from_str("CODING").unwrap(), ToolProfile::Coding);
-        assert_eq!(ToolProfile::from_str("Messaging").unwrap(), ToolProfile::Messaging);
-        assert_eq!(ToolProfile::from_str("full").unwrap(), ToolProfile::Full);
+    fn test_tool_profile_parse() {
+        assert_eq!(ToolProfile::parse("minimal").unwrap(), ToolProfile::Minimal);
+        assert_eq!(ToolProfile::parse("CODING").unwrap(), ToolProfile::Coding);
         assert_eq!(
-            ToolProfile::from_str("custom:my-profile").unwrap(),
+            ToolProfile::parse("Messaging").unwrap(),
+            ToolProfile::Messaging
+        );
+        assert_eq!(ToolProfile::parse("full").unwrap(), ToolProfile::Full);
+        assert_eq!(
+            ToolProfile::parse("custom:my-profile").unwrap(),
             ToolProfile::Custom("my-profile".to_string())
         );
         assert_eq!(
-            ToolProfile::from_str("unknown").unwrap(),
+            ToolProfile::parse("unknown").unwrap(),
             ToolProfile::Custom("unknown".to_string())
         );
     }

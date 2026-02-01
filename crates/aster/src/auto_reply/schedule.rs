@@ -46,7 +46,6 @@ pub struct ScheduleTriggerEvent {
     pub next_trigger_at: Option<DateTime<Utc>>,
 }
 
-
 /// Schedule 上下文
 ///
 /// 传递给 Agent 的调度上下文信息。
@@ -70,7 +69,6 @@ pub struct ScheduleContext {
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
 }
-
 
 /// 已注册的调度触发器状态
 #[derive(Debug, Clone)]
@@ -111,7 +109,6 @@ pub struct ScheduleTriggerHandler {
     schedules: Arc<RwLock<HashMap<String, RegisteredSchedule>>>,
 }
 
-
 impl Default for ScheduleTriggerHandler {
     fn default() -> Self {
         Self::new()
@@ -141,20 +138,14 @@ impl ScheduleTriggerHandler {
     pub async fn register(&self, trigger: AutoReplyTrigger) -> Result<(), String> {
         // 验证触发器类型
         if trigger.trigger_type != TriggerType::Schedule {
-            return Err(format!(
-                "触发器 {} 不是 Schedule 类型",
-                trigger.id
-            ));
+            return Err(format!("触发器 {} 不是 Schedule 类型", trigger.id));
         }
 
         // 提取调度配置
         let schedule_config = match &trigger.config {
             TriggerConfig::Schedule(config) => config.clone(),
             _ => {
-                return Err(format!(
-                    "触发器 {} 配置类型不匹配",
-                    trigger.id
-                ));
+                return Err(format!("触发器 {} 配置类型不匹配", trigger.id));
             }
         };
 
@@ -197,7 +188,6 @@ impl ScheduleTriggerHandler {
         })
     }
 
-
     /// 验证调度类型配置
     ///
     /// **Validates: Requirements 8.3, 8.4, 8.5**
@@ -236,7 +226,6 @@ impl ScheduleTriggerHandler {
             }
         }
     }
-
 
     /// 计算下次触发时间
     ///
@@ -295,7 +284,6 @@ impl ScheduleTriggerHandler {
             .map(|dt| dt.with_timezone(&Utc))
     }
 
-
     /// 检查并获取到期的触发器
     ///
     /// 返回所有已到期需要触发的调度，并更新其状态。
@@ -328,10 +316,8 @@ impl ScheduleTriggerHandler {
                     schedule.has_triggered = true;
 
                     // 计算下次触发时间
-                    let next = self.calculate_next_trigger(
-                        &schedule.schedule_config.schedule_type,
-                        now,
-                    );
+                    let next =
+                        self.calculate_next_trigger(&schedule.schedule_config.schedule_type, now);
                     schedule.next_trigger_at = next;
 
                     let mut event = event;
@@ -343,7 +329,6 @@ impl ScheduleTriggerHandler {
 
         events
     }
-
 
     /// 创建触发结果
     ///
@@ -359,7 +344,11 @@ impl ScheduleTriggerHandler {
 
         // 创建虚拟的入站消息（用于 Schedule 触发）
         let message = IncomingMessage {
-            id: format!("schedule-{}-{}", event.trigger_id, event.triggered_at.timestamp_millis()),
+            id: format!(
+                "schedule-{}-{}",
+                event.trigger_id,
+                event.triggered_at.timestamp_millis()
+            ),
             sender_id: "system".to_string(),
             sender_name: Some("Scheduler".to_string()),
             content: format!(
@@ -418,14 +407,14 @@ impl ScheduleTriggerHandler {
         Some(ScheduleContext {
             trigger_id: event.trigger_id.clone(),
             trigger_name: schedule.trigger.name.clone(),
-            schedule_description: self.describe_schedule_type(&schedule.schedule_config.schedule_type),
+            schedule_description: self
+                .describe_schedule_type(&schedule.schedule_config.schedule_type),
             triggered_at: event.triggered_at,
             is_first_trigger: !schedule.has_triggered,
             last_triggered_at: schedule.last_triggered_at,
             metadata: HashMap::new(),
         })
     }
-
 
     /// 描述调度类型
     fn describe_schedule_type(&self, schedule_type: &ScheduleType) -> String {
@@ -485,7 +474,6 @@ impl ScheduleTriggerHandler {
     }
 }
 
-
 /// 格式化毫秒为可读的时间间隔
 fn format_duration(ms: u64) -> String {
     let seconds = ms / 1000;
@@ -508,7 +496,6 @@ fn format_duration(ms: u64) -> String {
 
 // 需要引入 std::str::FromStr（cron::Schedule 在方法内部使用）
 use std::str::FromStr;
-
 
 #[cfg(test)]
 mod tests {
@@ -547,7 +534,6 @@ mod tests {
         assert_eq!(format_duration(86400000), "1天0小时");
         assert_eq!(format_duration(90000000), "1天1小时");
     }
-
 
     // ========== ScheduleTriggerHandler 测试 ==========
 
@@ -595,7 +581,6 @@ mod tests {
             response_template: None,
         }
     }
-
 
     #[tokio::test]
     async fn test_handler_new() {
@@ -645,7 +630,6 @@ mod tests {
         assert!(handler.is_registered("every-1").await);
     }
 
-
     #[tokio::test]
     async fn test_register_invalid_trigger_type() {
         let handler = ScheduleTriggerHandler::new();
@@ -685,7 +669,6 @@ mod tests {
         assert!(result.unwrap_err().contains("间隔必须大于 0"));
     }
 
-
     #[tokio::test]
     async fn test_unregister_existing_trigger() {
         let handler = ScheduleTriggerHandler::new();
@@ -708,8 +691,14 @@ mod tests {
     #[tokio::test]
     async fn test_list_schedules() {
         let handler = ScheduleTriggerHandler::new();
-        handler.register(create_cron_trigger("cron-1", "0 0 * * * *")).await.unwrap();
-        handler.register(create_every_trigger("every-1", 60000)).await.unwrap();
+        handler
+            .register(create_cron_trigger("cron-1", "0 0 * * * *"))
+            .await
+            .unwrap();
+        handler
+            .register(create_every_trigger("every-1", 60000))
+            .await
+            .unwrap();
 
         let schedules = handler.list_schedules().await;
         assert_eq!(schedules.len(), 2);
@@ -725,7 +714,6 @@ mod tests {
         assert!(next.is_some());
     }
 
-
     /// **Validates: Requirement 8.2** - Schedule 触发时创建触发事件
     #[tokio::test]
     async fn test_check_and_fire_expired_at_trigger() {
@@ -733,19 +721,22 @@ mod tests {
         // 创建一个已过期的 At 触发器（过去时间）
         let past_ms = Utc::now().timestamp_millis() - 1000; // 1秒前
         let trigger = create_at_trigger("at-past", past_ms);
-        
+
         // 手动注册（绕过验证，因为正常注册会拒绝过期时间）
         {
             let mut schedules = handler.schedules.write().await;
-            schedules.insert("at-past".to_string(), RegisteredSchedule {
-                trigger,
-                schedule_config: ScheduleTriggerConfig {
-                    schedule_type: ScheduleType::At { at_ms: past_ms },
+            schedules.insert(
+                "at-past".to_string(),
+                RegisteredSchedule {
+                    trigger,
+                    schedule_config: ScheduleTriggerConfig {
+                        schedule_type: ScheduleType::At { at_ms: past_ms },
+                    },
+                    next_trigger_at: Some(DateTime::from_timestamp_millis(past_ms).unwrap()),
+                    last_triggered_at: None,
+                    has_triggered: false,
                 },
-                next_trigger_at: Some(DateTime::from_timestamp_millis(past_ms).unwrap()),
-                last_triggered_at: None,
-                has_triggered: false,
-            });
+            );
         }
 
         let events = handler.check_and_fire().await;
@@ -774,7 +765,6 @@ mod tests {
         assert!(ctx.schedule_description.contains("每隔"));
     }
 
-
     /// **Validates: Requirement 8.2** - 创建触发结果
     #[tokio::test]
     async fn test_create_trigger_result() {
@@ -794,7 +784,7 @@ mod tests {
 
         let result = handler.create_trigger_result(&event).await;
         assert!(result.is_some());
-        
+
         match result.unwrap() {
             TriggerResult::Triggered { trigger, context } => {
                 assert_eq!(trigger.id, "cron-1");
@@ -857,14 +847,14 @@ mod tests {
     fn arb_valid_cron_expr() -> impl Strategy<Value = String> {
         // 生成有效的 cron 表达式（6 字段格式：秒 分 时 日 月 周）
         prop_oneof![
-            Just("0 0 * * * *".to_string()),      // 每小时
-            Just("0 */5 * * * *".to_string()),    // 每 5 分钟
-            Just("0 0 0 * * *".to_string()),      // 每天午夜
-            Just("0 0 12 * * *".to_string()),     // 每天中午
-            Just("0 30 9 * * 1-5".to_string()),   // 工作日 9:30
-            Just("0 0 0 1 * *".to_string()),      // 每月 1 号
-            Just("0 0 0 * * 0".to_string()),      // 每周日
-            Just("0 0 */2 * * *".to_string()),    // 每 2 小时
+            Just("0 0 * * * *".to_string()),    // 每小时
+            Just("0 */5 * * * *".to_string()),  // 每 5 分钟
+            Just("0 0 0 * * *".to_string()),    // 每天午夜
+            Just("0 0 12 * * *".to_string()),   // 每天中午
+            Just("0 30 9 * * 1-5".to_string()), // 工作日 9:30
+            Just("0 0 0 1 * *".to_string()),    // 每月 1 号
+            Just("0 0 0 * * 0".to_string()),    // 每周日
+            Just("0 0 */2 * * *".to_string()),  // 每 2 小时
         ]
     }
 
@@ -882,9 +872,8 @@ mod tests {
     /// 生成 Cron 调度类型
     /// **Validates: Requirement 8.3**
     fn arb_cron_schedule() -> impl Strategy<Value = ScheduleType> {
-        (arb_valid_cron_expr(), arb_timezone()).prop_map(|(expr, timezone)| {
-            ScheduleType::Cron { expr, timezone }
-        })
+        (arb_valid_cron_expr(), arb_timezone())
+            .prop_map(|(expr, timezone)| ScheduleType::Cron { expr, timezone })
     }
 
     /// 生成 At 调度类型（一次性定时）
@@ -904,11 +893,7 @@ mod tests {
     /// 生成任意有效的 ScheduleType
     /// **Validates: Requirements 8.3-8.5**
     fn arb_schedule_type() -> impl Strategy<Value = ScheduleType> {
-        prop_oneof![
-            arb_cron_schedule(),
-            arb_at_schedule(),
-            arb_every_schedule(),
-        ]
+        prop_oneof![arb_cron_schedule(), arb_at_schedule(), arb_every_schedule(),]
     }
 
     /// 生成 ScheduleTriggerConfig

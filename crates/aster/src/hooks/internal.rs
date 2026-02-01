@@ -1849,11 +1849,11 @@ mod tests {
     #[test]
     fn test_internal_hook_event_type_clone_copy() {
         let original = InternalHookEventType::Agent;
-        let cloned = original.clone();
-        let copied = original; // Copy trait
+        let copied1 = original; // Copy trait
+        let copied2 = original; // Copy trait
 
-        assert_eq!(original, cloned);
-        assert_eq!(original, copied);
+        assert_eq!(original, copied1);
+        assert_eq!(original, copied2);
     }
 
     #[test]
@@ -2147,11 +2147,11 @@ mod tests {
     #[test]
     fn test_internal_hook_action_clone_copy() {
         let original = InternalHookAction::Start;
-        let cloned = original.clone();
-        let copied = original; // Copy trait
+        let copied1 = original; // Copy trait
+        let copied2 = original; // Copy trait
 
-        assert_eq!(original, cloned);
-        assert_eq!(original, copied);
+        assert_eq!(original, copied1);
+        assert_eq!(original, copied2);
     }
 
     #[test]
@@ -2535,7 +2535,9 @@ mod tests {
         assert!(event.messages.is_empty());
 
         // 处理器可以向 messages 推送消息
-        event.messages.push("Agent started successfully".to_string());
+        event
+            .messages
+            .push("Agent started successfully".to_string());
         event.messages.push("Initialization complete".to_string());
 
         assert_eq!(event.messages.len(), 2);
@@ -2656,7 +2658,9 @@ mod tests {
 
         assert!(!registry.is_empty());
         assert_eq!(registry.handler_count(), 1);
-        assert!(registry.get_registered_keys().contains(&"agent:start".to_string()));
+        assert!(registry
+            .get_registered_keys()
+            .contains(&"agent:start".to_string()));
     }
 
     #[test]
@@ -2698,7 +2702,9 @@ mod tests {
         let handler: InternalHookHandlerFn = Arc::new(|_| Box::pin(async { Ok(()) }));
         registry.register("agent", handler);
 
-        assert!(registry.get_registered_keys().contains(&"agent".to_string()));
+        assert!(registry
+            .get_registered_keys()
+            .contains(&"agent".to_string()));
         assert_eq!(registry.get_handlers("agent").len(), 1);
     }
 
@@ -2761,7 +2767,9 @@ mod tests {
         assert!(removed);
         assert_eq!(registry.handler_count(), 1);
         // 事件键仍然存在，因为还有一个处理器
-        assert!(registry.get_registered_keys().contains(&"agent:start".to_string()));
+        assert!(registry
+            .get_registered_keys()
+            .contains(&"agent:start".to_string()));
     }
 
     #[test]
@@ -2883,12 +2891,16 @@ mod tests {
         let handler: InternalHookHandlerFn = Arc::new(|_| Box::pin(async { Ok(()) }));
         registry.register("agent:start", handler.clone());
 
-        assert!(registry.get_registered_keys().contains(&"agent:start".to_string()));
+        assert!(registry
+            .get_registered_keys()
+            .contains(&"agent:start".to_string()));
 
         registry.unregister("agent:start", &handler);
 
         // 取消注册后，空的事件键应该被移除
-        assert!(!registry.get_registered_keys().contains(&"agent:start".to_string()));
+        assert!(!registry
+            .get_registered_keys()
+            .contains(&"agent:start".to_string()));
     }
 
     // ========== 全局注册表单例测试 ==========
@@ -3085,10 +3097,7 @@ mod tests {
         // 验证按注册顺序调用
         let order = call_order.lock().unwrap();
         assert_eq!(*order, vec![1, 2, 3]);
-        assert_eq!(
-            event.messages,
-            vec!["Handler 1", "Handler 2", "Handler 3"]
-        );
+        assert_eq!(event.messages, vec!["Handler 1", "Handler 2", "Handler 3"]);
     }
 
     #[tokio::test]
@@ -3491,20 +3500,19 @@ mod tests {
         let handler: InternalHookHandlerFn = Arc::new(move |event| {
             *called_clone.lock().unwrap() = true;
             *context_clone.lock().unwrap() = event.context.clone();
-            event.messages.push("Agent start handler called".to_string());
+            event
+                .messages
+                .push("Agent start handler called".to_string());
             Box::pin(async move { Ok(()) })
         });
 
         registry.register("agent:start", handler.clone());
 
         // 触发 agent:start 事件
-        let event = trigger_agent_start(
-            "test-agent-001",
-            "coding",
-            Some("test-session".to_string()),
-        )
-        .await
-        .unwrap();
+        let event =
+            trigger_agent_start("test-agent-001", "coding", Some("test-session".to_string()))
+                .await
+                .unwrap();
 
         // 验证事件被触发
         assert!(*called.lock().unwrap());
@@ -3521,7 +3529,9 @@ mod tests {
         assert_eq!(context["agent_type"], "coding");
 
         // 验证处理器添加的消息
-        assert!(event.messages.contains(&"Agent start handler called".to_string()));
+        assert!(event
+            .messages
+            .contains(&"Agent start handler called".to_string()));
 
         // 清理
         registry.unregister("agent:start", &handler);
@@ -3548,13 +3558,9 @@ mod tests {
         registry.register("agent:stop", handler.clone());
 
         // 触发 agent:stop 事件
-        let event = trigger_agent_stop(
-            "test-agent-002",
-            "chat",
-            None,
-        )
-        .await
-        .unwrap();
+        let event = trigger_agent_stop("test-agent-002", "chat", None)
+            .await
+            .unwrap();
 
         // 验证事件被触发
         assert!(*called.lock().unwrap());
@@ -3571,7 +3577,9 @@ mod tests {
         assert_eq!(context["agent_type"], "chat");
 
         // 验证处理器添加的消息
-        assert!(event.messages.contains(&"Agent stop handler called".to_string()));
+        assert!(event
+            .messages
+            .contains(&"Agent stop handler called".to_string()));
 
         // 清理
         registry.unregister("agent:stop", &handler);
@@ -3591,7 +3599,9 @@ mod tests {
         let handler: InternalHookHandlerFn = Arc::new(move |event| {
             *called_clone.lock().unwrap() = true;
             *context_clone.lock().unwrap() = event.context.clone();
-            event.messages.push("Agent error handler called".to_string());
+            event
+                .messages
+                .push("Agent error handler called".to_string());
             Box::pin(async move { Ok(()) })
         });
 
@@ -3623,7 +3633,9 @@ mod tests {
         assert_eq!(context["error"], "Connection timeout");
 
         // 验证处理器添加的消息
-        assert!(event.messages.contains(&"Agent error handler called".to_string()));
+        assert!(event
+            .messages
+            .contains(&"Agent error handler called".to_string()));
 
         // 清理
         registry.unregister("agent:error", &handler);
@@ -3643,7 +3655,9 @@ mod tests {
         let handler: InternalHookHandlerFn = Arc::new(move |event| {
             *called_clone.lock().unwrap() = true;
             *context_clone.lock().unwrap() = event.context.clone();
-            event.messages.push("Agent bootstrap handler called".to_string());
+            event
+                .messages
+                .push("Agent bootstrap handler called".to_string());
             Box::pin(async move { Ok(()) })
         });
 
@@ -3673,7 +3687,9 @@ mod tests {
         assert_eq!(context["agent_type"], "assistant");
 
         // 验证处理器添加的消息
-        assert!(event.messages.contains(&"Agent bootstrap handler called".to_string()));
+        assert!(event
+            .messages
+            .contains(&"Agent bootstrap handler called".to_string()));
 
         // 清理
         registry.unregister("agent:bootstrap", &handler);
@@ -3687,13 +3703,9 @@ mod tests {
         registry.clear();
 
         // 测试没有处理器时的行为
-        let event = trigger_agent_start(
-            "no-handler-agent",
-            "test",
-            None,
-        )
-        .await
-        .unwrap();
+        let event = trigger_agent_start("no-handler-agent", "test", None)
+            .await
+            .unwrap();
 
         // 应该成功返回，messages 为空
         assert_eq!(event.event_type, InternalHookEventType::Agent);
@@ -3722,10 +3734,16 @@ mod tests {
         registry.register("agent", handler.clone());
 
         // 触发不同的 Agent 事件
-        let _ = trigger_agent_start("agent-1", "coding", None).await.unwrap();
+        let _ = trigger_agent_start("agent-1", "coding", None)
+            .await
+            .unwrap();
         let _ = trigger_agent_stop("agent-1", "coding", None).await.unwrap();
-        let _ = trigger_agent_error("agent-1", "coding", "error", None).await.unwrap();
-        let _ = trigger_agent_bootstrap("agent-1", "coding", None).await.unwrap();
+        let _ = trigger_agent_error("agent-1", "coding", "error", None)
+            .await
+            .unwrap();
+        let _ = trigger_agent_bootstrap("agent-1", "coding", None)
+            .await
+            .unwrap();
 
         // 验证类型级别处理器被调用了 4 次
         assert_eq!(*call_count.lock().unwrap(), 4);
@@ -3751,7 +3769,10 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(event.context["error"], "This is a detailed error message with special chars: <>&\"'");
+        assert_eq!(
+            event.context["error"],
+            "This is a detailed error message with special chars: <>&\"'"
+        );
     }
 
     #[tokio::test]
@@ -3770,7 +3791,9 @@ mod tests {
 
         registry.register("agent:start", handler.clone());
 
-        let event = trigger_agent_start("msg-agent", "coding", None).await.unwrap();
+        let event = trigger_agent_start("msg-agent", "coding", None)
+            .await
+            .unwrap();
 
         // 验证返回的事件包含处理器添加的消息
         assert!(event.messages.contains(&"Message 1".to_string()));
@@ -3791,17 +3814,18 @@ mod tests {
 
         // 注册处理器
         let handler: InternalHookHandlerFn = Arc::new(|event| {
-            event.messages.push("session:create handler called".to_string());
+            event
+                .messages
+                .push("session:create handler called".to_string());
             Box::pin(async move { Ok(()) })
         });
 
         registry.register("session:create", handler.clone());
 
         // 触发 session:create 事件
-        let event = trigger_session_create(
-            "test-session-001",
-            "user:session:123",
-        ).await.unwrap();
+        let event = trigger_session_create("test-session-001", "user:session:123")
+            .await
+            .unwrap();
 
         // 验证事件属性
         assert_eq!(event.event_type, InternalHookEventType::Session);
@@ -3814,7 +3838,9 @@ mod tests {
         assert_eq!(event.context["session_key"], "user:session:123");
 
         // 验证处理器被调用
-        assert!(event.messages.contains(&"session:create handler called".to_string()));
+        assert!(event
+            .messages
+            .contains(&"session:create handler called".to_string()));
 
         // 清理
         registry.unregister("session:create", &handler);
@@ -3828,17 +3854,18 @@ mod tests {
 
         // 注册处理器
         let handler: InternalHookHandlerFn = Arc::new(|event| {
-            event.messages.push("session:resume handler called".to_string());
+            event
+                .messages
+                .push("session:resume handler called".to_string());
             Box::pin(async move { Ok(()) })
         });
 
         registry.register("session:resume", handler.clone());
 
         // 触发 session:resume 事件
-        let event = trigger_session_resume(
-            "test-session-002",
-            "user:session:456",
-        ).await.unwrap();
+        let event = trigger_session_resume("test-session-002", "user:session:456")
+            .await
+            .unwrap();
 
         // 验证事件属性
         assert_eq!(event.event_type, InternalHookEventType::Session);
@@ -3851,7 +3878,9 @@ mod tests {
         assert_eq!(event.context["session_key"], "user:session:456");
 
         // 验证处理器被调用
-        assert!(event.messages.contains(&"session:resume handler called".to_string()));
+        assert!(event
+            .messages
+            .contains(&"session:resume handler called".to_string()));
 
         // 清理
         registry.unregister("session:resume", &handler);
@@ -3865,18 +3894,18 @@ mod tests {
 
         // 注册处理器
         let handler: InternalHookHandlerFn = Arc::new(|event| {
-            event.messages.push("session:end handler called".to_string());
+            event
+                .messages
+                .push("session:end handler called".to_string());
             Box::pin(async move { Ok(()) })
         });
 
         registry.register("session:end", handler.clone());
 
         // 触发 session:end 事件（带 reason）
-        let event = trigger_session_end(
-            "test-session-003",
-            "user:session:789",
-            Some("logout"),
-        ).await.unwrap();
+        let event = trigger_session_end("test-session-003", "user:session:789", Some("logout"))
+            .await
+            .unwrap();
 
         // 验证事件属性
         assert_eq!(event.event_type, InternalHookEventType::Session);
@@ -3890,7 +3919,9 @@ mod tests {
         assert_eq!(event.context["reason"], "logout");
 
         // 验证处理器被调用
-        assert!(event.messages.contains(&"session:end handler called".to_string()));
+        assert!(event
+            .messages
+            .contains(&"session:end handler called".to_string()));
 
         // 清理
         registry.unregister("session:end", &handler);
@@ -3904,11 +3935,9 @@ mod tests {
         registry.clear();
 
         // 触发 session:end 事件（不带 reason）
-        let event = trigger_session_end(
-            "test-session-004",
-            "user:session:abc",
-            None,
-        ).await.unwrap();
+        let event = trigger_session_end("test-session-004", "user:session:abc", None)
+            .await
+            .unwrap();
 
         // 验证 reason 默认为 "other"
         assert_eq!(event.context["reason"], "other");
@@ -3922,17 +3951,18 @@ mod tests {
 
         // 注册处理器
         let handler: InternalHookHandlerFn = Arc::new(|event| {
-            event.messages.push("session:compact handler called".to_string());
+            event
+                .messages
+                .push("session:compact handler called".to_string());
             Box::pin(async move { Ok(()) })
         });
 
         registry.register("session:compact", handler.clone());
 
         // 触发 session:compact 事件
-        let event = trigger_session_compact(
-            "test-session-005",
-            "user:session:xyz",
-        ).await.unwrap();
+        let event = trigger_session_compact("test-session-005", "user:session:xyz")
+            .await
+            .unwrap();
 
         // 验证事件属性
         assert_eq!(event.event_type, InternalHookEventType::Session);
@@ -3945,7 +3975,9 @@ mod tests {
         assert_eq!(event.context["session_key"], "user:session:xyz");
 
         // 验证处理器被调用
-        assert!(event.messages.contains(&"session:compact handler called".to_string()));
+        assert!(event
+            .messages
+            .contains(&"session:compact handler called".to_string()));
 
         // 清理
         registry.unregister("session:compact", &handler);
@@ -3977,10 +4009,18 @@ mod tests {
         let e4 = trigger_session_compact("s4", "key4").await.unwrap();
 
         // 验证每个事件都收到了类型级别处理器的消息
-        assert!(e1.messages.contains(&"type_level_handler_called".to_string()));
-        assert!(e2.messages.contains(&"type_level_handler_called".to_string()));
-        assert!(e3.messages.contains(&"type_level_handler_called".to_string()));
-        assert!(e4.messages.contains(&"type_level_handler_called".to_string()));
+        assert!(e1
+            .messages
+            .contains(&"type_level_handler_called".to_string()));
+        assert!(e2
+            .messages
+            .contains(&"type_level_handler_called".to_string()));
+        assert!(e3
+            .messages
+            .contains(&"type_level_handler_called".to_string()));
+        assert!(e4
+            .messages
+            .contains(&"type_level_handler_called".to_string()));
 
         // 验证类型级别处理器至少被调用了 4 次
         assert!(*call_count.lock().unwrap() >= 4);
@@ -3989,5 +4029,3 @@ mod tests {
         registry.unregister("session", &handler);
     }
 }
-
-

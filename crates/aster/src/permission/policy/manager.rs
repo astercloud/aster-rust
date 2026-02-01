@@ -21,7 +21,9 @@ use std::path::PathBuf;
 use super::groups::ToolGroups;
 use super::policy_merger::PolicyMerger;
 use super::profile::ProfileManager;
-use super::types::{MergedPolicy, PolicyDecision, PolicyError, PolicyLayer, ToolPolicy, ToolProfile};
+use super::types::{
+    MergedPolicy, PolicyDecision, PolicyError, PolicyLayer, ToolPolicy, ToolProfile,
+};
 
 /// Tool Policy 系统主管理器
 #[derive(Debug, Clone)]
@@ -55,11 +57,11 @@ impl ToolPolicyManager {
     /// 设置当前 Profile
     pub fn set_profile(&mut self, profile: ToolProfile) -> Result<(), PolicyError> {
         self.profile_manager.set_profile(profile.clone());
-        
+
         // 获取 Profile 对应的策略并设置到合并器
         let policy = self.profile_manager.get_profile_policy(&profile)?;
         self.merger.set_policy(PolicyLayer::Profile, policy);
-        
+
         Ok(())
     }
 
@@ -148,12 +150,12 @@ mod tests {
     #[test]
     fn test_is_allowed_with_profile() {
         let mut manager = ToolPolicyManager::default();
-        
+
         // Minimal profile 只允许 session_status
         manager.set_profile(ToolProfile::Minimal).unwrap();
         assert!(manager.is_allowed("session_status").allowed);
         assert!(!manager.is_allowed("bash").allowed);
-        
+
         // Full profile 允许所有
         manager.set_profile(ToolProfile::Full).unwrap();
         assert!(manager.is_allowed("bash").allowed);
@@ -164,12 +166,11 @@ mod tests {
     fn test_layer_policy_override() {
         let mut manager = ToolPolicyManager::default();
         manager.set_profile(ToolProfile::Full).unwrap();
-        
+
         // Session 层拒绝 bash
-        let session = ToolPolicy::new(PolicyLayer::Session)
-            .with_deny(vec!["bash".to_string()]);
+        let session = ToolPolicy::new(PolicyLayer::Session).with_deny(vec!["bash".to_string()]);
         manager.set_layer_policy(PolicyLayer::Session, session);
-        
+
         // bash 应被拒绝
         assert!(!manager.is_allowed("bash").allowed);
         // 其他工具仍被允许
@@ -180,7 +181,7 @@ mod tests {
     fn test_get_effective_policy() {
         let mut manager = ToolPolicyManager::default();
         manager.set_profile(ToolProfile::Coding).unwrap();
-        
+
         let policy = manager.get_effective_policy();
         // Coding profile 展开后应包含 bash
         assert!(policy.allowed_tools.contains("bash"));
@@ -190,13 +191,12 @@ mod tests {
     fn test_clear_layer_policy() {
         let mut manager = ToolPolicyManager::default();
         manager.set_profile(ToolProfile::Full).unwrap();
-        
-        let session = ToolPolicy::new(PolicyLayer::Session)
-            .with_deny(vec!["bash".to_string()]);
+
+        let session = ToolPolicy::new(PolicyLayer::Session).with_deny(vec!["bash".to_string()]);
         manager.set_layer_policy(PolicyLayer::Session, session);
-        
+
         assert!(!manager.is_allowed("bash").allowed);
-        
+
         manager.clear_layer_policy(PolicyLayer::Session);
         assert!(manager.is_allowed("bash").allowed);
     }

@@ -80,7 +80,6 @@ pub enum TriggerConfig {
     Webhook(WebhookTriggerConfig),
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,11 +109,11 @@ mod tests {
             // 序列化为 JSON
             let json = serde_json::to_string(&trigger_type)
                 .expect("TriggerType should serialize to JSON");
-            
+
             // 反序列化回 TriggerType
             let parsed: TriggerType = serde_json::from_str(&json)
                 .expect("JSON should deserialize back to TriggerType");
-            
+
             // 验证 round-trip 一致性
             prop_assert_eq!(trigger_type, parsed);
         }
@@ -125,7 +124,7 @@ mod tests {
         fn prop_trigger_type_snake_case_format(trigger_type in arb_trigger_type()) {
             let json = serde_json::to_string(&trigger_type)
                 .expect("TriggerType should serialize to JSON");
-            
+
             // 验证序列化格式为 snake_case（不包含大写字母，使用下划线分隔）
             let expected_format = match trigger_type {
                 TriggerType::Mention => "\"mention\"",
@@ -134,7 +133,7 @@ mod tests {
                 TriggerType::Schedule => "\"schedule\"",
                 TriggerType::Webhook => "\"webhook\"",
             };
-            
+
             prop_assert_eq!(json, expected_format);
         }
     }
@@ -207,7 +206,7 @@ mod tests {
         assert!(serde_json::from_str::<TriggerType>("\"KEYWORD\"").is_err());
         assert!(serde_json::from_str::<TriggerType>("\"directMessage\"").is_err());
         assert!(serde_json::from_str::<TriggerType>("\"DirectMessage\"").is_err());
-        
+
         // 无效值应该失败
         assert!(serde_json::from_str::<TriggerType>("\"invalid\"").is_err());
         assert!(serde_json::from_str::<TriggerType>("\"\"").is_err());

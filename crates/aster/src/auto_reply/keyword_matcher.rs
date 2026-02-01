@@ -51,7 +51,6 @@ pub struct KeywordMatcher {
     regex_cache: HashMap<String, Regex>,
 }
 
-
 impl Default for KeywordMatcher {
     fn default() -> Self {
         Self::new()
@@ -109,7 +108,6 @@ impl KeywordMatcher {
         None
     }
 
-
     /// 使用正则表达式匹配
     fn match_regex(
         &mut self,
@@ -141,7 +139,6 @@ impl KeywordMatcher {
         self.regex_cache.get(pattern)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -358,11 +355,7 @@ mod tests {
     fn test_multiple_patterns_first_match() {
         let mut matcher = KeywordMatcher::new();
         let config = KeywordTriggerConfig {
-            patterns: vec![
-                "hello".to_string(),
-                "world".to_string(),
-                "test".to_string(),
-            ],
+            patterns: vec!["hello".to_string(), "world".to_string(), "test".to_string()],
             case_insensitive: false,
             use_regex: false,
         };
@@ -378,11 +371,7 @@ mod tests {
     fn test_multiple_patterns_second_match() {
         let mut matcher = KeywordMatcher::new();
         let config = KeywordTriggerConfig {
-            patterns: vec![
-                "foo".to_string(),
-                "world".to_string(),
-                "bar".to_string(),
-            ],
+            patterns: vec!["foo".to_string(), "world".to_string(), "bar".to_string()],
             case_insensitive: false,
             use_regex: false,
         };
@@ -412,9 +401,9 @@ mod tests {
         let mut matcher = KeywordMatcher::new();
         let config = KeywordTriggerConfig {
             patterns: vec![
-                r"^\d+".to_string(),      // 以数字开头
-                r"help".to_string(),      // 包含 help
-                r"\?$".to_string(),       // 以问号结尾
+                r"^\d+".to_string(), // 以数字开头
+                r"help".to_string(), // 包含 help
+                r"\?$".to_string(),  // 以问号结尾
             ],
             case_insensitive: false,
             use_regex: true,
@@ -677,7 +666,7 @@ mod property_tests {
             };
 
             let result = matcher.match_message(&content, &config);
-            
+
             // pattern 一定在 content 中，应该匹配成功
             prop_assert!(
                 result.is_some(),
@@ -739,7 +728,7 @@ mod property_tests {
             // 使用一个已知会匹配的内容
             let content = "hello123world";
             let result = matcher.match_message(content, &config);
-            
+
             // 验证正则匹配器不会 panic，结果要么是 Some 要么是 None
             // 这是一个基本的健壮性测试
             prop_assert!(result.is_some() || result.is_none());
@@ -795,11 +784,11 @@ mod property_tests {
             // 测试小写内容
             let lowercase_content = format!("prefix {} suffix", pattern.to_lowercase());
             let result_lower = matcher.match_message(&lowercase_content, &config);
-            
+
             // 测试大写内容
             let uppercase_content = format!("prefix {} suffix", pattern.to_uppercase());
             let result_upper = matcher.match_message(&uppercase_content, &config);
-            
+
             // 两种情况都应该匹配成功
             prop_assert!(
                 result_lower.is_some(),
@@ -861,10 +850,10 @@ mod property_tests {
             if patterns.is_empty() {
                 return Ok(());
             }
-            
+
             let index = pattern_index % patterns.len();
             let matching_pattern = &patterns[index];
-            
+
             let mut matcher = KeywordMatcher::new();
             let config = KeywordTriggerConfig {
                 patterns: patterns.clone(),
@@ -875,7 +864,7 @@ mod property_tests {
             // 创建包含其中一个 pattern 的内容
             let content = format!("prefix {} suffix", matching_pattern);
             let result = matcher.match_message(&content, &config);
-            
+
             prop_assert!(
                 result.is_some(),
                 "Should match when content contains one of the patterns"
@@ -901,7 +890,7 @@ mod property_tests {
             // 使用一个不包含任何 pattern 的内容
             let content = "zzzzzzzzzzzzzzzzzzz";
             let result = matcher.match_message(content, &config);
-            
+
             prop_assert!(
                 result.is_none(),
                 "Should not match when content doesn't contain any pattern"
@@ -941,7 +930,7 @@ mod property_tests {
                     "Match position {} should be less than content length {}",
                     result.position, content.len()
                 );
-                
+
                 // 位置 + 匹配文本长度不应超过 content 长度
                 prop_assert!(
                     result.position + result.matched_text.len() <= content.len(),
@@ -962,9 +951,9 @@ mod property_tests {
             if patterns.is_empty() {
                 return Ok(());
             }
-            
+
             let matching_pattern = &patterns[0];
-            
+
             let mut matcher = KeywordMatcher::new();
             let config = KeywordTriggerConfig {
                 patterns: patterns.clone(),
@@ -973,7 +962,7 @@ mod property_tests {
             };
 
             let content = format!("prefix {} suffix", matching_pattern);
-            
+
             if let Some(result) = matcher.match_message(&content, &config) {
                 // 匹配的 pattern 应该在原始 patterns 列表中
                 prop_assert!(
@@ -1002,11 +991,13 @@ mod property_tests {
 
             if let Some(result) = matcher.match_message(&content, &config) {
                 // 从 content 中提取的文本应该等于 matched_text
-                let extracted = &content[result.position..result.position + result.matched_text.len()];
-                prop_assert_eq!(
-                    extracted, result.matched_text,
-                    "Extracted text at position should equal matched_text"
-                );
+                // 使用 get 方法避免 UTF-8 边界 panic
+                if let Some(extracted) = content.get(result.position..result.position + result.matched_text.len()) {
+                    prop_assert_eq!(
+                        extracted, result.matched_text,
+                        "Extracted text at position should equal matched_text"
+                    );
+                }
             }
         }
     }

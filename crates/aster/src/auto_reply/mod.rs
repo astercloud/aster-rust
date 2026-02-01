@@ -74,15 +74,15 @@ pub mod schedule;
 // Re-exports for convenience
 pub use config::AutoReplyConfig;
 pub use cooldown::{CooldownCheckResult, CooldownTracker};
-pub use whitelist::WhitelistManager;
 pub use group::{GroupActivation, GroupActivationManager, GroupRejectionReason};
 pub use keyword_matcher::{KeywordMatchResult, KeywordMatcher};
 pub use manager::{AutoReplyManager, AutoReplyStats};
 pub use message::{IncomingMessage, RejectionReason, TriggerContext, TriggerResult};
 pub use registry::{AutoReplyTrigger, TriggerRegistry};
+pub use schedule::{ScheduleContext, ScheduleTriggerEvent, ScheduleTriggerHandler};
 pub use types::{
     KeywordTriggerConfig, ScheduleTriggerConfig, ScheduleType, TriggerConfig, TriggerType,
     WebhookTriggerConfig,
 };
 pub use webhook::{WebhookHandler, WebhookRequest, WebhookResult};
-pub use schedule::{ScheduleContext, ScheduleTriggerEvent, ScheduleTriggerHandler};
+pub use whitelist::WhitelistManager;

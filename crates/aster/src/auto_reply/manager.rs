@@ -131,7 +131,6 @@ impl AutoReplyManager {
         })
     }
 
-
     /// 检查消息是否应该触发自动回复
     ///
     /// 这是核心方法，按以下顺序检查：
@@ -296,16 +295,14 @@ impl AutoReplyManager {
                 if let Some(cooldown_seconds) = activation.cooldown_seconds {
                     // 使用群组特定冷却时间进行检查
                     let cooldown = Duration::from_secs(cooldown_seconds);
-                    return self.check_cooldown_with_duration(
-                        &message.sender_id,
-                        cooldown,
-                    );
+                    return self.check_cooldown_with_duration(&message.sender_id, cooldown);
                 }
             }
         }
 
         // 使用默认冷却时间检查
-        self.cooldown.check_cooldown(&message.sender_id, trigger_type)
+        self.cooldown
+            .check_cooldown(&message.sender_id, trigger_type)
     }
 
     /// 使用指定的冷却时间检查
@@ -324,7 +321,6 @@ impl AutoReplyManager {
         // 这里暂时使用默认的 Mention 类型进行检查
         self.cooldown.check_cooldown(user_id, TriggerType::Mention)
     }
-
 
     /// 评估单个触发器是否匹配消息
     ///
@@ -557,7 +553,6 @@ impl AutoReplyManager {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -638,7 +633,7 @@ mod tests {
         let manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         assert!(manager.config_path().ends_with("test.json"));
     }
 
@@ -649,10 +644,10 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         let message = create_test_message("user1", "hello", false, false, None);
         let result = manager.should_reply(&message);
-        
+
         assert!(matches!(result, TriggerResult::NoMatch));
     }
 
@@ -663,13 +658,13 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_mention_trigger("mention-1", 10));
-        
+
         // 有 @提及的消息应该触发
         let message = create_test_message("user1", "hello @bot", false, true, None);
         let result = manager.should_reply(&message);
-        
+
         match result {
             TriggerResult::Triggered { trigger, context } => {
                 assert_eq!(trigger.id, "mention-1");
@@ -685,13 +680,13 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_mention_trigger("mention-1", 10));
-        
+
         // 没有 @提及的消息不应该触发
         let message = create_test_message("user1", "hello", false, false, None);
         let result = manager.should_reply(&message);
-        
+
         assert!(matches!(result, TriggerResult::NoMatch));
     }
 
@@ -702,13 +697,13 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_keyword_trigger("kw-1", vec!["help", "帮助"], 10));
-        
+
         // 包含关键词的消息应该触发
         let message = create_test_message("user1", "I need help", false, false, None);
         let result = manager.should_reply(&message);
-        
+
         match result {
             TriggerResult::Triggered { trigger, context } => {
                 assert_eq!(trigger.id, "kw-1");
@@ -726,13 +721,13 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_dm_trigger("dm-1", 10));
-        
+
         // 私聊消息应该触发
         let message = create_test_message("user1", "hello", true, false, None);
         let result = manager.should_reply(&message);
-        
+
         match result {
             TriggerResult::Triggered { trigger, context } => {
                 assert_eq!(trigger.id, "dm-1");
@@ -749,16 +744,16 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         // 注册多个触发器，优先级不同
         manager.register_trigger(create_mention_trigger("mention-low", 100));
         manager.register_trigger(create_mention_trigger("mention-high", 10));
         manager.register_trigger(create_mention_trigger("mention-mid", 50));
-        
+
         // 有 @提及的消息应该触发优先级最高的触发器
         let message = create_test_message("user1", "hello @bot", false, true, None);
         let result = manager.should_reply(&message);
-        
+
         match result {
             TriggerResult::Triggered { trigger, .. } => {
                 assert_eq!(trigger.id, "mention-high");
@@ -775,16 +770,16 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_mention_trigger("mention-1", 10));
-        
+
         // 添加白名单用户
         manager.add_to_whitelist("allowed_user".to_string());
-        
+
         // 不在白名单中的用户应该被拒绝
         let message = create_test_message("other_user", "hello @bot", false, true, None);
         let result = manager.should_reply(&message);
-        
+
         match result {
             TriggerResult::Rejected { reason } => {
                 assert!(matches!(reason, RejectionReason::NotInWhitelist));
@@ -799,16 +794,16 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_mention_trigger("mention-1", 10));
-        
+
         // 添加白名单用户
         manager.add_to_whitelist("allowed_user".to_string());
-        
+
         // 白名单中的用户应该被允许
         let message = create_test_message("allowed_user", "hello @bot", false, true, None);
         let result = manager.should_reply(&message);
-        
+
         assert!(matches!(result, TriggerResult::Triggered { .. }));
     }
 
@@ -818,13 +813,13 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_mention_trigger("mention-1", 10));
-        
+
         // 空白名单应该允许所有用户
         let message = create_test_message("any_user", "hello @bot", false, true, None);
         let result = manager.should_reply(&message);
-        
+
         assert!(matches!(result, TriggerResult::Triggered { .. }));
     }
 
@@ -835,16 +830,16 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_mention_trigger("mention-1", 10));
-        
+
         // 设置禁用的群组
         manager.set_group_activation(GroupActivation::disabled("group-123"));
-        
+
         // 禁用群组中的消息应该被拒绝
         let message = create_test_message("user1", "hello @bot", false, true, Some("group-123"));
         let result = manager.should_reply(&message);
-        
+
         match result {
             TriggerResult::Rejected { reason } => {
                 assert!(matches!(reason, RejectionReason::GroupNotActivated));
@@ -860,29 +855,28 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_keyword_trigger("kw-1", vec!["help"], 10));
-        
+
         // 设置要求 @提及的群组
-        manager.set_group_activation(
-            GroupActivation::new("group-123").with_require_mention(true)
-        );
-        
+        manager.set_group_activation(GroupActivation::new("group-123").with_require_mention(true));
+
         // 没有 @提及的消息应该被拒绝
         let message = create_test_message("user1", "help", false, false, Some("group-123"));
         let result = manager.should_reply(&message);
-        
+
         match result {
             TriggerResult::Rejected { reason } => {
                 assert!(matches!(reason, RejectionReason::RequiresMention));
             }
             _ => panic!("Expected Rejected result with RequiresMention"),
         }
-        
+
         // 有 @提及的消息应该被允许
-        let message_with_mention = create_test_message("user1", "help @bot", false, true, Some("group-123"));
+        let message_with_mention =
+            create_test_message("user1", "help @bot", false, true, Some("group-123"));
         let result = manager.should_reply(&message_with_mention);
-        
+
         // 注意：这里可能因为关键词不匹配而返回 NoMatch
         // 因为 "help @bot" 包含 "help"，所以应该触发
         assert!(matches!(result, TriggerResult::Triggered { .. }));
@@ -895,30 +889,31 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_mention_trigger("mention-1", 10));
-        
+
         // 设置群组特定白名单
         manager.set_group_activation(
-            GroupActivation::new("group-123")
-                .with_whitelist(vec!["group_user".to_string()])
+            GroupActivation::new("group-123").with_whitelist(vec!["group_user".to_string()]),
         );
-        
+
         // 不在群组白名单中的用户应该被拒绝
-        let message = create_test_message("other_user", "hello @bot", false, true, Some("group-123"));
+        let message =
+            create_test_message("other_user", "hello @bot", false, true, Some("group-123"));
         let result = manager.should_reply(&message);
-        
+
         match result {
             TriggerResult::Rejected { reason } => {
                 assert!(matches!(reason, RejectionReason::NotInWhitelist));
             }
             _ => panic!("Expected Rejected result with NotInWhitelist"),
         }
-        
+
         // 在群组白名单中的用户应该被允许
-        let message_allowed = create_test_message("group_user", "hello @bot", false, true, Some("group-123"));
+        let message_allowed =
+            create_test_message("group_user", "hello @bot", false, true, Some("group-123"));
         let result = manager.should_reply(&message_allowed);
-        
+
         assert!(matches!(result, TriggerResult::Triggered { .. }));
     }
 
@@ -929,27 +924,25 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_mention_trigger("mention-1", 10));
-        
+
         // 第一次触发应该成功
         let message1 = create_test_message("user1", "hello @bot", false, true, None);
         let result1 = manager.should_reply(&message1);
         assert!(matches!(result1, TriggerResult::Triggered { .. }));
-        
+
         // 立即再次触发应该被冷却时间拒绝
         let message2 = create_test_message("user1", "hello again @bot", false, true, None);
         let result2 = manager.should_reply(&message2);
-        
+
         match result2 {
-            TriggerResult::Rejected { reason } => {
-                match reason {
-                    RejectionReason::InCooldown { remaining } => {
-                        assert!(remaining > Duration::ZERO);
-                    }
-                    _ => panic!("Expected InCooldown rejection"),
+            TriggerResult::Rejected { reason } => match reason {
+                RejectionReason::InCooldown { remaining } => {
+                    assert!(remaining > Duration::ZERO);
                 }
-            }
+                _ => panic!("Expected InCooldown rejection"),
+            },
             _ => panic!("Expected Rejected result"),
         }
     }
@@ -960,14 +953,14 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_mention_trigger("mention-1", 10));
-        
+
         // user1 触发
         let message1 = create_test_message("user1", "hello @bot", false, true, None);
         let result1 = manager.should_reply(&message1);
         assert!(matches!(result1, TriggerResult::Triggered { .. }));
-        
+
         // user2 应该可以触发（独立冷却）
         let message2 = create_test_message("user2", "hello @bot", false, true, None);
         let result2 = manager.should_reply(&message2);
@@ -980,16 +973,16 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.register_trigger(create_mention_trigger("mention-1", 10));
-        
+
         // 第一次触发
         let message1 = create_test_message("user1", "hello @bot", false, true, None);
         let _ = manager.should_reply(&message1);
-        
+
         // 重置冷却
         manager.reset_user_cooldown("user1");
-        
+
         // 应该可以再次触发
         let message2 = create_test_message("user1", "hello again @bot", false, true, None);
         let result2 = manager.should_reply(&message2);
@@ -1005,15 +998,15 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         let trigger = create_mention_trigger("test-trigger", 10);
         manager.register_trigger(trigger);
-        
+
         // 注销触发器
         let removed = manager.unregister_trigger("test-trigger");
         assert!(removed.is_some());
         assert_eq!(removed.unwrap().id, "test-trigger");
-        
+
         // 再次注销应该返回 None
         let removed_again = manager.unregister_trigger("test-trigger");
         assert!(removed_again.is_none());
@@ -1024,19 +1017,19 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         // 设置群组配置
         manager.set_group_activation(GroupActivation::new("group-1").with_require_mention(true));
-        
+
         // 获取群组配置
         let activation = manager.get_group_activation("group-1");
         assert!(activation.is_some());
         assert!(activation.unwrap().require_mention);
-        
+
         // 移除群组配置
         let removed = manager.remove_group_activation("group-1");
         assert!(removed.is_some());
-        
+
         // 再次获取应该返回 None
         assert!(manager.get_group_activation("group-1").is_none());
     }
@@ -1046,15 +1039,15 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         // 初始状态：空白名单允许所有用户
         assert!(manager.is_user_whitelisted("any_user"));
-        
+
         // 添加用户到白名单
         manager.add_to_whitelist("user1".to_string());
         assert!(manager.is_user_whitelisted("user1"));
         assert!(!manager.is_user_whitelisted("user2"));
-        
+
         // 从白名单移除用户
         assert!(manager.remove_from_whitelist("user1"));
         assert!(manager.is_user_whitelisted("user1")); // 空白名单允许所有用户
@@ -1065,10 +1058,10 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         // 设置默认冷却时间
         manager.set_default_cooldown(Duration::from_secs(120));
-        
+
         // 设置特定类型冷却时间
         manager.set_type_cooldown(TriggerType::Mention, Duration::from_secs(30));
     }
@@ -1083,9 +1076,9 @@ mod tests {
         let manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         let stats = manager.get_stats();
-        
+
         assert_eq!(stats.total_triggers, 0);
         assert_eq!(stats.enabled_triggers, 0);
         assert_eq!(stats.whitelist_size, 0);
@@ -1098,18 +1091,18 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         // 添加启用的触发器
         manager.register_trigger(create_mention_trigger("t1", 10));
         manager.register_trigger(create_keyword_trigger("t2", vec!["help"], 20));
-        
+
         // 添加禁用的触发器
         let mut disabled_trigger = create_dm_trigger("t3", 30);
         disabled_trigger.enabled = false;
         manager.register_trigger(disabled_trigger);
-        
+
         let stats = manager.get_stats();
-        
+
         assert_eq!(stats.total_triggers, 3);
         assert_eq!(stats.enabled_triggers, 2);
     }
@@ -1120,13 +1113,13 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.add_to_whitelist("user1".to_string());
         manager.add_to_whitelist("user2".to_string());
         manager.add_to_whitelist("user3".to_string());
-        
+
         let stats = manager.get_stats();
-        
+
         assert_eq!(stats.whitelist_size, 3);
     }
 
@@ -1136,12 +1129,12 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         manager.set_group_activation(GroupActivation::new("group-1"));
         manager.set_group_activation(GroupActivation::new("group-2"));
-        
+
         let stats = manager.get_stats();
-        
+
         assert_eq!(stats.group_activations, 2);
     }
 
@@ -1151,25 +1144,25 @@ mod tests {
         let mut manager = AutoReplyManager::new(PathBuf::from("test.json"))
             .await
             .unwrap();
-        
+
         // 添加触发器
         manager.register_trigger(create_mention_trigger("t1", 10));
         manager.register_trigger(create_keyword_trigger("t2", vec!["help"], 20));
         let mut disabled = create_dm_trigger("t3", 30);
         disabled.enabled = false;
         manager.register_trigger(disabled);
-        
+
         // 添加白名单用户
         manager.add_to_whitelist("user1".to_string());
         manager.add_to_whitelist("user2".to_string());
-        
+
         // 添加群组配置
         manager.set_group_activation(GroupActivation::new("group-1"));
         manager.set_group_activation(GroupActivation::new("group-2"));
         manager.set_group_activation(GroupActivation::new("group-3"));
-        
+
         let stats = manager.get_stats();
-        
+
         assert_eq!(stats.total_triggers, 3);
         assert_eq!(stats.enabled_triggers, 2);
         assert_eq!(stats.whitelist_size, 2);

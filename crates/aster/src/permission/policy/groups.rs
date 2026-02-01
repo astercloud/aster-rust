@@ -325,7 +325,10 @@ mod tests {
     #[test]
     fn test_register_custom_group() {
         let mut groups = ToolGroups::new();
-        groups.register_group("group:custom", vec!["tool1".to_string(), "tool2".to_string()]);
+        groups.register_group(
+            "group:custom",
+            vec!["tool1".to_string(), "tool2".to_string()],
+        );
 
         assert!(groups.has_group("group:custom"));
         let tools = groups.get_group("group:custom").unwrap();
@@ -398,8 +401,8 @@ mod tests {
     fn test_expand_unknown_group() {
         let groups = ToolGroups::default();
 
-        let policy = ToolPolicy::new(PolicyLayer::Global)
-            .with_allow(vec!["group:unknown".to_string()]);
+        let policy =
+            ToolPolicy::new(PolicyLayer::Global).with_allow(vec!["group:unknown".to_string()]);
 
         let expanded = groups.expand_groups(&policy);
 

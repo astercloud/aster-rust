@@ -318,7 +318,7 @@ mod tests {
         fn prop_add_user_then_allowed(user_id in arb_user_id()) {
             let mut whitelist = WhitelistManager::new();
             whitelist.add_user(user_id.clone());
-            
+
             // 添加后该用户应该被允许
             prop_assert!(whitelist.is_allowed(&user_id));
         }
@@ -328,7 +328,7 @@ mod tests {
         #[test]
         fn prop_empty_whitelist_allows_all(user_id in arb_user_id()) {
             let whitelist = WhitelistManager::new();
-            
+
             // 空白名单应该允许任何用户
             prop_assert!(whitelist.is_allowed(&user_id));
             prop_assert!(whitelist.is_empty());
@@ -343,9 +343,9 @@ mod tests {
         ) {
             // 确保两个用户不同
             prop_assume!(allowed_user != other_user);
-            
+
             let whitelist = WhitelistManager::from_users(vec![allowed_user.clone()]);
-            
+
             // 白名单中的用户应该被允许
             prop_assert!(whitelist.is_allowed(&allowed_user));
             // 不在白名单中的用户应该被拒绝
@@ -361,18 +361,18 @@ mod tests {
         ) {
             // 确保两个用户不同
             prop_assume!(user_to_remove != other_user);
-            
+
             let mut whitelist = WhitelistManager::from_users(vec![
                 user_to_remove.clone(),
                 other_user.clone(),
             ]);
-            
+
             // 移除前应该被允许
             prop_assert!(whitelist.is_allowed(&user_to_remove));
-            
+
             // 移除用户
             whitelist.remove_user(&user_to_remove);
-            
+
             // 移除后应该不被允许（因为白名单非空）
             prop_assert!(!whitelist.is_allowed(&user_to_remove));
             // 其他用户仍然被允许
@@ -387,15 +387,15 @@ mod tests {
             test_user in arb_user_id()
         ) {
             let mut whitelist = WhitelistManager::from_users(vec![user_id.clone()]);
-            
+
             // 移除前，非白名单用户不被允许
             if user_id != test_user {
                 prop_assert!(!whitelist.is_allowed(&test_user));
             }
-            
+
             // 移除最后一个用户
             whitelist.remove_user(&user_id);
-            
+
             // 白名单为空后，所有用户都被允许
             prop_assert!(whitelist.is_empty());
             prop_assert!(whitelist.is_allowed(&test_user));
@@ -410,17 +410,17 @@ mod tests {
             test_users in prop::collection::vec(arb_user_id(), 1..10)
         ) {
             let mut whitelist = WhitelistManager::new();
-            
+
             // 应用操作序列
             apply_ops_to_whitelist(&mut whitelist, &ops);
-            
+
             // 计算预期的集合状态
             let expected_set = apply_ops_to_set(&ops);
-            
+
             // 验证白名单状态与预期集合一致
             prop_assert_eq!(whitelist.len(), expected_set.len());
             prop_assert_eq!(whitelist.is_empty(), expected_set.is_empty());
-            
+
             // 验证每个测试用户的 is_allowed 结果
             for user in &test_users {
                 let expected_allowed = expected_set.is_empty() || expected_set.contains(user);
@@ -440,12 +440,12 @@ mod tests {
         #[test]
         fn prop_add_user_idempotent(user_id in arb_user_id(), times in 1usize..10) {
             let mut whitelist = WhitelistManager::new();
-            
+
             // 多次添加同一用户
             for _ in 0..times {
                 whitelist.add_user(user_id.clone());
             }
-            
+
             // 用户数量应该是 1
             prop_assert_eq!(whitelist.len(), 1);
             // 用户应该被允许
@@ -460,13 +460,13 @@ mod tests {
             nonexistent_user in arb_user_id()
         ) {
             prop_assume!(existing_user != nonexistent_user);
-            
+
             let mut whitelist = WhitelistManager::from_users(vec![existing_user.clone()]);
             let len_before = whitelist.len();
-            
+
             // 移除不存在的用户
             let removed = whitelist.remove_user(&nonexistent_user);
-            
+
             // 应该返回 false
             prop_assert!(!removed);
             // 长度不变
@@ -483,10 +483,10 @@ mod tests {
             test_user in arb_user_id()
         ) {
             let mut whitelist = WhitelistManager::from_users(initial_users);
-            
+
             // 清空前可能不允许某些用户
             whitelist.clear();
-            
+
             // 清空后应该允许所有用户
             prop_assert!(whitelist.is_empty());
             prop_assert!(whitelist.is_allowed(&test_user));
@@ -498,12 +498,12 @@ mod tests {
         fn prop_list_users_complete(users in prop::collection::hash_set(arb_user_id(), 0..20)) {
             let users_vec: Vec<String> = users.iter().cloned().collect();
             let whitelist = WhitelistManager::from_users(users_vec);
-            
+
             let listed: std::collections::HashSet<&String> = whitelist.list_users().into_iter().collect();
-            
+
             // 列出的用户数量应该与输入一致
             prop_assert_eq!(listed.len(), users.len());
-            
+
             // 每个输入用户都应该在列表中
             for user in &users {
                 prop_assert!(listed.contains(user));
@@ -537,10 +537,8 @@ mod tests {
     /// 测试从用户列表创建白名单
     #[test]
     fn test_from_users() {
-        let whitelist = WhitelistManager::from_users(vec![
-            "user1".to_string(),
-            "user2".to_string(),
-        ]);
+        let whitelist =
+            WhitelistManager::from_users(vec!["user1".to_string(), "user2".to_string()]);
         assert_eq!(whitelist.len(), 2);
         assert!(whitelist.is_enabled());
         assert!(whitelist.is_allowed("user1"));
@@ -562,16 +560,16 @@ mod tests {
     #[test]
     fn test_add_user() {
         let mut whitelist = WhitelistManager::new();
-        
+
         // 添加前允许所有用户
         assert!(whitelist.is_allowed("user1"));
         assert!(whitelist.is_allowed("user2"));
-        
+
         // 添加用户后只允许白名单中的用户
         whitelist.add_user("user1".to_string());
         assert!(whitelist.is_allowed("user1"));
         assert!(!whitelist.is_allowed("user2"));
-        
+
         // 添加更多用户
         whitelist.add_user("user2".to_string());
         assert!(whitelist.is_allowed("user1"));
@@ -583,16 +581,14 @@ mod tests {
     /// **Validates: Requirement 3.5**
     #[test]
     fn test_remove_user() {
-        let mut whitelist = WhitelistManager::from_users(vec![
-            "user1".to_string(),
-            "user2".to_string(),
-        ]);
-        
+        let mut whitelist =
+            WhitelistManager::from_users(vec!["user1".to_string(), "user2".to_string()]);
+
         // 移除存在的用户
         assert!(whitelist.remove_user("user1"));
         assert!(!whitelist.is_allowed("user1"));
         assert!(whitelist.is_allowed("user2"));
-        
+
         // 移除不存在的用户
         assert!(!whitelist.remove_user("user1"));
         assert!(!whitelist.remove_user("nonexistent"));
@@ -602,11 +598,11 @@ mod tests {
     #[test]
     fn test_remove_last_user_allows_all() {
         let mut whitelist = WhitelistManager::from_users(vec!["user1".to_string()]);
-        
+
         assert!(!whitelist.is_allowed("other_user"));
-        
+
         whitelist.remove_user("user1");
-        
+
         // 白名单为空后允许所有用户
         assert!(whitelist.is_allowed("other_user"));
         assert!(whitelist.is_allowed("any_user"));
@@ -616,11 +612,9 @@ mod tests {
     /// **Validates: Requirement 3.6**
     #[test]
     fn test_is_allowed() {
-        let whitelist = WhitelistManager::from_users(vec![
-            "user1".to_string(),
-            "user2".to_string(),
-        ]);
-        
+        let whitelist =
+            WhitelistManager::from_users(vec!["user1".to_string(), "user2".to_string()]);
+
         assert!(whitelist.is_allowed("user1"));
         assert!(whitelist.is_allowed("user2"));
         assert!(!whitelist.is_allowed("user3"));
@@ -629,11 +623,9 @@ mod tests {
     /// 测试获取白名单用户列表
     #[test]
     fn test_list_users() {
-        let whitelist = WhitelistManager::from_users(vec![
-            "user1".to_string(),
-            "user2".to_string(),
-        ]);
-        
+        let whitelist =
+            WhitelistManager::from_users(vec!["user1".to_string(), "user2".to_string()]);
+
         let users = whitelist.list_users();
         assert_eq!(users.len(), 2);
         assert!(users.contains(&&"user1".to_string()));
@@ -643,15 +635,13 @@ mod tests {
     /// 测试清空白名单
     #[test]
     fn test_clear() {
-        let mut whitelist = WhitelistManager::from_users(vec![
-            "user1".to_string(),
-            "user2".to_string(),
-        ]);
-        
+        let mut whitelist =
+            WhitelistManager::from_users(vec!["user1".to_string(), "user2".to_string()]);
+
         assert!(!whitelist.is_allowed("other_user"));
-        
+
         whitelist.clear();
-        
+
         assert!(whitelist.is_empty());
         assert!(!whitelist.is_enabled());
         assert!(whitelist.is_allowed("other_user"));
@@ -662,10 +652,10 @@ mod tests {
     #[test]
     fn test_add_duplicate_user() {
         let mut whitelist = WhitelistManager::new();
-        
+
         whitelist.add_user("user1".to_string());
         whitelist.add_user("user1".to_string());
-        
+
         assert_eq!(whitelist.len(), 1);
         assert!(whitelist.is_allowed("user1"));
     }
@@ -683,10 +673,10 @@ mod tests {
     fn test_clone() {
         let mut original = WhitelistManager::from_users(vec!["user1".to_string()]);
         let cloned = original.clone();
-        
+
         // 修改原始不影响克隆
         original.add_user("user2".to_string());
-        
+
         assert!(original.is_allowed("user2"));
         assert!(!cloned.is_allowed("user2"));
     }

@@ -79,7 +79,10 @@ impl ScheduleType {
                     None
                 }
             }
-            ScheduleType::Every { every_ms, anchor_ms } => {
+            ScheduleType::Every {
+                every_ms,
+                anchor_ms,
+            } => {
                 // 间隔必须大于 0
                 if *every_ms == 0 {
                     return None;
@@ -113,18 +116,12 @@ impl ScheduleType {
     /// - `expr`: Cron 表达式（6 字段格式）
     /// - `tz`: 可选时区（IANA 格式）
     /// - `now`: 当前时间（UTC）
-    fn next_cron_run(
-        expr: &str,
-        tz: Option<&str>,
-        now: DateTime<Utc>,
-    ) -> Option<DateTime<Utc>> {
+    fn next_cron_run(expr: &str, tz: Option<&str>, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
         // 解析 cron 表达式
         let schedule = Schedule::from_str(expr).ok()?;
 
         // 解析时区，默认使用 UTC
-        let timezone: Tz = tz
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(chrono_tz::UTC);
+        let timezone: Tz = tz.and_then(|s| s.parse().ok()).unwrap_or(chrono_tz::UTC);
 
         // 将当前时间转换为指定时区
         let now_in_tz = now.with_timezone(&timezone);
@@ -421,7 +418,9 @@ impl CronPayload {
     /// 获取超时配置（仅对 AgentTurn 有效）
     pub fn get_timeout_seconds(&self) -> Option<u64> {
         match self {
-            CronPayload::AgentTurn { timeout_seconds, .. } => *timeout_seconds,
+            CronPayload::AgentTurn {
+                timeout_seconds, ..
+            } => *timeout_seconds,
             _ => None,
         }
     }
@@ -646,10 +645,7 @@ impl IsolationConfig {
             output.to_string()
         } else {
             // 按字符边界截断，避免截断 UTF-8 字符
-            let truncated: String = output
-                .chars()
-                .take(self.post_to_main_max_chars)
-                .collect();
+            let truncated: String = output.chars().take(self.post_to_main_max_chars).collect();
             format!("{}...", truncated)
         }
     }
@@ -1549,7 +1545,6 @@ pub struct ScheduledJob {
     pub state: JobState,
 
     // === 向后兼容字段 ===
-
     /// 旧格式：Recipe 源文件路径
     ///
     /// 用于向后兼容旧格式任务，存储原始 Recipe 文件路径。
@@ -1695,7 +1690,8 @@ impl ScheduledJob {
     /// 更新下次执行时间
     pub fn update_next_run(&mut self) {
         let next = self.schedule.next_run_at(Utc::now());
-        self.state.set_next_run(next.map(|dt| dt.timestamp_millis()));
+        self.state
+            .set_next_run(next.map(|dt| dt.timestamp_millis()));
         self.updated_at_ms = Utc::now().timestamp_millis();
     }
 
@@ -1777,7 +1773,7 @@ impl ScheduledJob {
         Self {
             id: id_str.clone(),
             agent_id: None,
-            name: id_str,  // 使用 ID 作为名称
+            name: id_str, // 使用 ID 作为名称
             description: None,
             enabled: !paused,
             delete_after_run: false,
@@ -1980,7 +1976,9 @@ mod tests {
 
     #[test]
     fn test_validate_at_valid() {
-        let schedule = ScheduleType::At { at_ms: 1704067200000 };
+        let schedule = ScheduleType::At {
+            at_ms: 1704067200000,
+        };
         assert!(schedule.validate().is_ok());
     }
 
@@ -2041,7 +2039,9 @@ mod tests {
 
     #[test]
     fn test_serialize_at() {
-        let schedule = ScheduleType::At { at_ms: 1704067200000 };
+        let schedule = ScheduleType::At {
+            at_ms: 1704067200000,
+        };
         let json = serde_json::to_string(&schedule).unwrap();
         assert!(json.contains("\"kind\":\"at\""));
         assert!(json.contains("\"atMs\":1704067200000"));
@@ -2097,7 +2097,10 @@ mod tests {
         let json = r#"{"kind":"every","everyMs":60000,"anchorMs":1704067200000}"#;
         let schedule: ScheduleType = serde_json::from_str(json).unwrap();
         match schedule {
-            ScheduleType::Every { every_ms, anchor_ms } => {
+            ScheduleType::Every {
+                every_ms,
+                anchor_ms,
+            } => {
                 assert_eq!(every_ms, 60000);
                 assert_eq!(anchor_ms, Some(1704067200000));
             }
@@ -2121,7 +2124,9 @@ mod tests {
     #[test]
     fn test_roundtrip_serialization() {
         let schedules = vec![
-            ScheduleType::At { at_ms: 1704067200000 },
+            ScheduleType::At {
+                at_ms: 1704067200000,
+            },
             ScheduleType::Every {
                 every_ms: 60000,
                 anchor_ms: Some(1704067200000),
@@ -2225,7 +2230,7 @@ mod tests {
     #[test]
     fn test_from_legacy_recipe() {
         let payload = CronPayload::from_legacy_recipe("Generate daily report");
-        
+
         match payload {
             CronPayload::AgentTurn {
                 message,
@@ -2474,7 +2479,7 @@ mod tests {
     fn test_post_to_main_mode_variants() {
         let summary = PostToMainMode::Summary;
         let full = PostToMainMode::Full;
-        
+
         assert_ne!(summary, full);
     }
 
@@ -2509,7 +2514,7 @@ mod tests {
     #[test]
     fn test_post_to_main_mode_roundtrip() {
         let modes = vec![PostToMainMode::Summary, PostToMainMode::Full];
-        
+
         for mode in modes {
             let json = serde_json::to_string(&mode).unwrap();
             let deserialized: PostToMainMode = serde_json::from_str(&json).unwrap();
@@ -2524,7 +2529,7 @@ mod tests {
     #[test]
     fn test_isolation_config_default() {
         let config = IsolationConfig::default();
-        
+
         assert!(!config.enabled);
         assert!(config.post_to_main_prefix.is_none());
         assert_eq!(config.post_to_main_mode, PostToMainMode::Summary);
@@ -2534,7 +2539,7 @@ mod tests {
     #[test]
     fn test_isolation_config_enabled_summary() {
         let config = IsolationConfig::enabled_summary();
-        
+
         assert!(config.enabled);
         assert!(config.post_to_main_prefix.is_none());
         assert_eq!(config.post_to_main_mode, PostToMainMode::Summary);
@@ -2544,7 +2549,7 @@ mod tests {
     #[test]
     fn test_isolation_config_enabled_full() {
         let config = IsolationConfig::enabled_full(Some(16000));
-        
+
         assert!(config.enabled);
         assert!(config.post_to_main_prefix.is_none());
         assert_eq!(config.post_to_main_mode, PostToMainMode::Full);
@@ -2554,16 +2559,15 @@ mod tests {
     #[test]
     fn test_isolation_config_enabled_full_default_max_chars() {
         let config = IsolationConfig::enabled_full(None);
-        
+
         assert!(config.enabled);
         assert_eq!(config.post_to_main_max_chars, 8000);
     }
 
     #[test]
     fn test_isolation_config_with_prefix() {
-        let config = IsolationConfig::enabled_summary()
-            .with_prefix("[定时任务]");
-        
+        let config = IsolationConfig::enabled_summary().with_prefix("[定时任务]");
+
         assert_eq!(config.post_to_main_prefix, Some("[定时任务]".to_string()));
     }
 
@@ -2573,10 +2577,10 @@ mod tests {
             post_to_main_max_chars: 100,
             ..Default::default()
         };
-        
+
         let output = "Hello, World!";
         let truncated = config.truncate_output(output);
-        
+
         assert_eq!(truncated, output);
     }
 
@@ -2586,10 +2590,10 @@ mod tests {
             post_to_main_max_chars: 10,
             ..Default::default()
         };
-        
+
         let output = "Hello, World! This is a long message.";
         let truncated = config.truncate_output(output);
-        
+
         assert_eq!(truncated, "Hello, Wor...");
     }
 
@@ -2599,10 +2603,10 @@ mod tests {
             post_to_main_max_chars: 13,
             ..Default::default()
         };
-        
+
         let output = "Hello, World!";
         let truncated = config.truncate_output(output);
-        
+
         // 刚好等于限制，不截断
         assert_eq!(truncated, output);
     }
@@ -2613,10 +2617,10 @@ mod tests {
             post_to_main_max_chars: 5,
             ..Default::default()
         };
-        
+
         let output = "你好世界！这是测试";
         let truncated = config.truncate_output(output);
-        
+
         // 应该按字符截断，不会截断 UTF-8 字符
         assert_eq!(truncated, "你好世界！...");
     }
@@ -2629,7 +2633,7 @@ mod tests {
             post_to_main_mode: PostToMainMode::Summary,
             post_to_main_max_chars: 8000,
         };
-        
+
         let message = config.format_message("任务完成");
         assert_eq!(message, "任务完成");
     }
@@ -2642,7 +2646,7 @@ mod tests {
             post_to_main_mode: PostToMainMode::Summary,
             post_to_main_max_chars: 8000,
         };
-        
+
         let message = config.format_message("任务完成");
         assert_eq!(message, "[任务] 任务完成");
     }
@@ -2655,7 +2659,7 @@ mod tests {
             post_to_main_mode: PostToMainMode::Full,
             post_to_main_max_chars: 100,
         };
-        
+
         let message = config.format_message("短消息");
         assert_eq!(message, "短消息");
     }
@@ -2668,7 +2672,7 @@ mod tests {
             post_to_main_mode: PostToMainMode::Full,
             post_to_main_max_chars: 5,
         };
-        
+
         let message = config.format_message("这是一个很长的消息");
         assert_eq!(message, "[报告] 这是一个很...");
     }
@@ -2681,7 +2685,7 @@ mod tests {
     fn test_isolation_config_serialize_default() {
         let config = IsolationConfig::default();
         let json = serde_json::to_string(&config).unwrap();
-        
+
         // enabled 默认为 false，但 serde(default) 会序列化
         assert!(json.contains("\"enabled\":false"));
         // post_to_main_prefix 为 None，不应该出现
@@ -2701,7 +2705,7 @@ mod tests {
             post_to_main_max_chars: 16000,
         };
         let json = serde_json::to_string(&config).unwrap();
-        
+
         assert!(json.contains("\"enabled\":true"));
         assert!(json.contains("\"postToMainPrefix\":\"[任务]\""));
         assert!(json.contains("\"postToMainMode\":\"full\""));
@@ -2713,7 +2717,7 @@ mod tests {
         // 只有必需字段，其他使用默认值
         let json = r#"{}"#;
         let config: IsolationConfig = serde_json::from_str(json).unwrap();
-        
+
         assert!(!config.enabled);
         assert!(config.post_to_main_prefix.is_none());
         assert_eq!(config.post_to_main_mode, PostToMainMode::Summary);
@@ -2729,7 +2733,7 @@ mod tests {
             "postToMainMaxChars": 12000
         }"#;
         let config: IsolationConfig = serde_json::from_str(json).unwrap();
-        
+
         assert!(config.enabled);
         assert_eq!(config.post_to_main_prefix, Some("[报告]".to_string()));
         assert_eq!(config.post_to_main_mode, PostToMainMode::Full);
@@ -2744,7 +2748,7 @@ mod tests {
             "postToMainMode": "full"
         }"#;
         let config: IsolationConfig = serde_json::from_str(json).unwrap();
-        
+
         assert!(config.enabled);
         assert!(config.post_to_main_prefix.is_none());
         assert_eq!(config.post_to_main_mode, PostToMainMode::Full);
@@ -2785,7 +2789,7 @@ mod tests {
     #[test]
     fn test_delivery_config_default() {
         let config = DeliveryConfig::default();
-        
+
         assert!(!config.enabled);
         assert!(config.channel.is_none());
         assert!(config.to.is_none());
@@ -2795,7 +2799,7 @@ mod tests {
     #[test]
     fn test_delivery_config_enabled() {
         let config = DeliveryConfig::enabled("slack", "#reports");
-        
+
         assert!(config.enabled);
         assert_eq!(config.channel, Some("slack".to_string()));
         assert_eq!(config.to, Some("#reports".to_string()));
@@ -2805,7 +2809,7 @@ mod tests {
     #[test]
     fn test_delivery_config_enabled_strict() {
         let config = DeliveryConfig::enabled_strict("email", "admin@example.com");
-        
+
         assert!(config.enabled);
         assert_eq!(config.channel, Some("email".to_string()));
         assert_eq!(config.to, Some("admin@example.com".to_string()));
@@ -2814,9 +2818,8 @@ mod tests {
 
     #[test]
     fn test_delivery_config_with_best_effort() {
-        let config = DeliveryConfig::enabled_strict("slack", "#reports")
-            .with_best_effort(true);
-        
+        let config = DeliveryConfig::enabled_strict("slack", "#reports").with_best_effort(true);
+
         assert!(config.best_effort);
     }
 
@@ -2859,11 +2862,11 @@ mod tests {
         // 禁用时不投递
         let disabled = DeliveryConfig::default();
         assert!(!disabled.should_deliver());
-        
+
         // 启用且配置完整时投递
         let enabled = DeliveryConfig::enabled("slack", "#reports");
         assert!(enabled.should_deliver());
-        
+
         // 启用但缺少配置时不投递
         let incomplete = DeliveryConfig {
             enabled: true,
@@ -2882,7 +2885,7 @@ mod tests {
     fn test_delivery_config_serialize_default() {
         let config = DeliveryConfig::default();
         let json = serde_json::to_string(&config).unwrap();
-        
+
         assert!(json.contains("\"enabled\":false"));
         assert!(json.contains("\"bestEffort\":true"));
         // channel 和 to 为 None，不应该出现
@@ -2899,7 +2902,7 @@ mod tests {
             best_effort: false,
         };
         let json = serde_json::to_string(&config).unwrap();
-        
+
         assert!(json.contains("\"enabled\":true"));
         assert!(json.contains("\"channel\":\"slack\""));
         assert!(json.contains("\"to\":\"#reports\""));
@@ -2910,7 +2913,7 @@ mod tests {
     fn test_delivery_config_deserialize_minimal() {
         let json = r#"{}"#;
         let config: DeliveryConfig = serde_json::from_str(json).unwrap();
-        
+
         assert!(!config.enabled);
         assert!(config.channel.is_none());
         assert!(config.to.is_none());
@@ -2926,7 +2929,7 @@ mod tests {
             "bestEffort": false
         }"#;
         let config: DeliveryConfig = serde_json::from_str(json).unwrap();
-        
+
         assert!(config.enabled);
         assert_eq!(config.channel, Some("telegram".to_string()));
         assert_eq!(config.to, Some("@user".to_string()));
@@ -2940,7 +2943,7 @@ mod tests {
             "channel": "email"
         }"#;
         let config: DeliveryConfig = serde_json::from_str(json).unwrap();
-        
+
         assert!(config.enabled);
         assert_eq!(config.channel, Some("email".to_string()));
         assert!(config.to.is_none());
@@ -3006,15 +3009,30 @@ mod tests {
     #[test]
     fn test_job_status_serialize() {
         assert_eq!(serde_json::to_string(&JobStatus::Ok).unwrap(), "\"ok\"");
-        assert_eq!(serde_json::to_string(&JobStatus::Error).unwrap(), "\"error\"");
-        assert_eq!(serde_json::to_string(&JobStatus::Skipped).unwrap(), "\"skipped\"");
+        assert_eq!(
+            serde_json::to_string(&JobStatus::Error).unwrap(),
+            "\"error\""
+        );
+        assert_eq!(
+            serde_json::to_string(&JobStatus::Skipped).unwrap(),
+            "\"skipped\""
+        );
     }
 
     #[test]
     fn test_job_status_deserialize() {
-        assert_eq!(serde_json::from_str::<JobStatus>("\"ok\"").unwrap(), JobStatus::Ok);
-        assert_eq!(serde_json::from_str::<JobStatus>("\"error\"").unwrap(), JobStatus::Error);
-        assert_eq!(serde_json::from_str::<JobStatus>("\"skipped\"").unwrap(), JobStatus::Skipped);
+        assert_eq!(
+            serde_json::from_str::<JobStatus>("\"ok\"").unwrap(),
+            JobStatus::Ok
+        );
+        assert_eq!(
+            serde_json::from_str::<JobStatus>("\"error\"").unwrap(),
+            JobStatus::Error
+        );
+        assert_eq!(
+            serde_json::from_str::<JobStatus>("\"skipped\"").unwrap(),
+            JobStatus::Skipped
+        );
     }
 
     #[test]
@@ -3380,7 +3398,10 @@ mod tests {
         state.mark_failed(end_ms, 1500, "Database connection failed");
         assert!(!state.is_running());
         assert!(state.was_failed());
-        assert_eq!(state.last_error, Some("Database connection failed".to_string()));
+        assert_eq!(
+            state.last_error,
+            Some("Database connection failed".to_string())
+        );
     }
 
     #[test]
@@ -3425,14 +3446,26 @@ mod tests {
 
     #[test]
     fn test_session_target_serialize() {
-        assert_eq!(serde_json::to_string(&SessionTarget::Main).unwrap(), "\"main\"");
-        assert_eq!(serde_json::to_string(&SessionTarget::Isolated).unwrap(), "\"isolated\"");
+        assert_eq!(
+            serde_json::to_string(&SessionTarget::Main).unwrap(),
+            "\"main\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SessionTarget::Isolated).unwrap(),
+            "\"isolated\""
+        );
     }
 
     #[test]
     fn test_session_target_deserialize() {
-        assert_eq!(serde_json::from_str::<SessionTarget>("\"main\"").unwrap(), SessionTarget::Main);
-        assert_eq!(serde_json::from_str::<SessionTarget>("\"isolated\"").unwrap(), SessionTarget::Isolated);
+        assert_eq!(
+            serde_json::from_str::<SessionTarget>("\"main\"").unwrap(),
+            SessionTarget::Main
+        );
+        assert_eq!(
+            serde_json::from_str::<SessionTarget>("\"isolated\"").unwrap(),
+            SessionTarget::Isolated
+        );
     }
 
     #[test]
@@ -3470,14 +3503,23 @@ mod tests {
 
     #[test]
     fn test_wake_mode_serialize() {
-        assert_eq!(serde_json::to_string(&WakeMode::NextHeartbeat).unwrap(), "\"nextHeartbeat\"");
+        assert_eq!(
+            serde_json::to_string(&WakeMode::NextHeartbeat).unwrap(),
+            "\"nextHeartbeat\""
+        );
         assert_eq!(serde_json::to_string(&WakeMode::Now).unwrap(), "\"now\"");
     }
 
     #[test]
     fn test_wake_mode_deserialize() {
-        assert_eq!(serde_json::from_str::<WakeMode>("\"nextHeartbeat\"").unwrap(), WakeMode::NextHeartbeat);
-        assert_eq!(serde_json::from_str::<WakeMode>("\"now\"").unwrap(), WakeMode::Now);
+        assert_eq!(
+            serde_json::from_str::<WakeMode>("\"nextHeartbeat\"").unwrap(),
+            WakeMode::NextHeartbeat
+        );
+        assert_eq!(
+            serde_json::from_str::<WakeMode>("\"now\"").unwrap(),
+            WakeMode::Now
+        );
     }
 
     #[test]
@@ -3526,7 +3568,9 @@ mod tests {
         let job = ScheduledJob::new(
             "test-job",
             "Test Job",
-            ScheduleType::At { at_ms: 1704153600000 },
+            ScheduleType::At {
+                at_ms: 1704153600000,
+            },
             CronPayload::system_event("Test event"),
         )
         .with_description("A test job")
@@ -3573,7 +3617,9 @@ mod tests {
         let at_job = ScheduledJob::new(
             "at-job",
             "At Job",
-            ScheduleType::At { at_ms: 1704153600000 },
+            ScheduleType::At {
+                at_ms: 1704153600000,
+            },
             CronPayload::system_event("Test"),
         );
         assert!(at_job.is_one_time());
@@ -3679,7 +3725,7 @@ mod tests {
         )
         .with_delivery(DeliveryConfig {
             enabled: true,
-            channel: None,  // 缺少 channel
+            channel: None, // 缺少 channel
             to: Some("target".to_string()),
             best_effort: true,
         });
@@ -3698,7 +3744,7 @@ mod tests {
         );
 
         assert_eq!(job.id, "legacy-job");
-        assert_eq!(job.name, "legacy-job");  // 使用 ID 作为名称
+        assert_eq!(job.name, "legacy-job"); // 使用 ID 作为名称
         assert!(job.enabled);
         assert_eq!(job.source, Some("/path/to/recipe.md".to_string()));
         assert_eq!(job.cron, Some("0 0 9 * * *".to_string()));
@@ -3724,11 +3770,11 @@ mod tests {
             "paused-job",
             "0 0 9 * * *",
             "/path/to/recipe.md",
-            true,  // paused
+            true, // paused
             None,
         );
 
-        assert!(!job.enabled);  // paused 转换为 !enabled
+        assert!(!job.enabled); // paused 转换为 !enabled
     }
 
     #[test]
@@ -3840,7 +3886,7 @@ mod tests {
         assert!(!json.contains("\"source\""));
         // 注意：schedule 中有 "kind":"cron"，所以检查顶层 cron 字段需要更精确
         // 顶层 cron 字段格式为 "cron":"..." 而不是 "kind":"cron"
-        assert!(!json.contains("\"cron\":\"0 0 9"));  // 顶层 cron 字段
+        assert!(!json.contains("\"cron\":\"0 0 9")); // 顶层 cron 字段
     }
 
     #[test]
@@ -3906,10 +3952,10 @@ mod tests {
 
         assert_eq!(job.id, "test-job");
         assert_eq!(job.name, "Test Job");
-        assert!(job.enabled);  // 默认值
-        assert!(!job.delete_after_run);  // 默认值
-        assert_eq!(job.session_target, SessionTarget::Main);  // 默认值
-        assert_eq!(job.wake_mode, WakeMode::NextHeartbeat);  // 默认值
+        assert!(job.enabled); // 默认值
+        assert!(!job.delete_after_run); // 默认值
+        assert_eq!(job.session_target, SessionTarget::Main); // 默认值
+        assert_eq!(job.wake_mode, WakeMode::NextHeartbeat); // 默认值
         assert!(job.agent_id.is_none());
         assert!(job.description.is_none());
         assert!(job.isolation.is_none());
@@ -3992,7 +4038,9 @@ mod tests {
             ScheduledJob::new(
                 "at-job",
                 "At Job",
-                ScheduleType::At { at_ms: 1704153600000 },
+                ScheduleType::At {
+                    at_ms: 1704153600000,
+                },
                 CronPayload::agent_turn("One-time task"),
             )
             .with_delete_after_run(true),
@@ -4088,16 +4136,16 @@ mod property_tests {
     /// 使用预定义的有效表达式列表
     fn arb_valid_cron_expr() -> impl Strategy<Value = String> {
         prop_oneof![
-            Just("0 * * * * *".to_string()),      // 每分钟
-            Just("0 0 * * * *".to_string()),      // 每小时
-            Just("0 0 0 * * *".to_string()),      // 每天
-            Just("0 0 9 * * *".to_string()),      // 每天 9:00
-            Just("0 30 8 * * *".to_string()),     // 每天 8:30
-            Just("0 0 0 * * 1".to_string()),      // 每周一
-            Just("0 0 0 1 * *".to_string()),      // 每月 1 号
-            Just("0 */5 * * * *".to_string()),    // 每 5 分钟
-            Just("0 0 */2 * * *".to_string()),    // 每 2 小时
-            Just("30 15 10 * * *".to_string()),   // 每天 10:15:30
+            Just("0 * * * * *".to_string()),    // 每分钟
+            Just("0 0 * * * *".to_string()),    // 每小时
+            Just("0 0 0 * * *".to_string()),    // 每天
+            Just("0 0 9 * * *".to_string()),    // 每天 9:00
+            Just("0 30 8 * * *".to_string()),   // 每天 8:30
+            Just("0 0 0 * * 1".to_string()),    // 每周一
+            Just("0 0 0 1 * *".to_string()),    // 每月 1 号
+            Just("0 */5 * * * *".to_string()),  // 每 5 分钟
+            Just("0 0 */2 * * *".to_string()),  // 每 2 小时
+            Just("30 15 10 * * *".to_string()), // 每天 10:15:30
         ]
     }
 
@@ -4120,25 +4168,21 @@ mod property_tests {
 
     /// 生成 ScheduleType::Every
     fn arb_schedule_every() -> impl Strategy<Value = ScheduleType> {
-        (arb_interval_ms(), arb_anchor_ms()).prop_map(|(every_ms, anchor_ms)| {
-            ScheduleType::Every { every_ms, anchor_ms }
+        (arb_interval_ms(), arb_anchor_ms()).prop_map(|(every_ms, anchor_ms)| ScheduleType::Every {
+            every_ms,
+            anchor_ms,
         })
     }
 
     /// 生成 ScheduleType::Cron
     fn arb_schedule_cron() -> impl Strategy<Value = ScheduleType> {
-        (arb_valid_cron_expr(), arb_valid_timezone()).prop_map(|(expr, tz)| {
-            ScheduleType::Cron { expr, tz }
-        })
+        (arb_valid_cron_expr(), arb_valid_timezone())
+            .prop_map(|(expr, tz)| ScheduleType::Cron { expr, tz })
     }
 
     /// 生成任意 ScheduleType
     fn arb_schedule_type() -> impl Strategy<Value = ScheduleType> {
-        prop_oneof![
-            arb_schedule_at(),
-            arb_schedule_every(),
-            arb_schedule_cron(),
-        ]
+        prop_oneof![arb_schedule_at(), arb_schedule_every(), arb_schedule_cron(),]
     }
 
     // ------------------------------------------------------------------------
@@ -4474,7 +4518,8 @@ mod property_tests {
 
     /// 生成任意非空字符串
     fn arb_non_empty_string() -> impl Strategy<Value = String> {
-        "[a-zA-Z0-9 _-]{1,100}".prop_map(|s| s.trim().to_string())
+        "[a-zA-Z0-9 _-]{1,100}"
+            .prop_map(|s| s.trim().to_string())
             .prop_filter("non-empty string", |s| !s.is_empty())
     }
 
@@ -4503,19 +4548,12 @@ mod property_tests {
 
     /// 生成可选的超时时间
     fn arb_timeout() -> impl Strategy<Value = Option<u64>> {
-        prop_oneof![
-            Just(None),
-            (1u64..3600u64).prop_map(Some),
-        ]
+        prop_oneof![Just(None), (1u64..3600u64).prop_map(Some),]
     }
 
     /// 生成可选的布尔值
     fn arb_optional_bool() -> impl Strategy<Value = Option<bool>> {
-        prop_oneof![
-            Just(None),
-            Just(Some(true)),
-            Just(Some(false)),
-        ]
+        prop_oneof![Just(None), Just(Some(true)), Just(Some(false)),]
     }
 
     /// 生成可选的渠道名称
@@ -4558,7 +4596,16 @@ mod property_tests {
             arb_optional_bool(),
         )
             .prop_map(
-                |(message, model, thinking, timeout_seconds, deliver, channel, to, best_effort_deliver)| {
+                |(
+                    message,
+                    model,
+                    thinking,
+                    timeout_seconds,
+                    deliver,
+                    channel,
+                    to,
+                    best_effort_deliver,
+                )| {
                     CronPayload::AgentTurn {
                         message,
                         model,
@@ -4575,10 +4622,7 @@ mod property_tests {
 
     /// 生成任意 CronPayload
     fn arb_cron_payload() -> impl Strategy<Value = CronPayload> {
-        prop_oneof![
-            arb_system_event(),
-            arb_agent_turn(),
-        ]
+        prop_oneof![arb_system_event(), arb_agent_turn(),]
     }
 
     proptest! {
@@ -4743,10 +4787,7 @@ mod property_tests {
 
     /// 生成 PostToMainMode
     fn arb_post_to_main_mode() -> impl Strategy<Value = PostToMainMode> {
-        prop_oneof![
-            Just(PostToMainMode::Summary),
-            Just(PostToMainMode::Full),
-        ]
+        prop_oneof![Just(PostToMainMode::Summary), Just(PostToMainMode::Full),]
     }
 
     /// 生成有效的 max_chars 值
@@ -5180,10 +5221,7 @@ mod property_tests {
 
     /// 生成 SessionTarget
     fn arb_session_target() -> impl Strategy<Value = SessionTarget> {
-        prop_oneof![
-            Just(SessionTarget::Main),
-            Just(SessionTarget::Isolated),
-        ]
+        prop_oneof![Just(SessionTarget::Main), Just(SessionTarget::Isolated),]
     }
 
     // ------------------------------------------------------------------------
@@ -5192,10 +5230,7 @@ mod property_tests {
 
     /// 生成 WakeMode
     fn arb_wake_mode() -> impl Strategy<Value = WakeMode> {
-        prop_oneof![
-            Just(WakeMode::NextHeartbeat),
-            Just(WakeMode::Now),
-        ]
+        prop_oneof![Just(WakeMode::NextHeartbeat), Just(WakeMode::Now),]
     }
 
     // ------------------------------------------------------------------------
@@ -5214,26 +5249,17 @@ mod property_tests {
 
     /// 生成可选的描述
     fn arb_description() -> impl Strategy<Value = Option<String>> {
-        prop_oneof![
-            Just(None),
-            arb_non_empty_string().prop_map(Some),
-        ]
+        prop_oneof![Just(None), arb_non_empty_string().prop_map(Some),]
     }
 
     /// 生成可选的 Agent ID
     fn arb_agent_id() -> impl Strategy<Value = Option<String>> {
-        prop_oneof![
-            Just(None),
-            arb_job_id().prop_map(Some),
-        ]
+        prop_oneof![Just(None), arb_job_id().prop_map(Some),]
     }
 
     /// 生成可选的 IsolationConfig
     fn arb_optional_isolation() -> impl Strategy<Value = Option<IsolationConfig>> {
-        prop_oneof![
-            Just(None),
-            arb_isolation_config().prop_map(Some),
-        ]
+        prop_oneof![Just(None), arb_isolation_config().prop_map(Some),]
     }
 
     /// 生成可选的 DeliveryConfig（有效配置）
@@ -5242,7 +5268,10 @@ mod property_tests {
             Just(None),
             Just(Some(DeliveryConfig::default())),
             Just(Some(DeliveryConfig::enabled("slack", "#general"))),
-            Just(Some(DeliveryConfig::enabled_strict("email", "admin@example.com"))),
+            Just(Some(DeliveryConfig::enabled_strict(
+                "email",
+                "admin@example.com"
+            ))),
         ]
     }
 
@@ -5274,14 +5303,14 @@ mod property_tests {
             arb_agent_id(),
             arb_job_name(),
             arb_description(),
-            proptest::bool::ANY,  // enabled
-            proptest::bool::ANY,  // delete_after_run
+            proptest::bool::ANY, // enabled
+            proptest::bool::ANY, // delete_after_run
         );
 
         // 第二组：时间和调度
         let timing = (
-            arb_timestamp_ms(),   // created_at_ms
-            arb_timestamp_ms(),   // updated_at_ms
+            arb_timestamp_ms(), // created_at_ms
+            arb_timestamp_ms(), // updated_at_ms
             arb_schedule_type(),
             arb_session_target(),
             arb_wake_mode(),
@@ -5296,27 +5325,33 @@ mod property_tests {
             arb_legacy_cron(),
         );
 
-        (basic, timing, config).prop_map(|((id, agent_id, name, description, enabled, delete_after_run), (created_at_ms, updated_at_ms, schedule, session_target, wake_mode), (payload, isolation, delivery, source, cron))| {
-            ScheduledJob {
-                id,
-                agent_id,
-                name,
-                description,
-                enabled,
-                delete_after_run,
-                created_at_ms,
-                updated_at_ms,
-                schedule,
-                session_target,
-                wake_mode,
-                payload,
-                isolation,
-                delivery,
-                state: JobState::default(),
-                source,
-                cron,
-            }
-        })
+        (basic, timing, config).prop_map(
+            |(
+                (id, agent_id, name, description, enabled, delete_after_run),
+                (created_at_ms, updated_at_ms, schedule, session_target, wake_mode),
+                (payload, isolation, delivery, source, cron),
+            )| {
+                ScheduledJob {
+                    id,
+                    agent_id,
+                    name,
+                    description,
+                    enabled,
+                    delete_after_run,
+                    created_at_ms,
+                    updated_at_ms,
+                    schedule,
+                    session_target,
+                    wake_mode,
+                    payload,
+                    isolation,
+                    delivery,
+                    state: JobState::default(),
+                    source,
+                    cron,
+                }
+            },
+        )
     }
 
     proptest! {

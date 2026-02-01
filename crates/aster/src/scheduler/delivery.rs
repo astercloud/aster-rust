@@ -67,7 +67,6 @@ impl DeliveryResult {
     }
 }
 
-
 // ============================================================================
 // DeliveryChannel Trait (Task 8.1)
 // ============================================================================
@@ -211,10 +210,7 @@ impl DeliveryRouter {
         };
 
         // 构建消息
-        let message = result
-            .output
-            .as_deref()
-            .unwrap_or("任务执行完成");
+        let message = result.output.as_deref().unwrap_or("任务执行完成");
 
         // 发送消息
         match channel.send(to, message).await {
@@ -241,7 +237,6 @@ impl Default for DeliveryRouter {
     }
 }
 
-
 // ============================================================================
 // 示例渠道实现
 // ============================================================================
@@ -267,12 +262,7 @@ impl DeliveryChannel for LogChannel {
     }
 
     async fn send(&self, to: &str, message: &str) -> Result<()> {
-        tracing::info!(
-            "[LogChannel:{}] 发送到 {}: {}",
-            self.id,
-            to,
-            message
-        );
+        tracing::info!("[LogChannel:{}] 发送到 {}: {}", self.id, to, message);
         Ok(())
     }
 }
@@ -323,7 +313,6 @@ impl DeliveryChannel for MockChannel {
         }
     }
 }
-
 
 // ============================================================================
 // 单元测试 (Task 8.2)

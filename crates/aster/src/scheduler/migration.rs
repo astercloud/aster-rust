@@ -22,9 +22,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use super::types::{
-    CronPayload, JobState, ScheduleType, ScheduledJob, SessionTarget, WakeMode,
-};
+use super::types::{CronPayload, JobState, ScheduleType, ScheduledJob, SessionTarget, WakeMode};
 
 // ============================================================================
 // 存储文件版本
@@ -84,7 +82,6 @@ pub struct LegacyScheduledJob {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_run: Option<DateTime<Utc>>,
 }
-
 
 // ============================================================================
 // 存储文件结构
@@ -190,8 +187,8 @@ pub fn detect_version_from_str(content: &str) -> io::Result<StorageVersion> {
         version: Option<u32>,
     }
 
-    let version_info: VersionOnly = serde_json::from_str(content)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let version_info: VersionOnly =
+        serde_json::from_str(content).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     Ok(match version_info.version {
         Some(v) if v == CURRENT_VERSION => StorageVersion::Current,
@@ -212,7 +209,7 @@ pub fn detect_version_from_str(content: &str) -> io::Result<StorageVersion> {
 /// - `Err`: 文件读取或解析错误
 pub fn needs_migration(path: impl AsRef<Path>) -> io::Result<bool> {
     let path = path.as_ref();
-    
+
     // 文件不存在，不需要迁移
     if !path.exists() {
         return Ok(false);
@@ -221,7 +218,6 @@ pub fn needs_migration(path: impl AsRef<Path>) -> io::Result<bool> {
     let version = detect_version(path)?;
     Ok(matches!(version, StorageVersion::Legacy))
 }
-
 
 // ============================================================================
 // 迁移函数
@@ -300,7 +296,6 @@ pub fn migrate_legacy_job(legacy: &LegacyScheduledJob) -> ScheduledJob {
     }
 }
 
-
 /// 迁移存储文件
 ///
 /// 读取旧格式存储文件，将所有任务迁移到新格式，并返回新的存储文件结构。
@@ -357,23 +352,17 @@ pub fn migrate_storage_from_str(content: &str) -> io::Result<StorageFile> {
             let legacy: LegacyStorageFile = serde_json::from_str(content)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-            let jobs: Vec<ScheduledJob> = legacy
-                .jobs
-                .iter()
-                .map(migrate_legacy_job)
-                .collect();
+            let jobs: Vec<ScheduledJob> = legacy.jobs.iter().map(migrate_legacy_job).collect();
 
             Ok(StorageFile {
                 version: CURRENT_VERSION,
                 jobs,
             })
         }
-        StorageVersion::Unknown(v) => {
-            Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("不支持的存储文件版本: {}", v),
-            ))
-        }
+        StorageVersion::Unknown(v) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("不支持的存储文件版本: {}", v),
+        )),
     }
 }
 
@@ -430,7 +419,6 @@ pub fn migrate_and_save(path: impl AsRef<Path>) -> io::Result<usize> {
 
     Ok(count)
 }
-
 
 // ============================================================================
 // 单元测试
@@ -529,7 +517,6 @@ mod tests {
         assert_eq!(version, StorageVersion::Unknown(99));
     }
 
-
     // ------------------------------------------------------------------------
     // migrate_legacy_job 测试
     // ------------------------------------------------------------------------
@@ -595,10 +582,7 @@ mod tests {
         let job = migrate_legacy_job(&legacy);
 
         // 迁移 last_run 到 state.last_run_at_ms
-        assert_eq!(
-            job.state.last_run_at_ms,
-            Some(last_run.timestamp_millis())
-        );
+        assert_eq!(job.state.last_run_at_ms, Some(last_run.timestamp_millis()));
     }
 
     #[test]
@@ -643,7 +627,6 @@ mod tests {
             _ => panic!("Expected AgentTurn payload"),
         }
     }
-
 
     // ------------------------------------------------------------------------
     // migrate_storage_from_str 测试
@@ -804,7 +787,6 @@ mod tests {
     }
 }
 
-
 // ============================================================================
 // 属性测试 (Property-Based Tests)
 // ============================================================================
@@ -830,14 +812,14 @@ mod property_tests {
     /// 使用常见的 6 字段 cron 格式
     fn arb_valid_cron_expr() -> impl Strategy<Value = String> {
         prop_oneof![
-            Just("0 0 9 * * *".to_string()),      // 每天 9:00
-            Just("0 30 8 * * *".to_string()),     // 每天 8:30
-            Just("0 0 12 * * *".to_string()),     // 每天 12:00
-            Just("0 */5 * * * *".to_string()),    // 每 5 分钟
-            Just("0 0 0 * * 1".to_string()),      // 每周一 0:00
-            Just("0 0 18 * * *".to_string()),     // 每天 18:00
-            Just("0 15 10 * * *".to_string()),    // 每天 10:15
-            Just("0 0 */2 * * *".to_string()),    // 每 2 小时
+            Just("0 0 9 * * *".to_string()),   // 每天 9:00
+            Just("0 30 8 * * *".to_string()),  // 每天 8:30
+            Just("0 0 12 * * *".to_string()),  // 每天 12:00
+            Just("0 */5 * * * *".to_string()), // 每 5 分钟
+            Just("0 0 0 * * 1".to_string()),   // 每周一 0:00
+            Just("0 0 18 * * *".to_string()),  // 每天 18:00
+            Just("0 15 10 * * *".to_string()), // 每天 10:15
+            Just("0 0 */2 * * *".to_string()), // 每 2 小时
         ]
     }
 
@@ -857,9 +839,8 @@ mod property_tests {
         prop_oneof![
             Just(None),
             // 生成过去 30 天内的随机时间
-            (1i64..2592000i64).prop_map(|secs| {
-                Some(Utc::now() - chrono::Duration::seconds(secs))
-            }),
+            (1i64..2592000i64)
+                .prop_map(|secs| { Some(Utc::now() - chrono::Duration::seconds(secs)) }),
         ]
     }
 

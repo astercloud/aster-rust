@@ -96,9 +96,7 @@ impl WebhookHandler {
     /// - 9.2: WHEN signature validation fails, THE Webhook_Trigger SHALL reject the request
     pub fn verify_signature(&self, payload: &[u8], signature: &str) -> bool {
         // 支持 "sha256=<hex>" 格式（GitHub 风格）
-        let signature_hex = signature
-            .strip_prefix("sha256=")
-            .unwrap_or(signature);
+        let signature_hex = signature.strip_prefix("sha256=").unwrap_or(signature);
 
         // 解码签名
         let expected_signature = match hex::decode(signature_hex) {
@@ -290,7 +288,9 @@ mod tests {
 
     /// 创建有效的测试请求体
     fn create_test_body() -> Vec<u8> {
-        r#"{"content":"Hello, World!","sender_id":"user-123"}"#.as_bytes().to_vec()
+        r#"{"content":"Hello, World!","sender_id":"user-123"}"#
+            .as_bytes()
+            .to_vec()
     }
 
     // ==================== 签名验证测试 ====================
@@ -301,10 +301,10 @@ mod tests {
     fn test_verify_signature_valid() {
         let handler = create_test_handler();
         let body = create_test_body();
-        
+
         // 计算正确的签名
         let signature = handler.compute_signature(&body);
-        
+
         assert!(handler.verify_signature(&body, &signature));
     }
 
@@ -314,10 +314,10 @@ mod tests {
     fn test_verify_signature_with_prefix() {
         let handler = create_test_handler();
         let body = create_test_body();
-        
+
         let signature = handler.compute_signature(&body);
         let prefixed_signature = format!("sha256={}", signature);
-        
+
         assert!(handler.verify_signature(&body, &prefixed_signature));
     }
 
@@ -327,10 +327,10 @@ mod tests {
     fn test_verify_signature_invalid() {
         let handler = create_test_handler();
         let body = create_test_body();
-        
+
         // 使用错误的签名
         let invalid_signature = "0000000000000000000000000000000000000000000000000000000000000000";
-        
+
         assert!(!handler.verify_signature(&body, invalid_signature));
     }
 
@@ -340,7 +340,7 @@ mod tests {
     fn test_verify_signature_invalid_hex() {
         let handler = create_test_handler();
         let body = create_test_body();
-        
+
         // 非 hex 格式
         assert!(!handler.verify_signature(&body, "not-a-hex-string"));
         assert!(!handler.verify_signature(&body, "zzzz"));
@@ -352,7 +352,7 @@ mod tests {
     fn test_verify_signature_empty() {
         let handler = create_test_handler();
         let body = create_test_body();
-        
+
         assert!(!handler.verify_signature(&body, ""));
     }
 
@@ -362,13 +362,13 @@ mod tests {
     fn test_verify_signature_tampered_payload() {
         let handler = create_test_handler();
         let body = create_test_body();
-        
+
         // 计算原始 body 的签名
         let signature = handler.compute_signature(&body);
-        
+
         // 修改 body
         let tampered_body = r#"{"content":"Tampered!","sender_id":"user-123"}"#.as_bytes();
-        
+
         // 使用原始签名验证修改后的 body 应该失败
         assert!(!handler.verify_signature(tampered_body, &signature));
     }
@@ -381,10 +381,10 @@ mod tests {
     fn test_parse_request_valid() {
         let handler = create_test_handler();
         let body = create_test_body();
-        
+
         let result = handler.parse_request(&body);
         assert!(result.is_ok());
-        
+
         let request = result.unwrap();
         assert_eq!(request.content, "Hello, World!");
         assert_eq!(request.sender_id, Some("user-123".to_string()));
@@ -396,10 +396,10 @@ mod tests {
     fn test_parse_request_minimal() {
         let handler = create_test_handler();
         let body = r#"{"content":"Minimal message"}"#.as_bytes();
-        
+
         let result = handler.parse_request(body);
         assert!(result.is_ok());
-        
+
         let request = result.unwrap();
         assert_eq!(request.content, "Minimal message");
         assert_eq!(request.sender_id, None);
@@ -418,16 +418,23 @@ mod tests {
                 "source": "github",
                 "priority": 1
             }
-        }"#.as_bytes();
-        
+        }"#
+        .as_bytes();
+
         let result = handler.parse_request(body);
         assert!(result.is_ok());
-        
+
         let request = result.unwrap();
         assert_eq!(request.content, "Message with metadata");
         assert_eq!(request.sender_id, Some("user-456".to_string()));
-        assert_eq!(request.metadata.get("source"), Some(&serde_json::json!("github")));
-        assert_eq!(request.metadata.get("priority"), Some(&serde_json::json!(1)));
+        assert_eq!(
+            request.metadata.get("source"),
+            Some(&serde_json::json!("github"))
+        );
+        assert_eq!(
+            request.metadata.get("priority"),
+            Some(&serde_json::json!(1))
+        );
     }
 
     /// 测试：解析无效 JSON 应该失败
@@ -435,7 +442,7 @@ mod tests {
     fn test_parse_request_invalid_json() {
         let handler = create_test_handler();
         let body = b"not valid json";
-        
+
         let result = handler.parse_request(body);
         assert!(result.is_err());
     }
@@ -445,7 +452,7 @@ mod tests {
     fn test_parse_request_missing_content() {
         let handler = create_test_handler();
         let body = r#"{"sender_id":"user-123"}"#.as_bytes();
-        
+
         let result = handler.parse_request(body);
         assert!(result.is_err());
     }
@@ -459,9 +466,9 @@ mod tests {
         let handler = create_test_handler();
         let body = create_test_body();
         let signature = handler.compute_signature(&body);
-        
+
         let result = handler.handle_request(&body, &signature);
-        
+
         assert!(result.is_triggered());
         let request = result.into_request().unwrap();
         assert_eq!(request.content, "Hello, World!");
@@ -474,9 +481,9 @@ mod tests {
         let handler = create_test_handler();
         let body = create_test_body();
         let invalid_signature = "invalid";
-        
+
         let result = handler.handle_request(&body, invalid_signature);
-        
+
         assert!(result.is_invalid_signature());
         assert_eq!(result, WebhookResult::InvalidSignature);
     }
@@ -488,9 +495,9 @@ mod tests {
         let handler = create_test_handler();
         let body = b"not valid json";
         let signature = handler.compute_signature(body);
-        
+
         let result = handler.handle_request(body, &signature);
-        
+
         assert!(result.is_parse_error());
     }
 
@@ -502,21 +509,23 @@ mod tests {
         let request = WebhookRequest::new("Test content".to_string())
             .with_sender_id("sender-1".to_string())
             .with_metadata("key".to_string(), serde_json::json!("value"));
-        
+
         assert_eq!(request.content, "Test content");
         assert_eq!(request.sender_id, Some("sender-1".to_string()));
-        assert_eq!(request.metadata.get("key"), Some(&serde_json::json!("value")));
+        assert_eq!(
+            request.metadata.get("key"),
+            Some(&serde_json::json!("value"))
+        );
     }
 
     /// 测试：WebhookRequest 序列化/反序列化
     #[test]
     fn test_webhook_request_serde() {
-        let request = WebhookRequest::new("Test".to_string())
-            .with_sender_id("user".to_string());
-        
+        let request = WebhookRequest::new("Test".to_string()).with_sender_id("user".to_string());
+
         let json = serde_json::to_string(&request).unwrap();
         let parsed: WebhookRequest = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(request, parsed);
     }
 
@@ -528,7 +537,7 @@ mod tests {
     fn test_configurable_path() {
         let handler1 = WebhookHandler::new("secret".to_string(), "/api/webhook".to_string());
         let handler2 = WebhookHandler::new("secret".to_string(), "/custom/path".to_string());
-        
+
         assert_eq!(handler1.path(), "/api/webhook");
         assert_eq!(handler2.path(), "/custom/path");
     }
@@ -541,12 +550,12 @@ mod tests {
         let handler1 = WebhookHandler::new("secret1".to_string(), "/webhook".to_string());
         let handler2 = WebhookHandler::new("secret2".to_string(), "/webhook".to_string());
         let body = create_test_body();
-        
+
         let sig1 = handler1.compute_signature(&body);
         let sig2 = handler2.compute_signature(&body);
-        
+
         assert_ne!(sig1, sig2);
-        
+
         // handler1 的签名不能通过 handler2 的验证
         assert!(!handler2.verify_signature(&body, &sig1));
     }
@@ -579,10 +588,7 @@ mod tests {
 
     /// 生成随机 sender_id
     fn arb_sender_id() -> impl Strategy<Value = Option<String>> {
-        prop::option::of(
-            prop::string::string_regex("[a-zA-Z0-9_-]{1,32}")
-                .unwrap()
-        )
+        prop::option::of(prop::string::string_regex("[a-zA-Z0-9_-]{1,32}").unwrap())
     }
 
     /// 生成随机 WebhookRequest
@@ -607,7 +613,7 @@ mod tests {
     fn arb_tampered_payload(original: &[u8]) -> impl Strategy<Value = Vec<u8>> {
         let original_len = original.len();
         let original_clone = original.to_vec();
-        
+
         prop::strategy::Union::new_weighted(vec![
             // 策略 1: 修改一个字节
             (3, {
@@ -672,13 +678,26 @@ mod tests {
     fn arb_invalid_signature() -> impl Strategy<Value = String> {
         prop::strategy::Union::new_weighted(vec![
             // 策略 1: 非 hex 字符串
-            (3, prop::string::string_regex("[g-z]{32,64}").unwrap().boxed()),
+            (
+                3,
+                prop::string::string_regex("[g-z]{32,64}").unwrap().boxed(),
+            ),
             // 策略 2: 空字符串
             (1, Just("".to_string()).boxed()),
             // 策略 3: 太短的 hex
-            (2, prop::string::string_regex("[0-9a-f]{1,10}").unwrap().boxed()),
+            (
+                2,
+                prop::string::string_regex("[0-9a-f]{1,10}")
+                    .unwrap()
+                    .boxed(),
+            ),
             // 策略 4: 包含非 hex 字符
-            (2, prop::string::string_regex("[0-9a-f]{20}[xyz]{5}[0-9a-f]{20}").unwrap().boxed()),
+            (
+                2,
+                prop::string::string_regex("[0-9a-f]{20}[xyz]{5}[0-9a-f]{20}")
+                    .unwrap()
+                    .boxed(),
+            ),
         ])
     }
 
@@ -698,12 +717,12 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 9: Webhook 签名验证
             // **Validates: Requirements 9.1, 9.2**
-            
+
             let handler = WebhookHandler::new(secret, path);
-            
+
             // 计算正确的签名
             let signature = handler.compute_signature(&payload);
-            
+
             // 验证签名应该通过
             prop_assert!(
                 handler.verify_signature(&payload, &signature),
@@ -723,13 +742,13 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 9: Webhook 签名验证
             // **Validates: Requirements 9.1, 9.2**
-            
+
             let handler = WebhookHandler::new(secret, path);
-            
+
             // 计算正确的签名并添加前缀
             let signature = handler.compute_signature(&payload);
             let prefixed_signature = format!("sha256={}", signature);
-            
+
             // 验证带前缀的签名应该通过
             prop_assert!(
                 handler.verify_signature(&payload, &prefixed_signature),
@@ -750,9 +769,9 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 9: Webhook 签名验证
             // **Validates: Requirements 9.1, 9.2**
-            
+
             let handler = WebhookHandler::new(secret, path);
-            
+
             // 无效签名应该被拒绝
             prop_assert!(
                 !handler.verify_signature(&payload, &invalid_sig),
@@ -773,15 +792,15 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 9: Webhook 签名验证
             // **Validates: Requirements 9.1, 9.2**
-            
+
             let handler = WebhookHandler::new(secret, path);
-            
+
             // 计算原始 payload 的签名
             let signature = handler.compute_signature(&payload);
-            
+
             // 生成篡改后的 payload
             let tampered = arb_tampered_payload(&payload);
-            
+
             // 使用 proptest runner 测试篡改后的 payload
             proptest!(|(tampered_payload in tampered)| {
                 // 只有当篡改后的 payload 与原始不同时才测试
@@ -807,28 +826,28 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 9: Webhook 签名验证
             // **Validates: Requirements 9.1, 9.2**
-            
+
             // 只有当两个 secret 不同时才测试
             prop_assume!(secret1 != secret2);
-            
+
             let handler1 = WebhookHandler::new(secret1, path.clone());
             let handler2 = WebhookHandler::new(secret2, path);
-            
+
             let sig1 = handler1.compute_signature(&payload);
             let sig2 = handler2.compute_signature(&payload);
-            
+
             // 不同 secret 应该产生不同签名
             prop_assert_ne!(
                 &sig1, &sig2,
                 "Different secrets should produce different signatures"
             );
-            
+
             // handler1 的签名不能通过 handler2 的验证
             prop_assert!(
                 !handler2.verify_signature(&payload, &sig1),
                 "Signature from secret1 should not pass verification with secret2"
             );
-            
+
             // handler2 的签名不能通过 handler1 的验证
             prop_assert!(
                 !handler1.verify_signature(&payload, &sig2),
@@ -848,14 +867,14 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 9: Webhook 签名验证
             // **Validates: Requirements 9.1, 9.2**
-            
+
             let handler = WebhookHandler::new(secret, path);
-            
+
             // 多次计算签名
             let sig1 = handler.compute_signature(&payload);
             let sig2 = handler.compute_signature(&payload);
             let sig3 = handler.compute_signature(&payload);
-            
+
             // 所有签名应该相同
             prop_assert_eq!(
                 &sig1, &sig2,
@@ -879,24 +898,24 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 9: Webhook 签名验证
             // **Validates: Requirements 9.1, 9.2, 9.3, 9.5**
-            
+
             let handler = WebhookHandler::new(secret, path);
-            
+
             // 序列化请求为 JSON
             let body = serde_json::to_vec(&request).unwrap();
-            
+
             // 计算正确的签名
             let signature = handler.compute_signature(&body);
-            
+
             // 处理请求
             let result = handler.handle_request(&body, &signature);
-            
+
             // 应该成功触发
             prop_assert!(
                 result.is_triggered(),
                 "Valid request with valid signature should trigger"
             );
-            
+
             // 解析后的请求应该与原始请求一致
             if let WebhookResult::Triggered { request: parsed } = result {
                 prop_assert_eq!(
@@ -923,15 +942,15 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 9: Webhook 签名验证
             // **Validates: Requirements 9.1, 9.2, 9.5**
-            
+
             let handler = WebhookHandler::new(secret, path);
-            
+
             // 序列化请求为 JSON
             let body = serde_json::to_vec(&request).unwrap();
-            
+
             // 使用无效签名处理请求
             let result = handler.handle_request(&body, &invalid_sig);
-            
+
             // 应该返回 InvalidSignature
             prop_assert!(
                 result.is_invalid_signature(),
@@ -951,17 +970,17 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 9: Webhook 签名验证
             // **Validates: Requirements 9.1, 9.2**
-            
+
             let handler = WebhookHandler::new(secret, path);
             let signature = handler.compute_signature(&payload);
-            
+
             // SHA256 产生 32 字节 = 64 hex 字符
             prop_assert_eq!(
                 signature.len(), 64,
                 "Signature should be 64 hex characters (SHA256), got {} characters",
                 signature.len()
             );
-            
+
             // 验证是有效的 hex 字符串
             prop_assert!(
                 signature.chars().all(|c| c.is_ascii_hexdigit()),
@@ -980,16 +999,16 @@ mod tests {
         ) {
             // Feature: auto-reply-mechanism, Property 9: Webhook 签名验证
             // **Validates: Requirements 9.1, 9.2**
-            
+
             let handler = WebhookHandler::new(secret, path);
             let empty_payload: &[u8] = &[];
-            
+
             // 计算空 payload 的签名
             let signature = handler.compute_signature(empty_payload);
-            
+
             // 签名应该是有效的 64 字符 hex
             prop_assert_eq!(signature.len(), 64);
-            
+
             // 验证应该通过
             prop_assert!(
                 handler.verify_signature(empty_payload, &signature),

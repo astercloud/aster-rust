@@ -3,8 +3,6 @@
 //! 使用 proptest 进行属性测试，验证系统的正确性属性。
 //! 配置为 10 次迭代以加快测试速度。
 
-#![cfg(test)]
-
 use proptest::prelude::*;
 
 use super::groups::ToolGroups;
@@ -90,14 +88,14 @@ proptest! {
     #[test]
     fn prop_group_allow_expands_to_all_tools(group_name in arb_group_name()) {
         let groups = ToolGroups::default();
-        
+
         // 创建允许该分组的策略
         let policy = ToolPolicy::new(PolicyLayer::Profile)
             .with_allow(vec![group_name.clone()]);
-        
+
         // 展开分组
         let expanded = groups.expand_groups(&policy);
-        
+
         // 验证分组中的所有工具都在展开后的 allow 列表中
         if let Some(tools) = groups.get_group(&group_name) {
             for tool in tools {
@@ -114,14 +112,14 @@ proptest! {
     #[test]
     fn prop_group_deny_expands_to_all_tools(group_name in arb_group_name()) {
         let groups = ToolGroups::default();
-        
+
         // 创建拒绝该分组的策略
         let policy = ToolPolicy::new(PolicyLayer::Profile)
             .with_deny(vec![group_name.clone()]);
-        
+
         // 展开分组
         let expanded = groups.expand_groups(&policy);
-        
+
         // 验证分组中的所有工具都在展开后的 deny 列表中
         if let Some(tools) = groups.get_group(&group_name) {
             for tool in tools {
@@ -138,13 +136,13 @@ proptest! {
     #[test]
     fn prop_expanded_policy_has_no_group_refs(group_name in arb_group_name()) {
         let groups = ToolGroups::default();
-        
+
         let policy = ToolPolicy::new(PolicyLayer::Profile)
             .with_allow(vec![group_name.clone()])
             .with_deny(vec!["group:web".to_string()]);
-        
+
         let expanded = groups.expand_groups(&policy);
-        
+
         // 验证展开后的列表不包含已知分组引用
         for item in &expanded.allow {
             if groups.has_group(item) {
@@ -176,13 +174,13 @@ proptest! {
     ) {
         let mut groups = ToolGroups::new();
         let group_name = format!("group:{}", group_suffix);
-        
+
         // 注册自定义分组
         groups.register_group(&group_name, tools.clone());
-        
+
         // 验证分组存在
         prop_assert!(groups.has_group(&group_name));
-        
+
         // 验证工具列表一致
         let retrieved = groups.get_group(&group_name).unwrap();
         prop_assert_eq!(retrieved, &tools);
@@ -193,10 +191,10 @@ proptest! {
     fn prop_add_tool_to_group(tool_name in arb_tool_name()) {
         let mut groups = ToolGroups::default();
         let group = "group:fs";
-        
+
         // 添加工具
         groups.add_tool_to_group(group, tool_name.clone());
-        
+
         // 验证工具在分组中
         prop_assert!(groups.tool_in_group(&tool_name, group));
     }
@@ -205,13 +203,13 @@ proptest! {
     #[test]
     fn prop_remove_tool_from_group(group_name in arb_group_name()) {
         let mut groups = ToolGroups::default();
-        
+
         // 获取分组中的第一个工具
         if let Some(tools) = groups.get_group(&group_name).cloned() {
             if let Some(tool) = tools.first() {
                 // 移除工具
                 groups.remove_tool_from_group(&group_name, tool);
-                
+
                 // 验证工具不在分组中
                 prop_assert!(!groups.tool_in_group(tool, &group_name));
             }
@@ -273,10 +271,10 @@ proptest! {
     #[test]
     fn prop_profile_switch_immediate(profile in arb_profile()) {
         let mut manager = ProfileManager::new();
-        
+
         // 切换 Profile
         manager.set_profile(profile.clone());
-        
+
         // 验证切换立即生效
         prop_assert_eq!(manager.current_profile(), &profile);
     }
@@ -295,17 +293,17 @@ proptest! {
     #[test]
     fn prop_higher_layer_allow_overrides_lower_deny(tool in arb_tool_name()) {
         let mut merger = PolicyMerger::default();
-        
+
         // Global 层拒绝工具
         let global = ToolPolicy::new(PolicyLayer::Global)
             .with_deny(vec![tool.clone()]);
         merger.set_policy(PolicyLayer::Global, global);
-        
+
         // Session 层允许工具
         let session = ToolPolicy::new(PolicyLayer::Session)
             .with_allow(vec![tool.clone()]);
         merger.set_policy(PolicyLayer::Session, session);
-        
+
         // 验证工具被允许（Session 优先级更高）
         let decision = merger.is_tool_allowed(&tool);
         prop_assert!(decision.allowed, "Tool should be allowed by higher priority Session layer");
@@ -315,17 +313,17 @@ proptest! {
     #[test]
     fn prop_higher_layer_deny_overrides_lower_allow(tool in arb_tool_name()) {
         let mut merger = PolicyMerger::default();
-        
+
         // Profile 层允许工具
         let profile = ToolPolicy::new(PolicyLayer::Profile)
             .with_allow(vec![tool.clone()]);
         merger.set_policy(PolicyLayer::Profile, profile);
-        
+
         // Agent 层拒绝工具
         let agent = ToolPolicy::new(PolicyLayer::Agent)
             .with_deny(vec![tool.clone()]);
         merger.set_policy(PolicyLayer::Agent, agent);
-        
+
         // 验证工具被拒绝（Agent 优先级更高）
         let decision = merger.is_tool_allowed(&tool);
         prop_assert!(!decision.allowed, "Tool should be denied by higher priority Agent layer");
@@ -360,10 +358,10 @@ proptest! {
             .with_allow(allow)
             .with_deny(deny)
             .with_description("Test policy");
-        
+
         let json = serde_json::to_string(&policy).unwrap();
         let deserialized: ToolPolicy = serde_json::from_str(&json).unwrap();
-        
+
         prop_assert_eq!(policy, deserialized);
     }
 
@@ -372,7 +370,7 @@ proptest! {
     fn prop_tool_profile_roundtrip(profile in arb_profile()) {
         let json = serde_json::to_string(&profile).unwrap();
         let deserialized: ToolProfile = serde_json::from_str(&json).unwrap();
-        
+
         prop_assert_eq!(profile, deserialized);
     }
 
@@ -381,7 +379,7 @@ proptest! {
     fn prop_policy_layer_roundtrip(layer in arb_policy_layer()) {
         let json = serde_json::to_string(&layer).unwrap();
         let deserialized: PolicyLayer = serde_json::from_str(&json).unwrap();
-        
+
         prop_assert_eq!(layer, deserialized);
     }
 }
@@ -399,15 +397,15 @@ proptest! {
     #[test]
     fn prop_query_consistency(tool in arb_tool_name()) {
         let mut merger = PolicyMerger::default();
-        
+
         // 设置一些策略
         let profile = ToolPolicy::new(PolicyLayer::Profile)
             .with_allow(vec!["bash".to_string(), "file_read".to_string()]);
         merger.set_policy(PolicyLayer::Profile, profile);
-        
+
         let merged = merger.merge();
         let decision = merger.is_tool_allowed(&tool);
-        
+
         // 验证两种查询方式结果一致
         prop_assert_eq!(
             merged.is_allowed(&tool),
@@ -416,7 +414,6 @@ proptest! {
         );
     }
 }
-
 
 // =============================================================================
 // Property 8: 无效配置错误处理
@@ -442,7 +439,6 @@ proptest! {
         prop_assert!(result.is_err());
     }
 }
-
 
 // =============================================================================
 // Property 9: 向后兼容性

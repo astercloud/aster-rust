@@ -57,7 +57,6 @@ pub enum RejectionReason {
     TriggerDisabled,
 }
 
-
 /// 触发上下文
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TriggerContext {

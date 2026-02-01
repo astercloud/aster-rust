@@ -320,7 +320,6 @@ impl AutoReplyConfig {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -388,18 +387,23 @@ mod tests {
             // use_regex 设为 false 以避免无效正则表达式问题
             Just(false),
         )
-            .prop_map(|(patterns, case_insensitive, use_regex)| KeywordTriggerConfig {
-                patterns,
-                case_insensitive,
-                use_regex,
-            })
+            .prop_map(
+                |(patterns, case_insensitive, use_regex)| KeywordTriggerConfig {
+                    patterns,
+                    case_insensitive,
+                    use_regex,
+                },
+            )
     }
 
     /// 生成 ScheduleType
     fn arb_schedule_type() -> impl Strategy<Value = ScheduleType> {
         prop_oneof![
             // Cron 表达式（使用简单有效的 cron 格式）
-            (Just("0 * * * *".to_string()), proptest::option::of("[A-Za-z/_]{1,20}"))
+            (
+                Just("0 * * * *".to_string()),
+                proptest::option::of("[A-Za-z/_]{1,20}")
+            )
                 .prop_map(|(expr, timezone)| ScheduleType::Cron { expr, timezone }),
             // At 一次性定时
             (0i64..=i64::MAX).prop_map(|at_ms| ScheduleType::At { at_ms }),
@@ -416,7 +420,7 @@ mod tests {
     /// 生成 WebhookTriggerConfig
     fn arb_webhook_config() -> impl Strategy<Value = WebhookTriggerConfig> {
         (
-            "[a-zA-Z0-9]{16,32}".prop_map(|s| s), // secret
+            "[a-zA-Z0-9]{16,32}".prop_map(|s| s),     // secret
             "/[a-z][a-z0-9/-]{0,30}".prop_map(|s| s), // path
         )
             .prop_map(|(secret, path)| WebhookTriggerConfig { secret, path })
@@ -427,23 +431,20 @@ mod tests {
         prop_oneof![
             Just((TriggerType::Mention, TriggerConfig::Mention)),
             Just((TriggerType::DirectMessage, TriggerConfig::DirectMessage)),
-            arb_keyword_config()
-                .prop_map(|c| (TriggerType::Keyword, TriggerConfig::Keyword(c))),
-            arb_schedule_config()
-                .prop_map(|c| (TriggerType::Schedule, TriggerConfig::Schedule(c))),
-            arb_webhook_config()
-                .prop_map(|c| (TriggerType::Webhook, TriggerConfig::Webhook(c))),
+            arb_keyword_config().prop_map(|c| (TriggerType::Keyword, TriggerConfig::Keyword(c))),
+            arb_schedule_config().prop_map(|c| (TriggerType::Schedule, TriggerConfig::Schedule(c))),
+            arb_webhook_config().prop_map(|c| (TriggerType::Webhook, TriggerConfig::Webhook(c))),
         ]
     }
 
     /// 生成 AutoReplyTrigger
     fn arb_trigger() -> impl Strategy<Value = AutoReplyTrigger> {
         (
-            arb_identifier(),                           // id
-            "[a-zA-Z0-9 _-]{1,50}".prop_map(|s| s),    // name
-            any::<bool>(),                              // enabled
-            arb_trigger_config(),                       // (trigger_type, config)
-            0u32..=1000u32,                             // priority
+            arb_identifier(),                            // id
+            "[a-zA-Z0-9 _-]{1,50}".prop_map(|s| s),      // name
+            any::<bool>(),                               // enabled
+            arb_trigger_config(),                        // (trigger_type, config)
+            0u32..=1000u32,                              // priority
             proptest::option::of("[a-zA-Z0-9 ]{0,100}"), // response_template
         )
             .prop_map(
@@ -482,10 +483,10 @@ mod tests {
     /// 生成 GroupActivation
     fn arb_group_activation() -> impl Strategy<Value = GroupActivation> {
         (
-            arb_identifier(),                                    // group_id
-            any::<bool>(),                                       // enabled
-            any::<bool>(),                                       // require_mention
-            proptest::option::of(0u64..=3600u64),                // cooldown_seconds
+            arb_identifier(),                                                 // group_id
+            any::<bool>(),                                                    // enabled
+            any::<bool>(),                                                    // require_mention
+            proptest::option::of(0u64..=3600u64),                             // cooldown_seconds
             proptest::option::of(prop::collection::vec(arb_user_id(), 0..5)), // whitelist
         )
             .prop_map(
@@ -522,11 +523,11 @@ mod tests {
     /// 生成 AutoReplyConfig
     fn arb_config() -> impl Strategy<Value = AutoReplyConfig> {
         (
-            any::<bool>(),                                       // enabled
-            arb_triggers(),                                      // triggers
-            prop::collection::vec(arb_user_id(), 0..10),         // whitelist
-            0u64..=3600u64,                                      // default_cooldown_seconds
-            arb_group_activations(),                             // group_activations
+            any::<bool>(),                               // enabled
+            arb_triggers(),                              // triggers
+            prop::collection::vec(arb_user_id(), 0..10), // whitelist
+            0u64..=3600u64,                              // default_cooldown_seconds
+            arb_group_activations(),                     // group_activations
         )
             .prop_map(
                 |(enabled, triggers, whitelist, default_cooldown_seconds, group_activations)| {
@@ -962,14 +963,8 @@ mod tests {
     #[test]
     fn test_validate_valid_config() {
         let config = AutoReplyConfig {
-            triggers: vec![
-                create_test_trigger("t1"),
-                create_test_trigger("t2"),
-            ],
-            group_activations: vec![
-                GroupActivation::new("g1"),
-                GroupActivation::new("g2"),
-            ],
+            triggers: vec![create_test_trigger("t1"), create_test_trigger("t2")],
+            group_activations: vec![GroupActivation::new("g1"), GroupActivation::new("g2")],
             ..Default::default()
         };
 
@@ -1048,10 +1043,7 @@ mod tests {
     #[test]
     fn test_group_count() {
         let config = AutoReplyConfig {
-            group_activations: vec![
-                GroupActivation::new("g1"),
-                GroupActivation::new("g2"),
-            ],
+            group_activations: vec![GroupActivation::new("g1"), GroupActivation::new("g2")],
             ..Default::default()
         };
 
@@ -1098,9 +1090,7 @@ mod tests {
             triggers: vec![create_test_trigger("t1")],
             whitelist: vec!["user1".to_string(), "user2".to_string()],
             default_cooldown_seconds: 90,
-            group_activations: vec![
-                GroupActivation::new("g1").with_require_mention(true),
-            ],
+            group_activations: vec![GroupActivation::new("g1").with_require_mention(true)],
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -1109,8 +1099,14 @@ mod tests {
         assert_eq!(config.enabled, parsed.enabled);
         assert_eq!(config.triggers.len(), parsed.triggers.len());
         assert_eq!(config.whitelist, parsed.whitelist);
-        assert_eq!(config.default_cooldown_seconds, parsed.default_cooldown_seconds);
-        assert_eq!(config.group_activations.len(), parsed.group_activations.len());
+        assert_eq!(
+            config.default_cooldown_seconds,
+            parsed.default_cooldown_seconds
+        );
+        assert_eq!(
+            config.group_activations.len(),
+            parsed.group_activations.len()
+        );
     }
 
     /// 测试默认值反序列化

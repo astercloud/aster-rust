@@ -23,8 +23,7 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 use super::types::{
-    IsolationConfig, JobStatus, PostToMainMode,
-    ScheduledJob as NewScheduledJob, SessionTarget,
+    IsolationConfig, JobStatus, PostToMainMode, ScheduledJob as NewScheduledJob, SessionTarget,
 };
 
 // ============================================================================
@@ -304,7 +303,6 @@ pub trait TaskExecutor: Send + Sync {
     fn name(&self) -> &str;
 }
 
-
 // ============================================================================
 // MainSessionExecutor (Task 7.2)
 // ============================================================================
@@ -480,7 +478,10 @@ impl IsolatedSessionExecutor {
                     if result.status.is_ok() {
                         "Task completed successfully".to_string()
                     } else if result.status.is_error() {
-                        format!("Task failed: {}", result.error.as_deref().unwrap_or("Unknown error"))
+                        format!(
+                            "Task failed: {}",
+                            result.error.as_deref().unwrap_or("Unknown error")
+                        )
                     } else {
                         "Task skipped".to_string()
                     }
@@ -610,7 +611,6 @@ impl ExecutorFactory {
         Self::create(&job.session_target)
     }
 }
-
 
 // ============================================================================
 // 单元测试
@@ -948,7 +948,6 @@ mod tests {
     }
 }
 
-
 // ============================================================================
 // 属性测试 (Property-Based Tests) - Task 7.4
 // ============================================================================
@@ -970,10 +969,7 @@ mod property_tests {
 
     /// 生成 SessionTarget
     fn arb_session_target() -> impl Strategy<Value = SessionTarget> {
-        prop_oneof![
-            Just(SessionTarget::Main),
-            Just(SessionTarget::Isolated),
-        ]
+        prop_oneof![Just(SessionTarget::Main), Just(SessionTarget::Isolated),]
     }
 
     /// 生成 IsolationConfig
@@ -983,19 +979,17 @@ mod property_tests {
             (
                 proptest::bool::ANY,
                 proptest::option::of("[A-Za-z\\[\\]]{1,10}"),
-                prop_oneof![
-                    Just(PostToMainMode::Summary),
-                    Just(PostToMainMode::Full),
-                ],
+                prop_oneof![Just(PostToMainMode::Summary), Just(PostToMainMode::Full),],
                 100usize..10000usize,
-            ).prop_map(|(enabled, prefix, mode, max_chars)| {
-                Some(IsolationConfig {
-                    enabled,
-                    post_to_main_prefix: prefix,
-                    post_to_main_mode: mode,
-                    post_to_main_max_chars: max_chars,
-                })
-            }),
+            )
+                .prop_map(|(enabled, prefix, mode, max_chars)| {
+                    Some(IsolationConfig {
+                        enabled,
+                        post_to_main_prefix: prefix,
+                        post_to_main_mode: mode,
+                        post_to_main_max_chars: max_chars,
+                    })
+                }),
         ]
     }
 
@@ -1006,8 +1000,8 @@ mod property_tests {
             proptest::bool::ANY,
             arb_session_target(),
             arb_isolation_config(),
-        ).prop_map(|(id, enabled, target, isolation)| {
-            NewScheduledJob {
+        )
+            .prop_map(|(id, enabled, target, isolation)| NewScheduledJob {
                 id: id.clone(),
                 agent_id: None,
                 name: id,
@@ -1028,8 +1022,7 @@ mod property_tests {
                 state: JobState::default(),
                 source: None,
                 cron: None,
-            }
-        })
+            })
     }
 
     // ------------------------------------------------------------------------

@@ -282,9 +282,9 @@ impl GroupActivation {
     /// assert_eq!(with_whitelist.is_user_whitelisted("user2"), Some(false));
     /// ```
     pub fn is_user_whitelisted(&self, user_id: &str) -> Option<bool> {
-        self.whitelist.as_ref().map(|list| {
-            list.iter().any(|u| u == user_id)
-        })
+        self.whitelist
+            .as_ref()
+            .map(|list| list.iter().any(|u| u == user_id))
     }
 
     /// 获取有效的冷却时间
@@ -367,7 +367,9 @@ impl std::fmt::Display for GroupRejectionReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GroupRejectionReason::GroupDisabled => write!(f, "Group has auto-reply disabled"),
-            GroupRejectionReason::RequiresMention => write!(f, "Group requires @mention to trigger"),
+            GroupRejectionReason::RequiresMention => {
+                write!(f, "Group requires @mention to trigger")
+            }
         }
     }
 }
@@ -402,7 +404,8 @@ impl GroupActivationManager {
 
     /// 设置群组配置
     pub fn set(&mut self, activation: GroupActivation) {
-        self.activations.insert(activation.group_id.clone(), activation);
+        self.activations
+            .insert(activation.group_id.clone(), activation);
     }
 
     /// 获取群组配置
@@ -433,7 +436,11 @@ impl GroupActivationManager {
     /// 检查群组消息是否应该触发
     ///
     /// 如果群组没有配置，默认允许触发。
-    pub fn should_trigger(&self, group_id: &str, mentions_bot: bool) -> Result<(), GroupRejectionReason> {
+    pub fn should_trigger(
+        &self,
+        group_id: &str,
+        mentions_bot: bool,
+    ) -> Result<(), GroupRejectionReason> {
         match self.get(group_id) {
             Some(activation) => activation.should_trigger(mentions_bot),
             None => Ok(()), // 未配置的群组默认允许
@@ -453,7 +460,8 @@ impl GroupActivationManager {
     ///
     /// 如果群组没有配置或没有自定义白名单，返回 None。
     pub fn is_user_whitelisted(&self, group_id: &str, user_id: &str) -> Option<bool> {
-        self.get(group_id).and_then(|a| a.is_user_whitelisted(user_id))
+        self.get(group_id)
+            .and_then(|a| a.is_user_whitelisted(user_id))
     }
 }
 
@@ -469,7 +477,7 @@ mod tests {
     #[test]
     fn test_new_group_activation() {
         let activation = GroupActivation::new("group-123");
-        
+
         assert_eq!(activation.group_id, "group-123");
         assert!(activation.enabled);
         assert!(!activation.require_mention);
@@ -482,7 +490,7 @@ mod tests {
     #[test]
     fn test_disabled_group_activation() {
         let activation = GroupActivation::disabled("group-123");
-        
+
         assert_eq!(activation.group_id, "group-123");
         assert!(!activation.enabled);
     }
@@ -495,7 +503,7 @@ mod tests {
             .with_require_mention(true)
             .with_cooldown(120)
             .with_whitelist(vec!["user1".to_string(), "user2".to_string()]);
-        
+
         assert!(activation.enabled);
         assert!(activation.require_mention);
         assert_eq!(activation.cooldown_seconds, Some(120));
@@ -507,7 +515,7 @@ mod tests {
     #[test]
     fn test_should_trigger_disabled_group() {
         let activation = GroupActivation::disabled("group-123");
-        
+
         // 禁用的群组应该拒绝所有触发
         assert_eq!(
             activation.should_trigger(true),
@@ -524,13 +532,13 @@ mod tests {
     #[test]
     fn test_should_trigger_require_mention() {
         let activation = GroupActivation::new("group-123").with_require_mention(true);
-        
+
         // 没有 @提及应该被拒绝
         assert_eq!(
             activation.should_trigger(false),
             Err(GroupRejectionReason::RequiresMention)
         );
-        
+
         // 有 @提及应该允许
         assert_eq!(activation.should_trigger(true), Ok(()));
     }
@@ -539,7 +547,7 @@ mod tests {
     #[test]
     fn test_should_trigger_no_require_mention() {
         let activation = GroupActivation::new("group-123");
-        
+
         // 不要求 @提及时，两种情况都应该允许
         assert_eq!(activation.should_trigger(false), Ok(()));
         assert_eq!(activation.should_trigger(true), Ok(()));
@@ -550,7 +558,7 @@ mod tests {
     #[test]
     fn test_is_user_whitelisted_no_whitelist() {
         let activation = GroupActivation::new("group-123");
-        
+
         // 没有白名单时返回 None
         assert_eq!(activation.is_user_whitelisted("any_user"), None);
     }
@@ -561,11 +569,11 @@ mod tests {
     fn test_is_user_whitelisted_with_whitelist() {
         let activation = GroupActivation::new("group-123")
             .with_whitelist(vec!["user1".to_string(), "user2".to_string()]);
-        
+
         // 白名单中的用户
         assert_eq!(activation.is_user_whitelisted("user1"), Some(true));
         assert_eq!(activation.is_user_whitelisted("user2"), Some(true));
-        
+
         // 不在白名单中的用户
         assert_eq!(activation.is_user_whitelisted("user3"), Some(false));
     }
@@ -577,7 +585,7 @@ mod tests {
         // 没有自定义冷却时间
         let no_cooldown = GroupActivation::new("group-123");
         assert_eq!(no_cooldown.effective_cooldown(60), 60);
-        
+
         // 有自定义冷却时间
         let with_cooldown = GroupActivation::new("group-456").with_cooldown(120);
         assert_eq!(with_cooldown.effective_cooldown(60), 120);
@@ -590,7 +598,7 @@ mod tests {
             .with_require_mention(true)
             .with_cooldown(120)
             .with_whitelist(vec!["user1".to_string()]);
-        
+
         assert_eq!(activation.group_id(), "group-123");
         assert!(activation.is_enabled());
         assert!(activation.requires_mention());
@@ -605,10 +613,10 @@ mod tests {
             .with_require_mention(true)
             .with_cooldown(120)
             .with_whitelist(vec!["user1".to_string()]);
-        
+
         let json = serde_json::to_string(&activation).unwrap();
         let parsed: GroupActivation = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(activation, parsed);
     }
 
@@ -617,7 +625,7 @@ mod tests {
     fn test_deserialization_defaults() {
         let json = r#"{"group_id": "group-123"}"#;
         let activation: GroupActivation = serde_json::from_str(json).unwrap();
-        
+
         assert_eq!(activation.group_id, "group-123");
         assert!(activation.enabled); // 默认 true
         assert!(!activation.require_mention); // 默认 false
@@ -659,7 +667,7 @@ mod tests {
             GroupActivation::new("group-2"),
         ];
         let manager = GroupActivationManager::from_activations(activations);
-        
+
         assert_eq!(manager.len(), 2);
         assert!(manager.get("group-1").is_some());
         assert!(manager.get("group-2").is_some());
@@ -668,9 +676,9 @@ mod tests {
     #[test]
     fn test_manager_set_and_get() {
         let mut manager = GroupActivationManager::new();
-        
+
         manager.set(GroupActivation::new("group-123").with_require_mention(true));
-        
+
         let activation = manager.get("group-123").unwrap();
         assert!(activation.require_mention);
     }
@@ -679,7 +687,7 @@ mod tests {
     fn test_manager_remove() {
         let mut manager = GroupActivationManager::new();
         manager.set(GroupActivation::new("group-123"));
-        
+
         let removed = manager.remove("group-123");
         assert!(removed.is_some());
         assert!(manager.get("group-123").is_none());
@@ -690,20 +698,20 @@ mod tests {
         let mut manager = GroupActivationManager::new();
         manager.set(GroupActivation::disabled("disabled-group"));
         manager.set(GroupActivation::new("mention-group").with_require_mention(true));
-        
+
         // 禁用的群组
         assert_eq!(
             manager.should_trigger("disabled-group", true),
             Err(GroupRejectionReason::GroupDisabled)
         );
-        
+
         // 要求 @提及的群组
         assert_eq!(
             manager.should_trigger("mention-group", false),
             Err(GroupRejectionReason::RequiresMention)
         );
         assert_eq!(manager.should_trigger("mention-group", true), Ok(()));
-        
+
         // 未配置的群组默认允许
         assert_eq!(manager.should_trigger("unknown-group", false), Ok(()));
     }
@@ -712,10 +720,10 @@ mod tests {
     fn test_manager_effective_cooldown() {
         let mut manager = GroupActivationManager::new();
         manager.set(GroupActivation::new("group-123").with_cooldown(120));
-        
+
         // 有自定义冷却时间的群组
         assert_eq!(manager.effective_cooldown("group-123", 60), 120);
-        
+
         // 未配置的群组使用默认值
         assert_eq!(manager.effective_cooldown("unknown-group", 60), 60);
     }
@@ -723,16 +731,22 @@ mod tests {
     #[test]
     fn test_manager_is_user_whitelisted() {
         let mut manager = GroupActivationManager::new();
-        manager.set(
-            GroupActivation::new("group-123")
-                .with_whitelist(vec!["user1".to_string()])
-        );
-        
+        manager.set(GroupActivation::new("group-123").with_whitelist(vec!["user1".to_string()]));
+
         // 有白名单的群组
-        assert_eq!(manager.is_user_whitelisted("group-123", "user1"), Some(true));
-        assert_eq!(manager.is_user_whitelisted("group-123", "user2"), Some(false));
-        
+        assert_eq!(
+            manager.is_user_whitelisted("group-123", "user1"),
+            Some(true)
+        );
+        assert_eq!(
+            manager.is_user_whitelisted("group-123", "user2"),
+            Some(false)
+        );
+
         // 未配置的群组
-        assert_eq!(manager.is_user_whitelisted("unknown-group", "any_user"), None);
+        assert_eq!(
+            manager.is_user_whitelisted("unknown-group", "any_user"),
+            None
+        );
     }
 }
