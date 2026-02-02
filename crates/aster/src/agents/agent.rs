@@ -44,7 +44,7 @@ use crate::recipe::{Author, Recipe, Response, Settings, SubRecipe};
 use crate::scheduler_trait::SchedulerTrait;
 use crate::security::security_inspector::SecurityInspector;
 use crate::session::extension_data::{EnabledExtensionsState, ExtensionState};
-use crate::session::{Session, SessionManager, SessionType};
+use crate::session::{Session, SessionManager, SessionStore, SessionType};
 use crate::tool_inspection::ToolInspectionManager;
 use crate::tool_monitor::RepetitionInspector;
 use crate::tools::{
@@ -104,6 +104,12 @@ pub struct Agent {
     pub(super) tool_registry: Arc<RwLock<ToolRegistry>>,
     /// Shared file read history for file tools
     pub(super) file_read_history: SharedFileReadHistory,
+
+    /// 可选的 session 存储
+    ///
+    /// 如果设置，Agent 会使用此存储保存消息。
+    /// 如果未设置，会回退到全局 SessionManager（向后兼容）。
+    pub(super) session_store: Option<Arc<dyn SessionStore>>,
 }
 
 #[derive(Clone, Debug)]
@@ -183,7 +189,28 @@ impl Agent {
             tool_inspection_manager: Self::create_default_tool_inspection_manager(),
             tool_registry: Arc::new(RwLock::new(tool_registry)),
             file_read_history,
+            session_store: None, // 默认使用全局 SessionManager
         }
+    }
+
+    /// 设置自定义 session 存储
+    ///
+    /// 允许应用层注入自己的存储实现，而不是使用默认的 SQLite 存储。
+    /// 如果设置为 None，会回退到全局 SessionManager。
+    ///
+    /// # Example
+    /// ```ignore
+    /// let store = Arc::new(MyCustomStore::new());
+    /// let agent = Agent::new().with_session_store(store);
+    /// ```
+    pub fn with_session_store(mut self, store: Arc<dyn SessionStore>) -> Self {
+        self.session_store = Some(store);
+        self
+    }
+
+    /// 获取当前的 session 存储引用
+    pub fn session_store(&self) -> Option<&Arc<dyn SessionStore>> {
+        self.session_store.as_ref()
     }
 
     /// Create a new Agent with custom tool registration configuration
@@ -221,6 +248,7 @@ impl Agent {
             tool_inspection_manager: Self::create_default_tool_inspection_manager(),
             tool_registry: Arc::new(RwLock::new(tool_registry)),
             file_read_history,
+            session_store: None,
         }
     }
 
@@ -286,6 +314,76 @@ impl Agent {
         tool_inspection_manager
     }
 
+    // ========== Session 存储辅助方法 ==========
+    // 这些方法会优先使用注入的 session_store，如果没有则回退到全局 SessionManager
+
+    /// 添加消息到 session
+    async fn store_add_message(&self, session_id: &str, message: &Message) -> Result<()> {
+        if let Some(store) = &self.session_store {
+            store.add_message(session_id, message).await
+        } else {
+            SessionManager::add_message(session_id, message).await
+        }
+    }
+
+    /// 获取 session
+    async fn store_get_session(&self, session_id: &str, include_messages: bool) -> Result<Session> {
+        if let Some(store) = &self.session_store {
+            store.get_session(session_id, include_messages).await
+        } else {
+            SessionManager::get_session(session_id, include_messages).await
+        }
+    }
+
+    /// 替换整个对话历史
+    async fn store_replace_conversation(
+        &self,
+        session_id: &str,
+        conversation: &Conversation,
+    ) -> Result<()> {
+        if let Some(store) = &self.session_store {
+            store.replace_conversation(session_id, conversation).await
+        } else {
+            SessionManager::replace_conversation(session_id, conversation).await
+        }
+    }
+
+    /// 更新 session 扩展数据
+    async fn store_update_extension_data(
+        &self,
+        session_id: &str,
+        extension_data: crate::session::ExtensionData,
+    ) -> Result<()> {
+        if let Some(store) = &self.session_store {
+            store.update_extension_data(session_id, extension_data).await
+        } else {
+            SessionManager::update_session(session_id)
+                .extension_data(extension_data)
+                .apply()
+                .await
+        }
+    }
+
+    /// 更新 session 的 provider 和 model 配置
+    async fn store_update_provider_config(
+        &self,
+        session_id: &str,
+        provider_name: String,
+        model_config: crate::model::ModelConfig,
+    ) -> Result<()> {
+        if let Some(store) = &self.session_store {
+            store.update_provider_config(session_id, Some(provider_name), Some(model_config)).await
+        } else {
+            SessionManager::update_session(session_id)
+                .provider_name(provider_name)
+                .model_config(model_config)
+                .apply()
+                .await
+        }
+    }
+
+    // ========== End Session 存储辅助方法 ==========
+
     /// Reset the retry attempts counter to 0
     pub async fn reset_retry_attempts(&self) {
         self.retry_manager.reset_attempts().await;
@@ -324,11 +422,13 @@ impl Agent {
             | RetryResult::SuccessChecksPassed => Ok(false),
         }
     }
-    async fn drain_elicitation_messages(session_id: &str) -> Vec<Message> {
+
+    /// 排空 elicitation 消息队列并保存到 session
+    async fn drain_elicitation_messages(&self, session_id: &str) -> Vec<Message> {
         let mut messages = Vec::new();
         let mut elicitation_rx = ActionRequiredManager::global().request_rx.lock().await;
         while let Ok(elicitation_message) = elicitation_rx.try_recv() {
-            if let Err(e) = SessionManager::add_message(session_id, &elicitation_message).await {
+            if let Err(e) = self.store_add_message(session_id, &elicitation_message).await {
                 warn!("Failed to save elicitation message to session: {}", e);
             }
             messages.push(elicitation_message);
@@ -644,16 +744,14 @@ impl Agent {
 
         let extensions_state = EnabledExtensionsState::new(extension_configs);
 
-        let mut session_data = SessionManager::get_session(&session.id, false).await?;
+        let mut session_data = self.store_get_session(&session.id, false).await?;
 
         if let Err(e) = extensions_state.to_extension_data(&mut session_data.extension_data) {
             warn!("Failed to serialize extension state: {}", e);
             return Err(anyhow!("Extension state serialization failed: {}", e));
         }
 
-        SessionManager::update_session(&session.id)
-            .extension_data(session_data.extension_data)
-            .apply()
+        self.store_update_extension_data(&session.id, session_data.extension_data)
             .await?;
 
         Ok(())
@@ -712,7 +810,7 @@ impl Agent {
         }
         if let Some(ref session_id) = self.extension_manager.get_context().await.session_id {
             if matches!(
-                SessionManager::get_session(session_id, false)
+                self.store_get_session(session_id, false)
                     .await
                     .ok()
                     .map(|session| session.session_type),
@@ -810,7 +908,7 @@ impl Agent {
                             ))
                         })));
                     }
-                    SessionManager::add_message(&session_config.id, &user_message).await?;
+                    self.store_add_message(&session_config.id, &user_message).await?;
                     return Ok(Box::pin(futures::stream::empty()));
                 }
             }
@@ -842,12 +940,12 @@ impl Agent {
                 })));
             }
             Ok(Some(response)) if response.role == rmcp::model::Role::Assistant => {
-                SessionManager::add_message(
+                self.store_add_message(
                     &session_config.id,
                     &user_message.clone().with_visibility(true, false),
                 )
                 .await?;
-                SessionManager::add_message(
+                self.store_add_message(
                     &session_config.id,
                     &response.clone().with_visibility(true, false),
                 )
@@ -858,14 +956,21 @@ impl Agent {
                     .contains(&message_text.trim())
                     || message_text.trim() == "/clear";
 
+                // 克隆 session_store 引用供 async_stream 宏内部使用
+                let session_store_clone = self.session_store.clone();
+                let session_id_clone = session_config.id.clone();
+
                 return Ok(Box::pin(async_stream::try_stream! {
                     yield AgentEvent::Message(user_message);
                     yield AgentEvent::Message(response);
 
                     // After commands that modify history, notify UI that history was replaced
                     if modifies_history {
-                        let updated_session = SessionManager::get_session(&session_config.id, true)
-                            .await
+                        let updated_session = if let Some(store) = &session_store_clone {
+                            store.get_session(&session_id_clone, true).await
+                        } else {
+                            SessionManager::get_session(&session_id_clone, true).await
+                        }
                             .map_err(|e| anyhow!("Failed to fetch updated session: {}", e))?;
                         let updated_conversation = updated_session
                             .conversation
@@ -875,22 +980,22 @@ impl Agent {
                 }));
             }
             Ok(Some(resolved_message)) => {
-                SessionManager::add_message(
+                self.store_add_message(
                     &session_config.id,
                     &user_message.clone().with_visibility(true, false),
                 )
                 .await?;
-                SessionManager::add_message(
+                self.store_add_message(
                     &session_config.id,
                     &resolved_message.clone().with_visibility(false, true),
                 )
                 .await?;
             }
             Ok(None) => {
-                SessionManager::add_message(&session_config.id, &user_message).await?;
+                self.store_add_message(&session_config.id, &user_message).await?;
             }
         }
-        let session = SessionManager::get_session(&session_config.id, true).await?;
+        let session = self.store_get_session(&session_config.id, true).await?;
         let conversation = session
             .conversation
             .clone()
@@ -937,7 +1042,7 @@ impl Agent {
 
                 match compact_messages(self.provider().await?.as_ref(), &conversation_to_compact, false).await {
                     Ok((compacted_conversation, summarization_usage)) => {
-                        SessionManager::replace_conversation(&session_config.id, &compacted_conversation).await?;
+                        self.store_replace_conversation(&session_config.id, &compacted_conversation).await?;
                         Self::update_session_metrics(&session_config, &summarization_usage, true).await?;
 
                         yield AgentEvent::HistoryReplaced(compacted_conversation.clone());
@@ -1214,7 +1319,7 @@ impl Agent {
                                             break;
                                         }
 
-                                        for msg in Self::drain_elicitation_messages(&session_config.id).await {
+                                        for msg in self.drain_elicitation_messages(&session_config.id).await {
                                             yield AgentEvent::Message(msg);
                                         }
 
@@ -1238,7 +1343,7 @@ impl Agent {
                                     }
 
                                     // check for remaining elicitation messages after all tools complete
-                                    for msg in Self::drain_elicitation_messages(&session_config.id).await {
+                                    for msg in self.drain_elicitation_messages(&session_config.id).await {
                                         yield AgentEvent::Message(msg);
                                     }
 
@@ -1316,7 +1421,7 @@ impl Agent {
 
                             match compact_messages(self.provider().await?.as_ref(), &conversation, false).await {
                                 Ok((compacted_conversation, usage)) => {
-                                    SessionManager::replace_conversation(&session_config.id, &compacted_conversation).await?;
+                                    self.store_replace_conversation(&session_config.id, &compacted_conversation).await?;
                                     Self::update_session_metrics(&session_config, &usage, true).await?;
                                     conversation = compacted_conversation;
                                     did_recovery_compact_this_iteration = true;
@@ -1385,7 +1490,7 @@ impl Agent {
                 }
 
                 for msg in &messages_to_add {
-                    SessionManager::add_message(&session_config.id, msg).await?;
+                    self.store_add_message(&session_config.id, msg).await?;
                 }
                 conversation.extend(messages_to_add);
                 if exit_chat {
@@ -1410,12 +1515,13 @@ impl Agent {
         let mut current_provider = self.provider.lock().await;
         *current_provider = Some(provider.clone());
 
-        SessionManager::update_session(session_id)
-            .provider_name(provider.get_name())
-            .model_config(provider.get_model_config())
-            .apply()
-            .await
-            .context("Failed to persist provider config to session")
+        self.store_update_provider_config(
+            session_id,
+            provider.get_name().to_string(),
+            provider.get_model_config(),
+        )
+        .await
+        .context("Failed to persist provider config to session")
     }
 
     /// Override the system prompt with a custom template
