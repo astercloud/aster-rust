@@ -82,16 +82,7 @@ pub trait SessionStore: Send + Sync {
     ) -> Result<()>;
 
     /// 更新 session token 统计
-    async fn update_token_stats(
-        &self,
-        session_id: &str,
-        total_tokens: Option<i32>,
-        input_tokens: Option<i32>,
-        output_tokens: Option<i32>,
-        accumulated_total: Option<i32>,
-        accumulated_input: Option<i32>,
-        accumulated_output: Option<i32>,
-    ) -> Result<()>;
+    async fn update_token_stats(&self, session_id: &str, stats: TokenStatsUpdate) -> Result<()>;
 
     /// 更新 session 的 provider 和 model 配置
     async fn update_provider_config(
@@ -129,6 +120,17 @@ pub struct ChatHistoryMatch {
     pub message_content: String,
     pub timestamp: chrono::DateTime<chrono::Utc>,
     pub relevance_score: f32,
+}
+
+/// Token 统计更新参数
+#[derive(Debug, Clone, Default)]
+pub struct TokenStatsUpdate {
+    pub total_tokens: Option<i32>,
+    pub input_tokens: Option<i32>,
+    pub output_tokens: Option<i32>,
+    pub accumulated_total: Option<i32>,
+    pub accumulated_input: Option<i32>,
+    pub accumulated_output: Option<i32>,
 }
 
 /// 空存储实现（不保存任何数据）
@@ -237,16 +239,7 @@ impl SessionStore for NoopSessionStore {
         Ok(())
     }
 
-    async fn update_token_stats(
-        &self,
-        _session_id: &str,
-        _total_tokens: Option<i32>,
-        _input_tokens: Option<i32>,
-        _output_tokens: Option<i32>,
-        _accumulated_total: Option<i32>,
-        _accumulated_input: Option<i32>,
-        _accumulated_output: Option<i32>,
-    ) -> Result<()> {
+    async fn update_token_stats(&self, _session_id: &str, _stats: TokenStatsUpdate) -> Result<()> {
         Ok(())
     }
 

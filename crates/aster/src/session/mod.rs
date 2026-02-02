@@ -38,7 +38,7 @@ mod store;
 // 导出存储抽象
 pub use store::{
     get_global_session_store, is_global_session_store_set, set_global_session_store,
-    ChatHistoryMatch, NoopSessionStore, SessionStore,
+    ChatHistoryMatch, NoopSessionStore, SessionStore, TokenStatsUpdate,
 };
 
 // 导出现有功能（向后兼容）
