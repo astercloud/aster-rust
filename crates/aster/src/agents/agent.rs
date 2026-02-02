@@ -355,7 +355,9 @@ impl Agent {
         extension_data: crate::session::ExtensionData,
     ) -> Result<()> {
         if let Some(store) = &self.session_store {
-            store.update_extension_data(session_id, extension_data).await
+            store
+                .update_extension_data(session_id, extension_data)
+                .await
         } else {
             SessionManager::update_session(session_id)
                 .extension_data(extension_data)
@@ -372,7 +374,9 @@ impl Agent {
         model_config: crate::model::ModelConfig,
     ) -> Result<()> {
         if let Some(store) = &self.session_store {
-            store.update_provider_config(session_id, Some(provider_name), Some(model_config)).await
+            store
+                .update_provider_config(session_id, Some(provider_name), Some(model_config))
+                .await
         } else {
             SessionManager::update_session(session_id)
                 .provider_name(provider_name)
@@ -428,7 +432,10 @@ impl Agent {
         let mut messages = Vec::new();
         let mut elicitation_rx = ActionRequiredManager::global().request_rx.lock().await;
         while let Ok(elicitation_message) = elicitation_rx.try_recv() {
-            if let Err(e) = self.store_add_message(session_id, &elicitation_message).await {
+            if let Err(e) = self
+                .store_add_message(session_id, &elicitation_message)
+                .await
+            {
                 warn!("Failed to save elicitation message to session: {}", e);
             }
             messages.push(elicitation_message);
@@ -908,7 +915,8 @@ impl Agent {
                             ))
                         })));
                     }
-                    self.store_add_message(&session_config.id, &user_message).await?;
+                    self.store_add_message(&session_config.id, &user_message)
+                        .await?;
                     return Ok(Box::pin(futures::stream::empty()));
                 }
             }
@@ -992,7 +1000,8 @@ impl Agent {
                 .await?;
             }
             Ok(None) => {
-                self.store_add_message(&session_config.id, &user_message).await?;
+                self.store_add_message(&session_config.id, &user_message)
+                    .await?;
             }
         }
         let session = self.store_get_session(&session_config.id, true).await?;
