@@ -7,6 +7,7 @@
 //! - Tool output compression
 //! - File content compression
 //! - Incremental compression on message addition
+//! - Progressive pruning based on context usage
 //!
 //! # Example
 //!
@@ -17,8 +18,9 @@
 //! let compressed = MessageCompressor::compress_code_block(code, 50);
 //! ```
 
+use crate::context::pruner::ProgressivePruner;
 use crate::context::token_estimator::TokenEstimator;
-use crate::context::types::{CodeBlock, CompressionConfig, CompressionResult};
+use crate::context::types::{CodeBlock, CompressionConfig, CompressionResult, PruningConfig};
 use crate::conversation::message::{Message, MessageContent};
 use regex::Regex;
 use std::sync::LazyLock;
@@ -587,6 +589,92 @@ impl MessageCompressor {
 
         CompressionResult::new(original_tokens, compressed_tokens, "message_compression")
     }
+
+    // ========================================================================
+    // Progressive Pruning Integration
+    // ========================================================================
+
+    /// Apply progressive pruning to messages based on context usage.
+    ///
+    /// This method combines standard compression with progressive pruning
+    /// to manage context size more effectively.
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The messages to process
+    /// * `usage_ratio` - Current context usage ratio (0.0-1.0)
+    /// * `compression_config` - Configuration for standard compression
+    /// * `pruning_config` - Configuration for progressive pruning
+    ///
+    /// # Returns
+    ///
+    /// A new vector of messages with both compression and pruning applied.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let messages = vec![...];
+    /// let compressed = MessageCompressor::compress_with_pruning(
+    ///     &messages,
+    ///     0.4, // 40% context usage
+    ///     &CompressionConfig::default(),
+    ///     &PruningConfig::default(),
+    /// );
+    /// ```
+    pub fn compress_with_pruning(
+        messages: &[Message],
+        usage_ratio: f64,
+        compression_config: &CompressionConfig,
+        pruning_config: &PruningConfig,
+    ) -> Vec<Message> {
+        // First apply standard compression
+        let compressed: Vec<Message> = messages
+            .iter()
+            .map(|msg| Self::compress_message(msg, compression_config))
+            .collect();
+
+        // Then apply progressive pruning based on usage ratio
+        ProgressivePruner::prune_messages(&compressed, usage_ratio, pruning_config)
+    }
+
+    /// Compress tool output with progressive pruning support.
+    ///
+    /// This method extends the standard tool output compression with
+    /// progressive pruning based on context usage.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - The tool output content to compress
+    /// * `max_chars` - Maximum characters for standard compression
+    /// * `usage_ratio` - Current context usage ratio (0.0-1.0)
+    /// * `pruning_config` - Configuration for progressive pruning
+    ///
+    /// # Returns
+    ///
+    /// The compressed/pruned content string.
+    pub fn compress_tool_output_with_pruning(
+        content: &str,
+        max_chars: usize,
+        usage_ratio: f64,
+        pruning_config: &PruningConfig,
+    ) -> String {
+        let pruning_level = pruning_config.get_pruning_level(usage_ratio);
+
+        match pruning_level {
+            crate::context::types::PruningLevel::HardClear => {
+                ProgressivePruner::hard_clear(&pruning_config.hard_clear_placeholder)
+            }
+            crate::context::types::PruningLevel::SoftTrim => ProgressivePruner::soft_trim(
+                content,
+                pruning_config.soft_trim_head_chars,
+                pruning_config.soft_trim_tail_chars,
+            ),
+            crate::context::types::PruningLevel::None => {
+                // Apply standard compression
+                Self::compress_tool_output(content, max_chars)
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -742,5 +830,65 @@ print("world")
 
         // Should have approximately 50 lines (30 head + 20 tail)
         assert!(content_lines.len() >= 48 && content_lines.len() <= 52);
+    }
+
+    #[test]
+    fn test_compress_tool_output_with_pruning_no_pruning() {
+        let content = "A".repeat(1000);
+        let config = PruningConfig::default();
+
+        // Usage below soft_trim_ratio (0.3)
+        let result =
+            MessageCompressor::compress_tool_output_with_pruning(&content, 2000, 0.2, &config);
+
+        // Should return original (no standard compression needed either)
+        assert_eq!(result, content);
+    }
+
+    #[test]
+    fn test_compress_tool_output_with_pruning_soft_trim() {
+        let content = "A".repeat(2000);
+        let config = PruningConfig::default();
+
+        // Usage between soft_trim_ratio (0.3) and hard_clear_ratio (0.5)
+        let result =
+            MessageCompressor::compress_tool_output_with_pruning(&content, 3000, 0.4, &config);
+
+        // Should be soft trimmed
+        assert!(result.contains("chars omitted"));
+        assert!(result.len() < content.len());
+    }
+
+    #[test]
+    fn test_compress_tool_output_with_pruning_hard_clear() {
+        let content = "A".repeat(2000);
+        let config = PruningConfig::default();
+
+        // Usage above hard_clear_ratio (0.5)
+        let result =
+            MessageCompressor::compress_tool_output_with_pruning(&content, 3000, 0.6, &config);
+
+        // Should be hard cleared
+        assert_eq!(result, "[content cleared]");
+    }
+
+    #[test]
+    fn test_compress_with_pruning() {
+        let messages = vec![
+            Message::user().with_text("Hello"),
+            Message::assistant().with_text("Hi there"),
+        ];
+        let compression_config = CompressionConfig::default();
+        let pruning_config = PruningConfig::default();
+
+        // Low usage - no pruning
+        let result = MessageCompressor::compress_with_pruning(
+            &messages,
+            0.2,
+            &compression_config,
+            &pruning_config,
+        );
+
+        assert_eq!(result.len(), messages.len());
     }
 }

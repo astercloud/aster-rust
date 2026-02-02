@@ -12,6 +12,7 @@ use super::final_output_tool::FinalOutputTool;
 use super::platform_tools;
 use super::tool_execution::{ToolCallResult, CHAT_MODE_TOOL_SKIPPED_RESPONSE, DECLINED_RESPONSE};
 use crate::action_required_manager::ActionRequiredManager;
+use crate::agents::error_handling::OverflowHandler;
 use crate::agents::extension::{ExtensionConfig, ExtensionResult, ToolInfo};
 use crate::agents::extension_manager::{get_parameter_names, ExtensionManager};
 use crate::agents::extension_manager_extension::MANAGE_EXTENSIONS_TOOL_NAME_COMPLETE;
@@ -1158,7 +1159,7 @@ impl Agent {
             let _ = reply_span.enter();
             let mut turns_taken = 0u32;
             let max_turns = session_config.max_turns.unwrap_or(DEFAULT_MAX_TURNS);
-            let mut compaction_attempts = 0;
+            let mut overflow_handler = OverflowHandler::new(2);
 
             loop {
                 if is_token_cancelled(&cancel_token) {
@@ -1210,7 +1211,7 @@ impl Agent {
 
                     match next {
                         Ok((response, usage)) => {
-                            compaction_attempts = 0;
+                            overflow_handler.reset();
 
                             // Emit model change event if provider is lead-worker
                             let provider = self.provider().await?;
@@ -1443,9 +1444,8 @@ impl Agent {
                         }
                         Err(ref provider_err @ ProviderError::ContextLengthExceeded(_)) => {
                             crate::posthog::emit_error(provider_err.telemetry_type(), &provider_err.to_string());
-                            compaction_attempts += 1;
 
-                            if compaction_attempts >= 2 {
+                            if !overflow_handler.can_retry() {
                                 error!("Context limit exceeded after compaction - prompt too large");
                                 yield AgentEvent::Message(
                                     Message::assistant().with_system_notification(
@@ -1459,7 +1459,11 @@ impl Agent {
                             yield AgentEvent::Message(
                                 Message::assistant().with_system_notification(
                                     SystemNotificationType::InlineMessage,
-                                    "Context limit reached. Compacting to continue conversation...",
+                                    format!(
+                                        "Context limit reached. Compacting to continue conversation... (attempt {}/{})",
+                                        overflow_handler.compaction_attempts() + 1,
+                                        2
+                                    ),
                                 )
                             );
                             yield AgentEvent::Message(
@@ -1469,18 +1473,26 @@ impl Agent {
                                 )
                             );
 
-                            match compact_messages(self.provider().await?.as_ref(), &conversation, false).await {
-                                Ok((compacted_conversation, usage)) => {
-                                    self.store_replace_conversation(&session_config.id, &compacted_conversation).await?;
-                                    Self::update_session_metrics(&session_config, &usage, true).await?;
-                                    conversation = compacted_conversation;
-                                    did_recovery_compact_this_iteration = true;
-                                    yield AgentEvent::HistoryReplaced(conversation.clone());
+                            match overflow_handler.handle_overflow(self.provider().await?.as_ref(), &conversation, &session).await {
+                                Ok((compacted_conversation, usage, should_retry)) => {
+                                    if should_retry {
+                                        self.store_replace_conversation(&session_config.id, &compacted_conversation).await?;
+                                        Self::update_session_metrics(&session_config, &usage, true).await?;
+                                        conversation = compacted_conversation;
+                                        did_recovery_compact_this_iteration = true;
+                                        yield AgentEvent::HistoryReplaced(conversation.clone());
+                                    }
                                     break;
                                 }
                                 Err(e) => {
                                     crate::posthog::emit_error("compaction_failed", &e.to_string());
                                     error!("Compaction failed: {}", e);
+                                    yield AgentEvent::Message(
+                                        Message::assistant().with_system_notification(
+                                            SystemNotificationType::InlineMessage,
+                                            format!("Compaction failed: {}", e),
+                                        )
+                                    );
                                     break;
                                 }
                             }

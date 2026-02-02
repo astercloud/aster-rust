@@ -751,6 +751,154 @@ pub struct ContextWindowStats {
 // Code Block Types
 // ============================================================================
 
+// ============================================================================
+// Progressive Pruning Types
+// ============================================================================
+
+/// Progressive pruning configuration for Tool output management.
+///
+/// This configuration controls how Tool outputs are progressively pruned
+/// based on context usage ratio. Pruning happens in two stages:
+/// - **Soft trim**: Preserves head and tail of content, replacing middle with "..."
+/// - **Hard clear**: Completely replaces content with a placeholder
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use aster::context::PruningConfig;
+///
+/// let config = PruningConfig::default();
+/// // Soft trim triggers at 30% context usage
+/// // Hard clear triggers at 50% context usage
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PruningConfig {
+    /// Soft trim trigger threshold (context usage ratio, 0.0-1.0)
+    /// When context usage exceeds this ratio, soft trimming is applied.
+    /// Default: 0.3 (30%)
+    pub soft_trim_ratio: f64,
+
+    /// Hard clear trigger threshold (context usage ratio, 0.0-1.0)
+    /// When context usage exceeds this ratio, hard clearing is applied.
+    /// Default: 0.5 (50%)
+    pub hard_clear_ratio: f64,
+
+    /// Number of recent assistant messages to keep unpruned.
+    /// These messages are protected from pruning to maintain conversation coherence.
+    /// Default: 3
+    pub keep_last_assistants: usize,
+
+    /// Characters to preserve from the head during soft trim.
+    /// Default: 500
+    pub soft_trim_head_chars: usize,
+
+    /// Characters to preserve from the tail during soft trim.
+    /// Default: 300
+    pub soft_trim_tail_chars: usize,
+
+    /// Placeholder text for hard-cleared content.
+    /// Default: "[content cleared]"
+    pub hard_clear_placeholder: String,
+
+    /// Tool names that are allowed to be pruned (supports glob patterns).
+    /// If empty, all tools are allowed unless in denied_tools.
+    /// Example: ["read_*", "grep", "glob"]
+    pub allowed_tools: Vec<String>,
+
+    /// Tool names that are never pruned.
+    /// Takes precedence over allowed_tools.
+    /// Example: ["write", "edit"]
+    pub denied_tools: Vec<String>,
+}
+
+impl Default for PruningConfig {
+    fn default() -> Self {
+        Self {
+            soft_trim_ratio: 0.3,
+            hard_clear_ratio: 0.5,
+            keep_last_assistants: 3,
+            soft_trim_head_chars: 500,
+            soft_trim_tail_chars: 300,
+            hard_clear_placeholder: "[content cleared]".to_string(),
+            allowed_tools: vec![],
+            denied_tools: vec![],
+        }
+    }
+}
+
+impl PruningConfig {
+    /// Create a new PruningConfig with custom thresholds.
+    pub fn with_thresholds(soft_trim_ratio: f64, hard_clear_ratio: f64) -> Self {
+        Self {
+            soft_trim_ratio,
+            hard_clear_ratio,
+            ..Default::default()
+        }
+    }
+
+    /// Set the number of recent assistant messages to keep unpruned.
+    pub fn with_keep_last_assistants(mut self, count: usize) -> Self {
+        self.keep_last_assistants = count;
+        self
+    }
+
+    /// Set the soft trim character limits.
+    pub fn with_soft_trim_chars(mut self, head: usize, tail: usize) -> Self {
+        self.soft_trim_head_chars = head;
+        self.soft_trim_tail_chars = tail;
+        self
+    }
+
+    /// Set the hard clear placeholder text.
+    pub fn with_placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.hard_clear_placeholder = placeholder.into();
+        self
+    }
+
+    /// Set allowed tools for pruning.
+    pub fn with_allowed_tools(mut self, tools: Vec<String>) -> Self {
+        self.allowed_tools = tools;
+        self
+    }
+
+    /// Set denied tools (never pruned).
+    pub fn with_denied_tools(mut self, tools: Vec<String>) -> Self {
+        self.denied_tools = tools;
+        self
+    }
+
+    /// Determine the pruning level based on context usage ratio.
+    ///
+    /// Returns:
+    /// - `PruningLevel::None` if usage is below soft_trim_ratio
+    /// - `PruningLevel::SoftTrim` if usage is between soft_trim_ratio and hard_clear_ratio
+    /// - `PruningLevel::HardClear` if usage is above hard_clear_ratio
+    pub fn get_pruning_level(&self, usage_ratio: f64) -> PruningLevel {
+        if usage_ratio >= self.hard_clear_ratio {
+            PruningLevel::HardClear
+        } else if usage_ratio >= self.soft_trim_ratio {
+            PruningLevel::SoftTrim
+        } else {
+            PruningLevel::None
+        }
+    }
+}
+
+/// Pruning level indicating the intensity of content pruning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PruningLevel {
+    /// No pruning applied
+    None,
+    /// Soft trim: preserve head and tail, replace middle with "..."
+    SoftTrim,
+    /// Hard clear: replace entire content with placeholder
+    HardClear,
+}
+
+// ============================================================================
+// Code Block Types
+// ============================================================================
+
 /// Information about a code block in text.
 #[derive(Debug, Clone)]
 pub struct CodeBlock {
@@ -883,5 +1031,51 @@ mod tests {
             100,
         );
         assert_eq!(block.line_count(), 3);
+    }
+
+    #[test]
+    fn test_pruning_config_default() {
+        let config = PruningConfig::default();
+        assert!((config.soft_trim_ratio - 0.3).abs() < 0.01);
+        assert!((config.hard_clear_ratio - 0.5).abs() < 0.01);
+        assert_eq!(config.keep_last_assistants, 3);
+        assert_eq!(config.soft_trim_head_chars, 500);
+        assert_eq!(config.soft_trim_tail_chars, 300);
+        assert_eq!(config.hard_clear_placeholder, "[content cleared]");
+    }
+
+    #[test]
+    fn test_pruning_config_get_pruning_level() {
+        let config = PruningConfig::default();
+
+        // Below soft_trim_ratio (0.3)
+        assert_eq!(config.get_pruning_level(0.2), PruningLevel::None);
+
+        // Between soft_trim_ratio and hard_clear_ratio
+        assert_eq!(config.get_pruning_level(0.35), PruningLevel::SoftTrim);
+        assert_eq!(config.get_pruning_level(0.49), PruningLevel::SoftTrim);
+
+        // At or above hard_clear_ratio (0.5)
+        assert_eq!(config.get_pruning_level(0.5), PruningLevel::HardClear);
+        assert_eq!(config.get_pruning_level(0.8), PruningLevel::HardClear);
+    }
+
+    #[test]
+    fn test_pruning_config_builder() {
+        let config = PruningConfig::with_thresholds(0.4, 0.6)
+            .with_keep_last_assistants(5)
+            .with_soft_trim_chars(1000, 500)
+            .with_placeholder("[removed]")
+            .with_allowed_tools(vec!["read_*".to_string()])
+            .with_denied_tools(vec!["write".to_string()]);
+
+        assert!((config.soft_trim_ratio - 0.4).abs() < 0.01);
+        assert!((config.hard_clear_ratio - 0.6).abs() < 0.01);
+        assert_eq!(config.keep_last_assistants, 5);
+        assert_eq!(config.soft_trim_head_chars, 1000);
+        assert_eq!(config.soft_trim_tail_chars, 500);
+        assert_eq!(config.hard_clear_placeholder, "[removed]");
+        assert_eq!(config.allowed_tools, vec!["read_*".to_string()]);
+        assert_eq!(config.denied_tools, vec!["write".to_string()]);
     }
 }

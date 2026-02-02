@@ -74,6 +74,7 @@ pub mod compressor;
 pub mod file_mention;
 pub mod manager;
 pub mod priority_sorter;
+pub mod pruner;
 pub mod summarizer;
 pub mod token_estimator;
 pub mod types;
@@ -106,6 +107,9 @@ pub use compressor::{
     DEFAULT_FILE_CONTENT_MAX_CHARS,
     DEFAULT_TOOL_OUTPUT_MAX_CHARS,
 };
+
+/// Progressive pruning for Tool output management
+pub use pruner::ProgressivePruner;
 
 /// Intelligent message summarization (AI-powered and simple)
 pub use summarizer::{
@@ -164,6 +168,9 @@ pub use types::{
     // Priority types
     MessagePriority,
     PrioritizedMessage,
+    // Progressive pruning types
+    PruningConfig,
+    PruningLevel,
     ResolvedFile,
     TokenUsage,
     // Constants from types module
