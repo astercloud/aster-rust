@@ -394,9 +394,9 @@ impl Agent {
                         total_tokens: current_total,
                         input_tokens: current_input,
                         output_tokens: current_output,
-                        accumulated_total: accumulated_total,
-                        accumulated_input: accumulated_input,
-                        accumulated_output: accumulated_output,
+                        accumulated_total,
+                        accumulated_input,
+                        accumulated_output,
                     },
                 )
                 .await?;
