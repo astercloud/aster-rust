@@ -213,6 +213,44 @@ impl Agent {
         self.session_store.as_ref()
     }
 
+    /// 设置 Agent 身份配置（Builder 模式）
+    ///
+    /// 允许应用层完全控制 Agent 的身份，包括名称、语言、描述等。
+    /// 这会替换默认的 "aster by Block" 身份。
+    ///
+    /// 注意：此方法使用 try_lock，如果锁被占用会静默失败。
+    /// 建议在 Agent 创建后立即调用，或使用异步版本 `set_identity()`。
+    ///
+    /// # Example
+    /// ```ignore
+    /// use aster::agents::{Agent, AgentIdentity};
+    ///
+    /// let identity = AgentIdentity::new("ProxyCast 助手")
+    ///     .with_language("Chinese")
+    ///     .with_description("一个专业的 AI 代理服务助手");
+    ///
+    /// let agent = Agent::new().with_identity(identity);
+    /// ```
+    pub fn with_identity(self, identity: super::identity::AgentIdentity) -> Self {
+        // 使用 try_lock 避免在异步运行时中阻塞
+        if let Ok(mut pm) = self.prompt_manager.try_lock() {
+            pm.set_identity(identity);
+        } else {
+            // 如果锁被占用，记录警告
+            tracing::warn!("[Agent] with_identity: 无法获取锁，身份设置被跳过");
+        }
+        self
+    }
+
+    /// 设置 Agent 身份（异步方法）
+    ///
+    /// 用于在 Agent 创建后动态修改身份配置。
+    /// 这是在异步上下文中设置身份的推荐方式。
+    pub async fn set_identity(&self, identity: super::identity::AgentIdentity) {
+        let mut pm = self.prompt_manager.lock().await;
+        pm.set_identity(identity);
+    }
+
     /// Create a new Agent with custom tool registration configuration
     ///
     /// This allows customizing which tools are registered and their configuration.
@@ -447,6 +485,7 @@ impl Agent {
         &self,
         unfixed_conversation: Conversation,
         working_dir: &std::path::Path,
+        session_config: &SessionConfig,
     ) -> Result<ReplyContext> {
         let unfixed_messages = unfixed_conversation.messages().clone();
         let (conversation, issues) = fix_conversation(unfixed_conversation.clone());
@@ -463,8 +502,10 @@ impl Agent {
         let initial_messages = conversation.messages().clone();
         let config = Config::global();
 
-        let (tools, toolshim_tools, system_prompt) =
-            self.prepare_tools_and_prompt(working_dir).await?;
+        let session_prompt = session_config.system_prompt.as_deref();
+        let (tools, toolshim_tools, system_prompt) = self
+            .prepare_tools_and_prompt(working_dir, session_prompt)
+            .await?;
         let aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
 
         self.tool_inspection_manager
@@ -1091,7 +1132,7 @@ impl Agent {
         cancel_token: Option<CancellationToken>,
     ) -> Result<BoxStream<'_, Result<AgentEvent>>> {
         let context = self
-            .prepare_reply_context(conversation, &session.working_dir)
+            .prepare_reply_context(conversation, &session.working_dir, &session_config)
             .await?;
         let ReplyContext {
             mut conversation,
@@ -1457,8 +1498,9 @@ impl Agent {
                     }
                 }
                 if tools_updated {
+                    let session_prompt = session_config.system_prompt.as_deref();
                     (tools, toolshim_tools, system_prompt) =
-                        self.prepare_tools_and_prompt(&working_dir).await?;
+                        self.prepare_tools_and_prompt(&working_dir, session_prompt).await?;
                 }
                 let mut exit_chat = false;
                 if no_tools_called {

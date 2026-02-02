@@ -279,6 +279,7 @@ pub async fn reply(
             schedule_id: session.schedule_id.clone(),
             max_turns: None,
             retry_config: None,
+            system_prompt: None,
         };
 
         let mut all_messages = match conversation_so_far {

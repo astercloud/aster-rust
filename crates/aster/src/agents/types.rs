@@ -92,4 +92,8 @@ pub struct SessionConfig {
     /// Retry configuration for automated validation and recovery
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retry_config: Option<RetryConfig>,
+    /// Session-level system prompt
+    /// 会话级别的系统提示词，用于定义特定会话的行为上下文
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub system_prompt: Option<String>,
 }

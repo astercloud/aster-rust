@@ -514,6 +514,7 @@ async fn process_message_streaming(
         schedule_id: None,
         max_turns: None,
         retry_config: None,
+        system_prompt: None,
     };
 
     match agent.reply(user_message, session_config, None).await {

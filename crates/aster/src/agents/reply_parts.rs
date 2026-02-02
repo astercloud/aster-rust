@@ -112,6 +112,7 @@ impl Agent {
     pub async fn prepare_tools_and_prompt(
         &self,
         working_dir: &std::path::Path,
+        session_prompt: Option<&str>,
     ) -> Result<(Vec<Tool>, Vec<Tool>, String)> {
         // Get tools from extension manager
         let mut tools = self.list_tools(None).await;
@@ -152,6 +153,7 @@ impl Agent {
             .with_code_execution_mode(code_execution_active)
             .with_hints(working_dir)
             .with_enable_subagents(self.subagents_enabled().await)
+            .with_session_prompt(session_prompt.map(|s| s.to_string()))
             .build();
 
         // Handle toolshim if enabled
@@ -552,7 +554,7 @@ mod tests {
 
         let working_dir = std::env::current_dir()?;
         let (tools, _toolshim_tools, _system_prompt) =
-            agent.prepare_tools_and_prompt(&working_dir).await?;
+            agent.prepare_tools_and_prompt(&working_dir, None).await?;
 
         // Ensure both platform and frontend tools are present
         let names: Vec<String> = tools.iter().map(|t| t.name.clone().into_owned()).collect();

@@ -1,3 +1,10 @@
+//! 提示词管理器
+//!
+//! 管理 Agent 的系统提示词，支持分层组合：
+//! 1. Identity（身份层）- 应用层可完全控制
+//! 2. Capabilities（能力层）- 框架提供的 Extensions 等能力描述
+//! 3. Context（上下文层）- 运行时注入的 hints 和额外指令
+
 #[cfg(test)]
 use chrono::DateTime;
 use chrono::Utc;
@@ -5,6 +12,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 
+use super::identity::AgentIdentity;
 use crate::agents::extension::ExtensionInfo;
 use crate::hints::load_hints::{load_hint_files, AGENTS_MD_FILENAME, ASTER_HINTS_FILENAME};
 use crate::{
@@ -18,9 +26,16 @@ const MAX_EXTENSIONS: usize = 5;
 const MAX_TOOLS: usize = 50;
 
 pub struct PromptManager {
+    /// 完全覆盖系统提示词（向后兼容）
     system_prompt_override: Option<String>,
+    /// 额外指令（追加到末尾）
     system_prompt_extras: Vec<String>,
+    /// 当前时间戳
     current_date_timestamp: String,
+    /// Agent 身份配置（新增）
+    identity: AgentIdentity,
+    /// Session 级别的系统提示词
+    session_prompt: Option<String>,
 }
 
 impl Default for PromptManager {
@@ -29,6 +44,19 @@ impl Default for PromptManager {
     }
 }
 
+/// 身份提示词上下文
+#[derive(Serialize)]
+struct IdentityContext {
+    agent_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent_creator: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent_description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language_preference: Option<String>,
+}
+
+/// 能力提示词上下文
 #[derive(Serialize)]
 struct SystemPromptContext {
     extensions: Vec<ExtensionInfo>,
@@ -52,6 +80,7 @@ pub struct SystemPromptBuilder<'a, M> {
     subagents_enabled: bool,
     hints: Option<String>,
     code_execution_mode: bool,
+    session_prompt: Option<String>,
 }
 
 impl<'a> SystemPromptBuilder<'a, PromptManager> {
@@ -118,6 +147,12 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
         self
     }
 
+    /// 设置 session 级别的系统提示词
+    pub fn with_session_prompt(mut self, prompt: Option<String>) -> Self {
+        self.session_prompt = prompt;
+        self
+    }
+
     pub fn build(self) -> String {
         let mut extensions_info = self.extensions_info;
 
@@ -147,7 +182,7 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
             .extension_tool_count
             .filter(|(extensions, tools)| *extensions > MAX_EXTENSIONS || *tools > MAX_TOOLS);
 
-        let context = SystemPromptContext {
+        let capabilities_context = SystemPromptContext {
             extensions: sanitized_extensions_info,
             current_date_time: self.manager.current_date_timestamp.clone(),
             extension_tool_limits,
@@ -159,15 +194,20 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
             code_execution_mode: self.code_execution_mode,
         };
 
+        // 构建提示词：优先使用 override，否则使用分层结构
         let base_prompt = if let Some(override_prompt) = &self.manager.system_prompt_override {
+            // 向后兼容：完全覆盖模式
             let sanitized_override_prompt = sanitize_unicode_tags(override_prompt);
-            prompt_template::render_inline_once(&sanitized_override_prompt, &context)
+            prompt_template::render_inline_once(&sanitized_override_prompt, &capabilities_context)
+                .unwrap_or_else(|_| override_prompt.clone())
         } else {
-            prompt_template::render_global_file("system.md", &context)
-        }
-        .unwrap_or_else(|_| {
-            "You are a general-purpose AI agent called aster, created by Block".to_string()
-        });
+            // 新的分层模式：Identity + Session Context + Capabilities
+            Self::build_layered_prompt_with_session(
+                &self.manager.identity,
+                &self.session_prompt,
+                &capabilities_context,
+            )
+        };
 
         let mut system_prompt_extras = self.manager.system_prompt_extras.clone();
 
@@ -198,6 +238,84 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
             )
         }
     }
+
+    /// 构建分层提示词：Identity + Capabilities（静态方法）
+    fn build_layered_prompt_static(
+        identity: &AgentIdentity,
+        capabilities_context: &SystemPromptContext,
+    ) -> String {
+        // 1. 构建身份层
+        let identity_prompt = if let Some(custom) = &identity.custom_prompt {
+            // 使用完全自定义的身份提示词
+            sanitize_unicode_tags(custom)
+        } else {
+            // 使用模板渲染身份
+            let identity_context = IdentityContext {
+                agent_name: identity.name.clone(),
+                agent_creator: identity.creator.clone(),
+                agent_description: identity.description.clone(),
+                language_preference: identity.language.clone(),
+            };
+            prompt_template::render_global_file("identity.md", &identity_context)
+                .unwrap_or_else(|_| format!("You are an AI agent called {}.", identity.name))
+        };
+
+        // 2. 构建能力层
+        let capabilities_prompt =
+            prompt_template::render_global_file("capabilities.md", capabilities_context)
+                .unwrap_or_default();
+
+        // 3. 组合
+        if capabilities_prompt.is_empty() {
+            identity_prompt
+        } else {
+            format!("{}\n\n{}", identity_prompt, capabilities_prompt)
+        }
+    }
+
+    /// 构建分层提示词（包含 session_prompt）：Identity + Session Context + Capabilities
+    fn build_layered_prompt_with_session(
+        identity: &AgentIdentity,
+        session_prompt: &Option<String>,
+        capabilities_context: &SystemPromptContext,
+    ) -> String {
+        // 1. 构建身份层
+        let identity_prompt = if let Some(custom) = &identity.custom_prompt {
+            sanitize_unicode_tags(custom)
+        } else {
+            let identity_context = IdentityContext {
+                agent_name: identity.name.clone(),
+                agent_creator: identity.creator.clone(),
+                agent_description: identity.description.clone(),
+                language_preference: identity.language.clone(),
+            };
+            prompt_template::render_global_file("identity.md", &identity_context)
+                .unwrap_or_else(|_| format!("You are an AI agent called {}.", identity.name))
+        };
+
+        // 2. Session Context 层（如果有）
+        let session_section = if let Some(prompt) = session_prompt {
+            let sanitized = sanitize_unicode_tags(prompt);
+            format!("\n\n## Session Context\n\n{}", sanitized)
+        } else {
+            String::new()
+        };
+
+        // 3. 构建能力层
+        let capabilities_prompt =
+            prompt_template::render_global_file("capabilities.md", capabilities_context)
+                .unwrap_or_default();
+
+        // 4. 组合：Identity + Session Context + Capabilities
+        if capabilities_prompt.is_empty() {
+            format!("{}{}", identity_prompt, session_section)
+        } else {
+            format!(
+                "{}{}\n\n{}",
+                identity_prompt, session_section, capabilities_prompt
+            )
+        }
+    }
 }
 
 impl PromptManager {
@@ -205,9 +323,20 @@ impl PromptManager {
         PromptManager {
             system_prompt_override: None,
             system_prompt_extras: Vec::new(),
-            // Use the fixed current date time so that prompt cache can be used.
-            // Filtering to an hour to balance user time accuracy and multi session prompt cache hits.
             current_date_timestamp: Utc::now().format("%Y-%m-%d %H:00").to_string(),
+            identity: AgentIdentity::default(),
+            session_prompt: None,
+        }
+    }
+
+    /// 创建带自定义身份的 PromptManager
+    pub fn with_identity(identity: AgentIdentity) -> Self {
+        PromptManager {
+            system_prompt_override: None,
+            system_prompt_extras: Vec::new(),
+            current_date_timestamp: Utc::now().format("%Y-%m-%d %H:00").to_string(),
+            identity,
+            session_prompt: None,
         }
     }
 
@@ -217,7 +346,34 @@ impl PromptManager {
             system_prompt_override: None,
             system_prompt_extras: Vec::new(),
             current_date_timestamp: dt.format("%Y-%m-%d %H:%M:%S").to_string(),
+            identity: AgentIdentity::default(),
+            session_prompt: None,
         }
+    }
+
+    /// 设置 Agent 身份
+    pub fn set_identity(&mut self, identity: AgentIdentity) {
+        self.identity = identity;
+    }
+
+    /// 获取当前身份配置
+    pub fn identity(&self) -> &AgentIdentity {
+        &self.identity
+    }
+
+    /// 设置 session 级别的系统提示词
+    pub fn set_session_prompt(&mut self, prompt: Option<String>) {
+        self.session_prompt = prompt;
+    }
+
+    /// 获取当前 session 提示词
+    pub fn session_prompt(&self) -> Option<&String> {
+        self.session_prompt.as_ref()
+    }
+
+    /// 清除 session 提示词
+    pub fn clear_session_prompt(&mut self) {
+        self.session_prompt = None;
     }
 
     /// Add an additional instruction to the system prompt
@@ -225,7 +381,7 @@ impl PromptManager {
         self.system_prompt_extras.push(instruction);
     }
 
-    /// Override the system prompt with custom text
+    /// Override the system prompt with custom text (向后兼容)
     pub fn set_system_prompt_override(&mut self, template: String) {
         self.system_prompt_override = Some(template);
     }
@@ -240,6 +396,7 @@ impl PromptManager {
             subagents_enabled: false,
             hints: None,
             code_execution_mode: false,
+            session_prompt: None,
         }
     }
 

@@ -195,6 +195,7 @@ fn get_agent_messages(
             schedule_id: None,
             max_turns: task_config.max_turns.map(|v| v as u32),
             retry_config: recipe.retry,
+            system_prompt: None,
         };
 
         let mut stream = crate::session_context::with_session_id(Some(session_id.clone()), async {
