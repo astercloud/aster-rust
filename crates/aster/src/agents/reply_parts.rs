@@ -17,9 +17,9 @@ use crate::providers::toolshim::{
 };
 
 use crate::agents::code_execution_extension::EXTENSION_NAME as CODE_EXECUTION_EXTENSION;
-use crate::session::SessionManager;
 #[cfg(test)]
 use crate::session::SessionType;
+use crate::session::{SessionManager, SessionStore, TokenStatsUpdate};
 use rmcp::model::Tool;
 
 fn coerce_value(s: &str, schema: &Value) -> Value {
@@ -350,9 +350,14 @@ impl Agent {
         session_config: &crate::agents::types::SessionConfig,
         usage: &ProviderUsage,
         is_compaction_usage: bool,
+        session_store: Option<&Arc<dyn SessionStore>>,
     ) -> Result<()> {
         let session_id = session_config.id.as_str();
-        let session = SessionManager::get_session(session_id, false).await?;
+        let session = if let Some(store) = session_store {
+            store.get_session(session_id, false).await?
+        } else {
+            SessionManager::get_session(session_id, false).await?
+        };
 
         let accumulate = |a: Option<i32>, b: Option<i32>| -> Option<i32> {
             match (a, b) {
@@ -380,16 +385,33 @@ impl Agent {
             )
         };
 
-        SessionManager::update_session(session_id)
-            .schedule_id(session_config.schedule_id.clone())
-            .total_tokens(current_total)
-            .input_tokens(current_input)
-            .output_tokens(current_output)
-            .accumulated_total_tokens(accumulated_total)
-            .accumulated_input_tokens(accumulated_input)
-            .accumulated_output_tokens(accumulated_output)
-            .apply()
-            .await?;
+        if let Some(store) = session_store {
+            store
+                .update_token_stats(
+                    session_id,
+                    TokenStatsUpdate {
+                        schedule_id: session_config.schedule_id.clone(),
+                        total_tokens: current_total,
+                        input_tokens: current_input,
+                        output_tokens: current_output,
+                        accumulated_total: accumulated_total,
+                        accumulated_input: accumulated_input,
+                        accumulated_output: accumulated_output,
+                    },
+                )
+                .await?;
+        } else {
+            SessionManager::update_session(session_id)
+                .schedule_id(session_config.schedule_id.clone())
+                .total_tokens(current_total)
+                .input_tokens(current_input)
+                .output_tokens(current_output)
+                .accumulated_total_tokens(accumulated_total)
+                .accumulated_input_tokens(accumulated_input)
+                .accumulated_output_tokens(accumulated_output)
+                .apply()
+                .await?;
+        }
 
         Ok(())
     }

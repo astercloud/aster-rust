@@ -125,6 +125,7 @@ pub struct ChatHistoryMatch {
 /// Token 统计更新参数
 #[derive(Debug, Clone, Default)]
 pub struct TokenStatsUpdate {
+    pub schedule_id: Option<String>,
     pub total_tokens: Option<i32>,
     pub input_tokens: Option<i32>,
     pub output_tokens: Option<i32>,

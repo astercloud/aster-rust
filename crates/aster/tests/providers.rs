@@ -450,11 +450,13 @@ async fn test_provider(
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_openai_provider() -> Result<()> {
     test_provider("openai", OPEN_AI_DEFAULT_MODEL, &["OPENAI_API_KEY"], None).await
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_azure_provider() -> Result<()> {
     test_provider(
         "Azure",
@@ -470,6 +472,7 @@ async fn test_azure_provider() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_bedrock_provider_long_term_credentials() -> Result<()> {
     test_provider(
         "Bedrock",
@@ -481,6 +484,7 @@ async fn test_bedrock_provider_long_term_credentials() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_bedrock_provider_aws_profile_credentials() -> Result<()> {
     let env_mods =
         HashMap::from_iter([("AWS_ACCESS_KEY_ID", None), ("AWS_SECRET_ACCESS_KEY", None)]);
@@ -495,6 +499,7 @@ async fn test_bedrock_provider_aws_profile_credentials() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_databricks_provider() -> Result<()> {
     test_provider(
         "Databricks",
@@ -506,11 +511,13 @@ async fn test_databricks_provider() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_ollama_provider() -> Result<()> {
     test_provider("Ollama", OLLAMA_DEFAULT_MODEL, &["OLLAMA_HOST"], None).await
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_anthropic_provider() -> Result<()> {
     test_provider(
         "Anthropic",
@@ -522,6 +529,7 @@ async fn test_anthropic_provider() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_openrouter_provider() -> Result<()> {
     test_provider(
         "OpenRouter",
@@ -533,11 +541,13 @@ async fn test_openrouter_provider() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_google_provider() -> Result<()> {
     test_provider("Google", GOOGLE_DEFAULT_MODEL, &["GOOGLE_API_KEY"], None).await
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_snowflake_provider() -> Result<()> {
     test_provider(
         "Snowflake",
@@ -549,6 +559,7 @@ async fn test_snowflake_provider() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_sagemaker_tgi_provider() -> Result<()> {
     test_provider(
         "SageMakerTgi",
@@ -560,6 +571,7 @@ async fn test_sagemaker_tgi_provider() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_litellm_provider() -> Result<()> {
     if std::env::var("LITELLM_HOST").is_err() {
         println!("LITELLM_HOST not set, skipping test");
@@ -576,6 +588,7 @@ async fn test_litellm_provider() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires real API credentials"]
 async fn test_xai_provider() -> Result<()> {
     test_provider("Xai", XAI_DEFAULT_MODEL, &["XAI_API_KEY"], None).await
 }

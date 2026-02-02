@@ -81,7 +81,7 @@ impl Agent {
     }
 
     async fn handle_compact_command(&self, session_id: &str) -> Result<Option<Message>> {
-        let session = SessionManager::get_session(session_id, true).await?;
+        let session = self.store_get_session(session_id, true).await?;
         let conversation = session
             .conversation
             .ok_or_else(|| anyhow!("Session has no conversation"))?;
@@ -93,7 +93,8 @@ impl Agent {
         )
         .await?;
 
-        SessionManager::replace_conversation(session_id, &compacted_conversation).await?;
+        self.store_replace_conversation(session_id, &compacted_conversation)
+            .await?;
 
         Ok(Some(Message::assistant().with_system_notification(
             SystemNotificationType::InlineMessage,
@@ -104,14 +105,33 @@ impl Agent {
     async fn handle_clear_command(&self, session_id: &str) -> Result<Option<Message>> {
         use crate::conversation::Conversation;
 
-        SessionManager::replace_conversation(session_id, &Conversation::default()).await?;
-
-        SessionManager::update_session(session_id)
-            .total_tokens(Some(0))
-            .input_tokens(Some(0))
-            .output_tokens(Some(0))
-            .apply()
+        self.store_replace_conversation(session_id, &Conversation::default())
             .await?;
+
+        if let Some(store) = &self.session_store {
+            use crate::session::TokenStatsUpdate;
+            store
+                .update_token_stats(
+                    session_id,
+                    TokenStatsUpdate {
+                        schedule_id: None,
+                        total_tokens: Some(0),
+                        input_tokens: Some(0),
+                        output_tokens: Some(0),
+                        accumulated_total: None,
+                        accumulated_input: None,
+                        accumulated_output: None,
+                    },
+                )
+                .await?;
+        } else {
+            SessionManager::update_session(session_id)
+                .total_tokens(Some(0))
+                .input_tokens(Some(0))
+                .output_tokens(Some(0))
+                .apply()
+                .await?;
+        }
 
         Ok(Some(Message::assistant().with_system_notification(
             SystemNotificationType::InlineMessage,
@@ -238,10 +258,11 @@ impl Agent {
                         return Ok(Some(Message::assistant().with_text(error_msg)));
                     }
 
-                    SessionManager::add_message(session_id, &msg).await?;
+                    self.store_add_message(session_id, &msg).await?;
                 }
 
-                let last_message = SessionManager::get_session(session_id, true)
+                let last_message = self
+                    .store_get_session(session_id, true)
                     .await?
                     .conversation
                     .ok_or_else(|| anyhow!("No conversation found"))?

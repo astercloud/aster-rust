@@ -357,7 +357,11 @@ impl Agent {
     // 这些方法会优先使用注入的 session_store，如果没有则回退到全局 SessionManager
 
     /// 添加消息到 session
-    async fn store_add_message(&self, session_id: &str, message: &Message) -> Result<()> {
+    pub(crate) async fn store_add_message(
+        &self,
+        session_id: &str,
+        message: &Message,
+    ) -> Result<()> {
         if let Some(store) = &self.session_store {
             store.add_message(session_id, message).await
         } else {
@@ -366,7 +370,11 @@ impl Agent {
     }
 
     /// 获取 session
-    async fn store_get_session(&self, session_id: &str, include_messages: bool) -> Result<Session> {
+    pub(crate) async fn store_get_session(
+        &self,
+        session_id: &str,
+        include_messages: bool,
+    ) -> Result<Session> {
         if let Some(store) = &self.session_store {
             store.get_session(session_id, include_messages).await
         } else {
@@ -375,7 +383,7 @@ impl Agent {
     }
 
     /// 替换整个对话历史
-    async fn store_replace_conversation(
+    pub(crate) async fn store_replace_conversation(
         &self,
         session_id: &str,
         conversation: &Conversation,
@@ -1094,7 +1102,7 @@ impl Agent {
                 match compact_messages(self.provider().await?.as_ref(), &conversation_to_compact, false).await {
                     Ok((compacted_conversation, summarization_usage)) => {
                         self.store_replace_conversation(&session_config.id, &compacted_conversation).await?;
-                        Self::update_session_metrics(&session_config, &summarization_usage, true).await?;
+                        Self::update_session_metrics(&session_config, &summarization_usage, true, self.session_store.as_ref()).await?;
 
                         yield AgentEvent::HistoryReplaced(compacted_conversation.clone());
 
@@ -1235,7 +1243,7 @@ impl Agent {
                             }
 
                             if let Some(ref usage) = usage {
-                                Self::update_session_metrics(&session_config, usage, false).await?;
+                                Self::update_session_metrics(&session_config, usage, false, self.session_store.as_ref()).await?;
                             }
 
                             if let Some(response) = response {
@@ -1477,7 +1485,7 @@ impl Agent {
                                 Ok((compacted_conversation, usage, should_retry)) => {
                                     if should_retry {
                                         self.store_replace_conversation(&session_config.id, &compacted_conversation).await?;
-                                        Self::update_session_metrics(&session_config, &usage, true).await?;
+                                        Self::update_session_metrics(&session_config, &usage, true, self.session_store.as_ref()).await?;
                                         conversation = compacted_conversation;
                                         did_recovery_compact_this_iteration = true;
                                         yield AgentEvent::HistoryReplaced(conversation.clone());
