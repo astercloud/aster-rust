@@ -828,6 +828,7 @@ config_value!(CODEX_COMMAND, OsString, "codex");
 config_value!(CODEX_REASONING_EFFORT, String, "high");
 config_value!(CODEX_ENABLE_SKILLS, String, "true");
 config_value!(CODEX_SKIP_GIT_CHECK, String, "false");
+config_value!(CODEX_USE_APP_SERVER, String, "true");
 
 config_value!(ASTER_SEARCH_PATHS, Vec<String>);
 config_value!(ASTER_MODE, AsterMode);

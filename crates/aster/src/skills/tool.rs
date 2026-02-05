@@ -102,6 +102,7 @@ impl SkillTool {
             success: true,
             output: Some(format!("Launching skill: {}", display_name)),
             error: None,
+            steps_completed: Vec::new(),
             command_name: Some(display_name),
             allowed_tools,
             model,
@@ -173,9 +174,13 @@ impl Tool for SkillTool {
     }
 
     fn description(&self) -> &str {
-        // Note: In a real implementation, this would be dynamically generated
         "Execute a skill within the main conversation. \
          Skills provide specialized capabilities and domain knowledge."
+    }
+
+    /// 动态生成包含可用 Skills 列表的描述
+    fn dynamic_description(&self) -> Option<String> {
+        Some(self.generate_description())
     }
 
     fn input_schema(&self) -> serde_json::Value {
@@ -245,7 +250,7 @@ impl Tool for SkillTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skills::types::{SkillDefinition, SkillSource};
+    use crate::skills::types::{SkillDefinition, SkillExecutionMode, SkillSource};
     use std::path::PathBuf;
 
     fn create_test_skill() -> SkillDefinition {
@@ -266,6 +271,9 @@ mod tests {
             base_dir: PathBuf::from("/test"),
             file_path: PathBuf::from("/test/SKILL.md"),
             supporting_files: vec![],
+            execution_mode: SkillExecutionMode::default(),
+            provider: None,
+            workflow: None,
         }
     }
 

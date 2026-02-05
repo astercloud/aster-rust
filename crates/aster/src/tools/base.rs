@@ -122,6 +122,15 @@ pub trait Tool: Send + Sync {
     /// when and how to use the tool.
     fn description(&self) -> &str;
 
+    /// Returns a dynamically generated description of the tool
+    ///
+    /// Override this method when the tool description needs to include
+    /// dynamic content (e.g., available skills, current state).
+    /// Default implementation returns None, falling back to `description()`.
+    fn dynamic_description(&self) -> Option<String> {
+        None
+    }
+
     /// Returns the JSON Schema for the tool's input parameters
     ///
     /// This schema is used for:
@@ -172,11 +181,15 @@ pub trait Tool: Send + Sync {
     /// Returns a `ToolDefinition` containing the name, description,
     /// and input schema in a format suitable for LLM tool calling.
     ///
-    /// Default implementation constructs from name(), description(), and input_schema().
+    /// Default implementation constructs from name(), dynamic_description() or description(),
+    /// and input_schema(). Prefers dynamic_description() if available.
     fn get_definition(&self) -> ToolDefinition {
+        let description = self
+            .dynamic_description()
+            .unwrap_or_else(|| self.description().to_string());
         ToolDefinition {
             name: self.name().to_string(),
-            description: self.description().to_string(),
+            description,
             input_schema: self.input_schema(),
         }
     }

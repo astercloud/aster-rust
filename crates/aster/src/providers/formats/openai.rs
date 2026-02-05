@@ -37,6 +37,8 @@ struct Delta {
     content: Option<String>,
     role: Option<String>,
     tool_calls: Option<Vec<DeltaToolCall>>,
+    /// DeepSeek reasoner 模型的推理内容
+    reasoning_content: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -65,6 +67,8 @@ pub fn format_messages(messages: &[Message], image_format: &ImageFormat) -> Vec<
         let mut output = Vec::new();
         let mut content_array = Vec::new();
         let mut text_array = Vec::new();
+        // 收集 Thinking 内容用于 DeepSeek reasoner 的 reasoning_content
+        let mut reasoning_content: Option<String> = None;
 
         for content in &message.content {
             match content {
@@ -82,9 +86,11 @@ pub fn format_messages(messages: &[Message], image_format: &ImageFormat) -> Vec<
                         }
                     }
                 }
-                MessageContent::Thinking(_) => {
-                    // Thinking blocks are not directly used in OpenAI format
-                    continue;
+                MessageContent::Thinking(thinking) => {
+                    // 保存 Thinking 内容用于 DeepSeek reasoner 的 reasoning_content
+                    if !thinking.thinking.is_empty() {
+                        reasoning_content = Some(thinking.thinking.clone());
+                    }
                 }
                 MessageContent::RedactedThinking(_) => {
                     // Redacted thinking blocks are not directly used in OpenAI format
@@ -244,6 +250,11 @@ pub fn format_messages(messages: &[Message], image_format: &ImageFormat) -> Vec<
             converted["content"] = json!(content_array);
         } else if !text_array.is_empty() {
             converted["content"] = json!(text_array.join("\n"));
+        }
+
+        // 添加 reasoning_content 字段（用于 DeepSeek reasoner 模型）
+        if let Some(reasoning) = reasoning_content {
+            converted["reasoning_content"] = json!(reasoning);
         }
 
         if converted.get("content").is_some() || converted.get("tool_calls").is_some() {
@@ -561,6 +572,13 @@ where
                     }
                 }
 
+                // 如果有 reasoning_content（DeepSeek reasoner），添加为 Thinking 内容
+                if let Some(reasoning) = &chunk.choices[0].delta.reasoning_content {
+                    if !reasoning.is_empty() {
+                        contents.insert(0, MessageContent::thinking(reasoning.clone(), ""));
+                    }
+                }
+
                 let mut msg = Message::new(
                     Role::Assistant,
                     chrono::Utc::now().timestamp(),
@@ -576,12 +594,31 @@ where
                     Some(msg),
                     usage,
                 )
-            } else if chunk.choices[0].delta.content.is_some() {
-                let text = chunk.choices[0].delta.content.as_ref().unwrap();
+            } else if chunk.choices[0].delta.content.is_some() || chunk.choices[0].delta.reasoning_content.is_some() {
+                let mut contents = Vec::new();
+
+                // 处理 reasoning_content（DeepSeek reasoner）
+                if let Some(reasoning) = &chunk.choices[0].delta.reasoning_content {
+                    if !reasoning.is_empty() {
+                        contents.push(MessageContent::thinking(reasoning.clone(), ""));
+                    }
+                }
+
+                // 处理普通文本内容
+                if let Some(text) = &chunk.choices[0].delta.content {
+                    if !text.is_empty() {
+                        contents.push(MessageContent::text(text));
+                    }
+                }
+
+                if contents.is_empty() {
+                    continue;
+                }
+
                 let mut msg = Message::new(
                     Role::Assistant,
                     chrono::Utc::now().timestamp(),
-                    vec![MessageContent::text(text)],
+                    contents,
                 );
 
                 // Add ID if present

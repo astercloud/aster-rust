@@ -219,6 +219,7 @@ pub fn global_registry() -> &'static SharedSkillRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skills::types::SkillExecutionMode;
     #[allow(unused_imports)]
     use std::fs;
     #[allow(unused_imports)]
@@ -242,6 +243,9 @@ mod tests {
             base_dir: PathBuf::from("/test"),
             file_path: PathBuf::from("/test/SKILL.md"),
             supporting_files: vec![],
+            execution_mode: SkillExecutionMode::default(),
+            provider: None,
+            workflow: None,
         }
     }
 

@@ -25,6 +25,15 @@ pub(crate) mod todo_extension;
 mod tool_execution;
 pub mod types;
 
+/// SubAgent 调度器模块
+///
+/// 基于 Anthropic 最佳实践实现的 SubAgent 调度系统，提供：
+/// - Orchestrator-Worker 模式的任务分发
+/// - 上下文继承、压缩和隔离
+/// - 并行执行和依赖管理
+/// - 结果聚合和摘要生成
+pub mod subagent_scheduler;
+
 // ============================================================================
 // ============================================================================
 
@@ -286,4 +295,32 @@ pub use error_handling::{
     TimeoutStatus,
     UnifiedErrorRecord,
     UnifiedRetryConfig,
+};
+
+// ============================================================================
+// SubAgent Scheduler Module Re-exports
+// ============================================================================
+
+pub use subagent_scheduler::{
+    // 配置
+    SchedulerConfig,
+    // 类型
+    SchedulerError,
+    SchedulerEvent,
+    SchedulerExecutionResult,
+    SchedulerProgress,
+    SchedulerResult,
+    // 策略
+    SchedulingStrategy,
+    StrategySelector,
+    // 执行器
+    SubAgentExecutor,
+    SubAgentResult,
+    SubAgentScheduler,
+    SubAgentTask,
+    SubAgentTaskStatus,
+    // 摘要
+    SummaryGenerator,
+    TaskComplexity,
+    TokenUsage as SchedulerTokenUsage,
 };

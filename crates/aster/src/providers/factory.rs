@@ -7,6 +7,7 @@ use super::{
     bedrock::BedrockProvider,
     claude_code::ClaudeCodeProvider,
     codex::CodexProvider,
+    codex_stateful::CodexStatefulProvider,
     cursor_agent::CursorAgentProvider,
     databricks::DatabricksProvider,
     gcpvertexai::GcpVertexAIProvider,
@@ -49,6 +50,10 @@ async fn init_registry() -> RwLock<ProviderRegistry> {
         registry
             .register::<ClaudeCodeProvider, _>(|m| Box::pin(ClaudeCodeProvider::from_env(m)), true);
         registry.register::<CodexProvider, _>(|m| Box::pin(CodexProvider::from_env(m)), true);
+        registry.register::<CodexStatefulProvider, _>(
+            |m| Box::pin(CodexStatefulProvider::from_env(m)),
+            true,
+        );
         registry.register::<CursorAgentProvider, _>(
             |m| Box::pin(CursorAgentProvider::from_env(m)),
             false,
@@ -187,6 +192,10 @@ fn map_provider_alias(name: &str) -> &str {
         "vertex" | "vertexai" | "vertex_ai" => "gcpvertexai",
         "aws_bedrock" | "aws-bedrock" => "bedrock",
         "kiro" => "bedrock", // Kiro 使用 CodeWhisperer API
+
+        // 自定义 Provider（UUID 格式，如 custom-ba4e7574-dd00-4784-945a-0f383dfa1272）
+        // 这些是用户通过 API Key Provider 添加的自定义服务，通常是 OpenAI 兼容的
+        s if s.starts_with("custom-") => "openai",
 
         // 默认返回原名称（让 Aster 原生处理）
         _ => name,
@@ -409,5 +418,35 @@ mod tests {
                 continue;
             }
         }
+    }
+
+    #[test]
+    fn test_map_provider_alias_custom_uuid() {
+        // 自定义 Provider UUID 格式应该映射到 openai
+        assert_eq!(
+            map_provider_alias("custom-ba4e7574-dd00-4784-945a-0f383dfa1272"),
+            "openai"
+        );
+        assert_eq!(
+            map_provider_alias("custom-12345678-1234-1234-1234-123456789abc"),
+            "openai"
+        );
+        // 普通 custom 也应该映射到 openai
+        assert_eq!(map_provider_alias("custom"), "openai");
+        assert_eq!(map_provider_alias("custom_openai"), "openai");
+    }
+
+    #[test]
+    fn test_map_provider_alias_known_providers() {
+        // 已知的 Provider 应该正确映射
+        assert_eq!(map_provider_alias("deepseek"), "openai");
+        assert_eq!(map_provider_alias("qwen"), "openai");
+        assert_eq!(map_provider_alias("claude"), "anthropic");
+        assert_eq!(map_provider_alias("gemini"), "google");
+        assert_eq!(map_provider_alias("kiro"), "bedrock");
+        // 原生支持的 Provider 应该保持原名
+        assert_eq!(map_provider_alias("openai"), "openai");
+        assert_eq!(map_provider_alias("anthropic"), "anthropic");
+        assert_eq!(map_provider_alias("google"), "google");
     }
 }

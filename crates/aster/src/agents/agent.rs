@@ -909,6 +909,22 @@ impl Agent {
                 let sub_recipes_vec: Vec<_> = sub_recipes.values().cloned().collect();
                 prefixed_tools.push(create_subagent_tool(&sub_recipes_vec));
             }
+
+            // 添加 tool_registry 中的原生工具（包括 SkillTool）
+            if let Ok(registry) = self.tool_registry.read() {
+                for tool_def in registry.get_definitions() {
+                    let tool = Tool::new(
+                        tool_def.name,
+                        tool_def.description,
+                        tool_def
+                            .input_schema
+                            .as_object()
+                            .cloned()
+                            .unwrap_or_default(),
+                    );
+                    prefixed_tools.push(tool);
+                }
+            }
         }
 
         prefixed_tools

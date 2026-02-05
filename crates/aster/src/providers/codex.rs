@@ -70,11 +70,11 @@ impl CodexProvider {
             "high".to_string()
         };
 
-        // Get enable_skills from config, default to true
+        // Get enable_skills from config, default to false (skills feature may not exist in all Codex versions)
         let enable_skills = config
             .get_codex_enable_skills()
             .map(|s| s.to_lowercase() == "true")
-            .unwrap_or(true);
+            .unwrap_or(false);
 
         // Get skip_git_check from config, default to false
         let skip_git_check = config
@@ -236,13 +236,22 @@ impl CodexProvider {
             .take()
             .ok_or_else(|| ProviderError::RequestFailed("Failed to capture stdout".to_string()))?;
 
-        let mut reader = BufReader::new(stdout);
+        // Also capture stderr for error messages
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| ProviderError::RequestFailed("Failed to capture stderr".to_string()))?;
+
+        let mut stdout_reader = BufReader::new(stdout);
+        let mut stderr_reader = BufReader::new(stderr);
         let mut lines = Vec::new();
+        let mut stderr_lines = Vec::new();
         let mut line = String::new();
 
+        // Read stdout
         loop {
             line.clear();
-            match reader.read_line(&mut line).await {
+            match stdout_reader.read_line(&mut line).await {
                 Ok(0) => break, // EOF
                 Ok(_) => {
                     let trimmed = line.trim();
@@ -259,14 +268,46 @@ impl CodexProvider {
             }
         }
 
+        // Read stderr
+        loop {
+            line.clear();
+            match stderr_reader.read_line(&mut line).await {
+                Ok(0) => break, // EOF
+                Ok(_) => {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        stderr_lines.push(trimmed.to_string());
+                    }
+                }
+                Err(_) => break, // Ignore stderr read errors
+            }
+        }
+
         let exit_status = child.wait().await.map_err(|e| {
             ProviderError::RequestFailed(format!("Failed to wait for command: {}", e))
         })?;
 
         if !exit_status.success() {
+            let stderr_output = stderr_lines.join("\n");
+            let error_detail = if stderr_output.is_empty() {
+                format!("exit code: {:?}", exit_status.code())
+            } else {
+                // 检测常见错误并提供升级提示
+                let upgrade_hint = if stderr_output.contains("Unknown feature flag: skills") {
+                    "\n\n提示: 请升级 Codex CLI 到最新版本: npm i -g @openai/codex@latest\n或者设置 CODEX_ENABLE_SKILLS=false 禁用 skills 功能"
+                } else {
+                    ""
+                };
+                format!(
+                    "exit code: {:?}, stderr: {}{}",
+                    exit_status.code(),
+                    stderr_output,
+                    upgrade_hint
+                )
+            };
             return Err(ProviderError::RequestFailed(format!(
-                "Codex command failed with exit code: {:?}",
-                exit_status.code()
+                "Codex command failed with {}",
+                error_detail
             )));
         }
 
