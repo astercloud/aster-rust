@@ -793,10 +793,7 @@ impl Agent {
                 // MCP 工具：通过 extension_manager 分发
                 let result = self
                     .extension_manager
-                    .dispatch_tool_call(
-                        tool_call.clone(),
-                        cancellation_token.unwrap_or_default(),
-                    )
+                    .dispatch_tool_call(tool_call.clone(), cancellation_token.unwrap_or_default())
                     .await;
                 result.unwrap_or_else(|e| {
                     crate::posthog::emit_error(
@@ -2048,12 +2045,14 @@ mod tests {
         let agent = Agent::new();
 
         // Register an MCP tool
-        agent.register_mcp_tool(
-            "test_mcp_tool".to_string(),
-            "A test MCP tool".to_string(),
-            serde_json::json!({"type": "object"}),
-            "test_server".to_string(),
-        ).await;
+        agent
+            .register_mcp_tool(
+                "test_mcp_tool".to_string(),
+                "A test MCP tool".to_string(),
+                serde_json::json!({"type": "object"}),
+                "test_server".to_string(),
+            )
+            .await;
 
         // Verify the MCP tool is registered
         let registry = agent.tool_registry();

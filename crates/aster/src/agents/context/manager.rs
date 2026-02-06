@@ -1414,10 +1414,19 @@ mod property_tests {
             }
 
             // Merged context should have updated token count
-            prop_assert!(
-                merged.metadata.token_count > 0 || merged.is_empty(),
-                "Token count should be updated"
-            );
+            // 注意：当所有内容都很短时，estimate_token_count (chars/4) 可能为 0
+            let total_content_len: usize = merged.conversation_history.iter()
+                .flat_map(|m| m.content.iter())
+                .map(|c| c.to_string().len())
+                .sum::<usize>()
+                + merged.file_context.iter().map(|f| f.content.len()).sum::<usize>()
+                + merged.tool_results.iter().map(|t| t.content.len()).sum::<usize>();
+            if total_content_len >= 4 {
+                prop_assert!(
+                    merged.metadata.token_count > 0,
+                    "Token count should be > 0 when content is substantial"
+                );
+            }
         }
     }
 

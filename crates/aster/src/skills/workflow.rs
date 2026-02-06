@@ -19,7 +19,7 @@
 //!
 //! ```rust
 //! use std::collections::HashMap;
-//! use aster::skills::workflow::interpolate_variables;
+//! use aster::skills::interpolate_variables;
 //!
 //! let mut context = HashMap::new();
 //! context.insert("name".to_string(), "Alice".to_string());
@@ -61,7 +61,7 @@ use super::types::WorkflowStep;
 ///
 /// ```rust
 /// use std::collections::HashMap;
-/// use aster::skills::workflow::interpolate_variables;
+/// use aster::skills::interpolate_variables;
 ///
 /// // 基本变量替换
 /// let mut context = HashMap::new();
@@ -125,8 +125,8 @@ pub fn interpolate_variables(template: &str, context: &HashMap<String, String>) 
 /// # 示例
 ///
 /// ```rust
-/// use aster::skills::workflow::topological_sort;
-/// use aster::skills::types::WorkflowStep;
+/// use aster::skills::topological_sort;
+/// use aster::skills::WorkflowStep;
 ///
 /// // 创建步骤：step2 依赖 step1
 /// let steps = vec![
@@ -143,8 +143,8 @@ pub fn interpolate_variables(template: &str, context: &HashMap<String, String>) 
 /// # 错误示例
 ///
 /// ```rust
-/// use aster::skills::workflow::topological_sort;
-/// use aster::skills::types::WorkflowStep;
+/// use aster::skills::topological_sort;
+/// use aster::skills::WorkflowStep;
 ///
 /// // 循环依赖：step1 -> step2 -> step1
 /// let steps = vec![

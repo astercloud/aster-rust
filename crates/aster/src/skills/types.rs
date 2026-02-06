@@ -34,7 +34,7 @@ impl SkillExecutionMode {
     ///
     /// # Examples
     /// ```
-    /// use aster::skills::types::SkillExecutionMode;
+    /// use aster::skills::SkillExecutionMode;
     ///
     /// assert_eq!(SkillExecutionMode::parse("workflow"), SkillExecutionMode::Workflow);
     /// assert_eq!(SkillExecutionMode::parse("AGENT"), SkillExecutionMode::Agent);
@@ -426,7 +426,7 @@ pub struct InvokedSkill {
 ///
 /// # 示例
 /// ```rust
-/// use aster::skills::types::StepResult;
+/// use aster::skills::StepResult;
 ///
 /// let result = StepResult {
 ///     step_id: "analyze".to_string(),

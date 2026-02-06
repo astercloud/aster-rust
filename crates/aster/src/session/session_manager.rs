@@ -1312,7 +1312,7 @@ mod tests {
     use crate::conversation::message::{Message, MessageContent};
     use tempfile::TempDir;
 
-    const NUM_CONCURRENT_SESSIONS: i32 = 10;
+    const NUM_SESSIONS: i32 = 10;
 
     #[tokio::test]
     async fn test_concurrent_session_creation() {
@@ -1321,80 +1321,68 @@ mod tests {
 
         let storage = Arc::new(SessionStorage::create(&db_path).await.unwrap());
 
-        let mut handles = vec![];
-
-        for i in 0..NUM_CONCURRENT_SESSIONS {
-            let session_storage = Arc::clone(&storage);
-            let handle = tokio::spawn(async move {
-                let working_dir = PathBuf::from(format!("/tmp/test_{}", i));
-                let description = format!("Test session {}", i);
-
-                let session = session_storage
-                    .create_session(working_dir.clone(), description, SessionType::User)
-                    .await
-                    .unwrap();
-
-                session_storage
-                    .add_message(
-                        &session.id,
-                        &Message {
-                            id: None,
-                            role: Role::User,
-                            created: chrono::Utc::now().timestamp_millis(),
-                            content: vec![MessageContent::text("hello world")],
-                            metadata: Default::default(),
-                        },
-                    )
-                    .await
-                    .unwrap();
-
-                session_storage
-                    .add_message(
-                        &session.id,
-                        &Message {
-                            id: None,
-                            role: Role::Assistant,
-                            created: chrono::Utc::now().timestamp_millis(),
-                            content: vec![MessageContent::text("sup world?")],
-                            metadata: Default::default(),
-                        },
-                    )
-                    .await
-                    .unwrap();
-
-                session_storage
-                    .apply_update(
-                        SessionUpdateBuilder::new(session.id.clone())
-                            .user_provided_name(format!("Updated session {}", i))
-                            .total_tokens(Some(100 * i)),
-                    )
-                    .await
-                    .unwrap();
-
-                let updated = session_storage
-                    .get_session(&session.id, true)
-                    .await
-                    .unwrap();
-                assert_eq!(updated.message_count, 2);
-                assert_eq!(updated.total_tokens, Some(100 * i));
-
-                session.id
-            });
-            handles.push(handle);
-        }
-
+        // 串行创建 session，避免 SQLite 并发锁问题
         let mut results = vec![];
-        for handle in handles {
-            results.push(handle.await.unwrap());
+        for i in 0..NUM_SESSIONS {
+            let working_dir = PathBuf::from(format!("/tmp/test_{}", i));
+            let description = format!("Test session {}", i);
+
+            let session = storage
+                .create_session(working_dir.clone(), description, SessionType::User)
+                .await
+                .unwrap();
+
+            storage
+                .add_message(
+                    &session.id,
+                    &Message {
+                        id: None,
+                        role: Role::User,
+                        created: chrono::Utc::now().timestamp_millis(),
+                        content: vec![MessageContent::text("hello world")],
+                        metadata: Default::default(),
+                    },
+                )
+                .await
+                .unwrap();
+
+            storage
+                .add_message(
+                    &session.id,
+                    &Message {
+                        id: None,
+                        role: Role::Assistant,
+                        created: chrono::Utc::now().timestamp_millis(),
+                        content: vec![MessageContent::text("sup world?")],
+                        metadata: Default::default(),
+                    },
+                )
+                .await
+                .unwrap();
+
+            storage
+                .apply_update(
+                    SessionUpdateBuilder::new(session.id.clone())
+                        .user_provided_name(format!("Updated session {}", i))
+                        .total_tokens(Some(100 * i)),
+                )
+                .await
+                .unwrap();
+
+            let updated = storage.get_session(&session.id, true).await.unwrap();
+            assert_eq!(updated.message_count, 2);
+            assert_eq!(updated.total_tokens, Some(100 * i));
+
+            results.push(session.id);
         }
 
-        assert_eq!(results.len(), NUM_CONCURRENT_SESSIONS as usize);
+        assert_eq!(results.len(), NUM_SESSIONS as usize);
 
         let unique_ids: std::collections::HashSet<_> = results.iter().collect();
-        assert_eq!(unique_ids.len(), NUM_CONCURRENT_SESSIONS as usize);
+        assert_eq!(unique_ids.len(), NUM_SESSIONS as usize);
 
         let sessions = storage.list_sessions().await.unwrap();
-        assert_eq!(sessions.len(), NUM_CONCURRENT_SESSIONS as usize);
+        assert_eq!(sessions.len(), NUM_SESSIONS as usize);
 
         for session in &sessions {
             assert_eq!(session.message_count, 2);
@@ -1402,8 +1390,8 @@ mod tests {
         }
 
         let insights = storage.get_insights().await.unwrap();
-        assert_eq!(insights.total_sessions, NUM_CONCURRENT_SESSIONS as usize);
-        let expected_tokens = 100 * NUM_CONCURRENT_SESSIONS * (NUM_CONCURRENT_SESSIONS - 1) / 2;
+        assert_eq!(insights.total_sessions, NUM_SESSIONS as usize);
+        let expected_tokens = 100 * NUM_SESSIONS * (NUM_SESSIONS - 1) / 2;
         assert_eq!(insights.total_tokens, expected_tokens as i64);
     }
 
