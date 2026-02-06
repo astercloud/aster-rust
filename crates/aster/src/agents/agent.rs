@@ -58,8 +58,7 @@ use rmcp::model::{
     ServerNotification, Tool,
 };
 use serde_json::Value;
-use std::sync::RwLock;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -318,7 +317,7 @@ impl Agent {
     /// * `server_name` - Name of the MCP server providing this tool
     ///
     /// Requirements: 11.4, 11.5
-    pub fn register_mcp_tool(
+    pub async fn register_mcp_tool(
         &self,
         name: String,
         description: String,
@@ -327,9 +326,8 @@ impl Agent {
     ) {
         let wrapper =
             crate::tools::McpToolWrapper::new(name.clone(), description, input_schema, server_name);
-        if let Ok(mut registry) = self.tool_registry.write() {
-            registry.register_mcp(name, wrapper);
-        }
+        let mut registry = self.tool_registry.write().await;
+        registry.register_mcp(name, wrapper);
     }
 
     /// Create a tool inspection manager with default inspectors
@@ -761,22 +759,57 @@ impl Agent {
                 None,
             )))
         } else {
-            // Clone the result to ensure no references to extension_manager are returned
-            let result = self
-                .extension_manager
-                .dispatch_tool_call(tool_call.clone(), cancellation_token.unwrap_or_default())
-                .await;
-            result.unwrap_or_else(|e| {
-                crate::posthog::emit_error(
-                    "tool_execution_failed",
-                    &format!("{}: {}", tool_call.name, e),
-                );
-                ToolCallResult::from(Err(ErrorData::new(
-                    ErrorCode::INTERNAL_ERROR,
-                    e.to_string(),
-                    None,
-                )))
-            })
+            // 参考 claude-code-open 架构：优先检查 tool_registry 中的原生工具
+            // 原生工具直接在进程内执行，不需要 MCP 子进程
+            let is_native = self.tool_registry.read().await.contains(&tool_call.name);
+
+            if is_native {
+                // 原生工具：直接通过 tool_registry 执行（类似 claude-code-open 的 toolRegistry.execute）
+                let tool_name = tool_call.name.clone();
+                let params = tool_call
+                    .arguments
+                    .clone()
+                    .map(Value::Object)
+                    .unwrap_or(Value::Object(serde_json::Map::new()));
+                let context = crate::tools::context::ToolContext::new(session.working_dir.clone())
+                    .with_session_id(session.id.clone());
+
+                let registry = self.tool_registry.read().await;
+                let execute_result = registry.execute(&tool_name, params, &context, None).await;
+                drop(registry);
+
+                match execute_result {
+                    Ok(result) => {
+                        let text = result.output.unwrap_or_default();
+                        ToolCallResult::from(Ok(CallToolResult::success(vec![Content::text(text)])))
+                    }
+                    Err(e) => ToolCallResult::from(Err(ErrorData::new(
+                        ErrorCode::INTERNAL_ERROR,
+                        e.to_string(),
+                        None,
+                    ))),
+                }
+            } else {
+                // MCP 工具：通过 extension_manager 分发
+                let result = self
+                    .extension_manager
+                    .dispatch_tool_call(
+                        tool_call.clone(),
+                        cancellation_token.unwrap_or_default(),
+                    )
+                    .await;
+                result.unwrap_or_else(|e| {
+                    crate::posthog::emit_error(
+                        "tool_execution_failed",
+                        &format!("{}: {}", tool_call.name, e),
+                    );
+                    ToolCallResult::from(Err(ErrorData::new(
+                        ErrorCode::INTERNAL_ERROR,
+                        e.to_string(),
+                        None,
+                    )))
+                })
+            }
         };
 
         debug!("WAITING_TOOL_END: {}", tool_call.name);
@@ -911,19 +944,18 @@ impl Agent {
             }
 
             // 添加 tool_registry 中的原生工具（包括 SkillTool）
-            if let Ok(registry) = self.tool_registry.read() {
-                for tool_def in registry.get_definitions() {
-                    let tool = Tool::new(
-                        tool_def.name,
-                        tool_def.description,
-                        tool_def
-                            .input_schema
-                            .as_object()
-                            .cloned()
-                            .unwrap_or_default(),
-                    );
-                    prefixed_tools.push(tool);
-                }
+            let registry = self.tool_registry.read().await;
+            for tool_def in registry.get_definitions() {
+                let tool = Tool::new(
+                    tool_def.name,
+                    tool_def.description,
+                    tool_def
+                        .input_schema
+                        .as_object()
+                        .cloned()
+                        .unwrap_or_default(),
+                );
+                prefixed_tools.push(tool);
             }
         }
 
@@ -1952,7 +1984,7 @@ mod tests {
 
         // Verify that the tool registry is initialized
         let registry = agent.tool_registry();
-        let registry_guard = registry.read().unwrap();
+        let registry_guard = registry.read().await;
 
         // Verify core native tools are registered
         assert!(
@@ -1996,7 +2028,7 @@ mod tests {
 
         // Verify that the tool registry is initialized
         let registry = agent.tool_registry();
-        let registry_guard = registry.read().unwrap();
+        let registry_guard = registry.read().await;
 
         // Verify core native tools are registered
         assert!(
@@ -2021,11 +2053,11 @@ mod tests {
             "A test MCP tool".to_string(),
             serde_json::json!({"type": "object"}),
             "test_server".to_string(),
-        );
+        ).await;
 
         // Verify the MCP tool is registered
         let registry = agent.tool_registry();
-        let registry_guard = registry.read().unwrap();
+        let registry_guard = registry.read().await;
         assert!(
             registry_guard.contains("test_mcp_tool"),
             "MCP tool should be registered"
