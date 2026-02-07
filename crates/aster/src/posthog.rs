@@ -1,8 +1,12 @@
 //! PostHog telemetry - fires once per session creation.
 
+#[cfg(feature = "telemetry-posthog")]
+use crate::config::get_enabled_extensions;
 use crate::config::paths::Paths;
-use crate::config::{get_enabled_extensions, Config};
+use crate::config::Config;
+#[cfg(feature = "telemetry-posthog")]
 use crate::session::session_manager::CURRENT_SCHEMA_VERSION;
+#[cfg(feature = "telemetry-posthog")]
 use crate::session::SessionManager;
 use chrono::{DateTime, Utc};
 use once_cell::sync::Lazy;
@@ -261,150 +265,178 @@ async fn send_error_event(
     error_type: &str,
     context: ErrorContext,
 ) -> Result<(), String> {
-    let client = posthog_rs::client(POSTHOG_API_KEY).await;
-    let mut event = posthog_rs::Event::new("error", &installation.installation_id);
-
-    event.insert_prop("error_type", error_type).ok();
-    event
-        .insert_prop("error_category", classify_error(error_type))
-        .ok();
-    event.insert_prop("source", "backend").ok();
-    event.insert_prop("version", env!("CARGO_PKG_VERSION")).ok();
-    event.insert_prop("interface", get_session_interface()).ok();
-    event.insert_prop("os", std::env::consts::OS).ok();
-    event.insert_prop("arch", std::env::consts::ARCH).ok();
-
-    if let Some(component) = &context.component {
-        event.insert_prop("component", component.as_str()).ok();
-    }
-    if let Some(action) = &context.action {
-        event.insert_prop("action", action.as_str()).ok();
-    }
-    if let Some(error_message) = &context.error_message {
-        let sanitized = sanitize_string(error_message);
-        event.insert_prop("error_message", sanitized).ok();
+    #[cfg(not(feature = "telemetry-posthog"))]
+    {
+        let _ = (installation, error_type, context);
+        return Ok(());
     }
 
-    if let Some(platform_version) = get_platform_version() {
-        event.insert_prop("platform_version", platform_version).ok();
-    }
+    #[cfg(feature = "telemetry-posthog")]
+    {
+        let client = posthog_rs::client(POSTHOG_API_KEY).await;
+        let mut event = posthog_rs::Event::new("error", &installation.installation_id);
 
-    let config = Config::global();
-    if let Ok(provider) = config.get_param::<String>("ASTER_PROVIDER") {
-        event.insert_prop("provider", provider).ok();
-    }
-    if let Ok(model) = config.get_param::<String>("ASTER_MODEL") {
-        event.insert_prop("model", model).ok();
-    }
+        event.insert_prop("error_type", error_type).ok();
+        event
+            .insert_prop("error_category", classify_error(error_type))
+            .ok();
+        event.insert_prop("source", "backend").ok();
+        event.insert_prop("version", env!("CARGO_PKG_VERSION")).ok();
+        event.insert_prop("interface", get_session_interface()).ok();
+        event.insert_prop("os", std::env::consts::OS).ok();
+        event.insert_prop("arch", std::env::consts::ARCH).ok();
 
-    client.capture(event).await.map_err(|e| format!("{:?}", e))
+        if let Some(component) = &context.component {
+            event.insert_prop("component", component.as_str()).ok();
+        }
+        if let Some(action) = &context.action {
+            event.insert_prop("action", action.as_str()).ok();
+        }
+        if let Some(error_message) = &context.error_message {
+            let sanitized = sanitize_string(error_message);
+            event.insert_prop("error_message", sanitized).ok();
+        }
+
+        if let Some(platform_version) = get_platform_version() {
+            event.insert_prop("platform_version", platform_version).ok();
+        }
+
+        let config = Config::global();
+        if let Ok(provider) = config.get_param::<String>("ASTER_PROVIDER") {
+            event.insert_prop("provider", provider).ok();
+        }
+        if let Ok(model) = config.get_param::<String>("ASTER_MODEL") {
+            event.insert_prop("model", model).ok();
+        }
+
+        client.capture(event).await.map_err(|e| format!("{:?}", e))
+    }
 }
 
 async fn send_custom_slash_command_event(installation: &InstallationData) -> Result<(), String> {
-    let client = posthog_rs::client(POSTHOG_API_KEY).await;
-    let mut event =
-        posthog_rs::Event::new("custom_slash_command_used", &installation.installation_id);
-
-    event.insert_prop("source", "backend").ok();
-    event.insert_prop("version", env!("CARGO_PKG_VERSION")).ok();
-    event.insert_prop("interface", get_session_interface()).ok();
-    event.insert_prop("os", std::env::consts::OS).ok();
-    event.insert_prop("arch", std::env::consts::ARCH).ok();
-
-    if let Some(platform_version) = get_platform_version() {
-        event.insert_prop("platform_version", platform_version).ok();
+    #[cfg(not(feature = "telemetry-posthog"))]
+    {
+        let _ = installation;
+        return Ok(());
     }
 
-    client.capture(event).await.map_err(|e| format!("{:?}", e))
+    #[cfg(feature = "telemetry-posthog")]
+    {
+        let client = posthog_rs::client(POSTHOG_API_KEY).await;
+        let mut event =
+            posthog_rs::Event::new("custom_slash_command_used", &installation.installation_id);
+
+        event.insert_prop("source", "backend").ok();
+        event.insert_prop("version", env!("CARGO_PKG_VERSION")).ok();
+        event.insert_prop("interface", get_session_interface()).ok();
+        event.insert_prop("os", std::env::consts::OS).ok();
+        event.insert_prop("arch", std::env::consts::ARCH).ok();
+
+        if let Some(platform_version) = get_platform_version() {
+            event.insert_prop("platform_version", platform_version).ok();
+        }
+
+        client.capture(event).await.map_err(|e| format!("{:?}", e))
+    }
 }
 
 async fn send_session_event(installation: &InstallationData) -> Result<(), String> {
-    let client = posthog_rs::client(POSTHOG_API_KEY).await;
-    let mut event = posthog_rs::Event::new("session_started", &installation.installation_id);
-
-    event.insert_prop("os", std::env::consts::OS).ok();
-    event.insert_prop("arch", std::env::consts::ARCH).ok();
-    event.insert_prop("version", env!("CARGO_PKG_VERSION")).ok();
-    event.insert_prop("is_dev", is_dev_mode()).ok();
-
-    if let Some(platform_version) = get_platform_version() {
-        event.insert_prop("platform_version", platform_version).ok();
+    #[cfg(not(feature = "telemetry-posthog"))]
+    {
+        let _ = installation;
+        return Ok(());
     }
 
-    event
-        .insert_prop("install_method", detect_install_method())
-        .ok();
+    #[cfg(feature = "telemetry-posthog")]
+    {
+        let client = posthog_rs::client(POSTHOG_API_KEY).await;
+        let mut event = posthog_rs::Event::new("session_started", &installation.installation_id);
 
-    event.insert_prop("interface", get_session_interface()).ok();
+        event.insert_prop("os", std::env::consts::OS).ok();
+        event.insert_prop("arch", std::env::consts::ARCH).ok();
+        event.insert_prop("version", env!("CARGO_PKG_VERSION")).ok();
+        event.insert_prop("is_dev", is_dev_mode()).ok();
 
-    event
-        .insert_prop("is_resumed", get_session_is_resumed())
-        .ok();
+        if let Some(platform_version) = get_platform_version() {
+            event.insert_prop("platform_version", platform_version).ok();
+        }
 
-    event
-        .insert_prop("session_number", installation.session_count)
-        .ok();
-    let days_since_install = (Utc::now() - installation.first_seen).num_days();
-    event
-        .insert_prop("days_since_install", days_since_install)
-        .ok();
-
-    let config = Config::global();
-    if let Ok(provider) = config.get_param::<String>("ASTER_PROVIDER") {
-        event.insert_prop("provider", provider).ok();
-    }
-    if let Ok(model) = config.get_param::<String>("ASTER_MODEL") {
-        event.insert_prop("model", model).ok();
-    }
-
-    if let Ok(mode) = config.get_param::<String>("ASTER_MODE") {
-        event.insert_prop("setting_mode", mode).ok();
-    }
-    if let Ok(max_turns) = config.get_param::<i64>("ASTER_MAX_TURNS") {
-        event.insert_prop("setting_max_turns", max_turns).ok();
-    }
-
-    if let Ok(lead_model) = config.get_param::<String>("ASTER_LEAD_MODEL") {
-        event.insert_prop("setting_lead_model", lead_model).ok();
-    }
-    if let Ok(lead_provider) = config.get_param::<String>("ASTER_LEAD_PROVIDER") {
         event
-            .insert_prop("setting_lead_provider", lead_provider)
+            .insert_prop("install_method", detect_install_method())
             .ok();
-    }
-    if let Ok(lead_turns) = config.get_param::<i64>("ASTER_LEAD_TURNS") {
-        event.insert_prop("setting_lead_turns", lead_turns).ok();
-    }
-    if let Ok(lead_failure_threshold) = config.get_param::<i64>("ASTER_LEAD_FAILURE_THRESHOLD") {
-        event
-            .insert_prop("setting_lead_failure_threshold", lead_failure_threshold)
-            .ok();
-    }
-    if let Ok(lead_fallback_turns) = config.get_param::<i64>("ASTER_LEAD_FALLBACK_TURNS") {
-        event
-            .insert_prop("setting_lead_fallback_turns", lead_fallback_turns)
-            .ok();
-    }
 
-    let extensions = get_enabled_extensions();
-    event.insert_prop("extensions_count", extensions.len()).ok();
-    let extension_names: Vec<String> = extensions.iter().map(|e| e.name()).collect();
-    event.insert_prop("extensions", extension_names).ok();
+        event.insert_prop("interface", get_session_interface()).ok();
 
-    event
-        .insert_prop("db_schema_version", CURRENT_SCHEMA_VERSION)
-        .ok();
+        event
+            .insert_prop("is_resumed", get_session_is_resumed())
+            .ok();
 
-    if let Ok(insights) = SessionManager::get_insights().await {
         event
-            .insert_prop("total_sessions", insights.total_sessions)
+            .insert_prop("session_number", installation.session_count)
             .ok();
+        let days_since_install = (Utc::now() - installation.first_seen).num_days();
         event
-            .insert_prop("total_tokens", insights.total_tokens)
+            .insert_prop("days_since_install", days_since_install)
             .ok();
+
+        let config = Config::global();
+        if let Ok(provider) = config.get_param::<String>("ASTER_PROVIDER") {
+            event.insert_prop("provider", provider).ok();
+        }
+        if let Ok(model) = config.get_param::<String>("ASTER_MODEL") {
+            event.insert_prop("model", model).ok();
+        }
+
+        if let Ok(mode) = config.get_param::<String>("ASTER_MODE") {
+            event.insert_prop("setting_mode", mode).ok();
+        }
+        if let Ok(max_turns) = config.get_param::<i64>("ASTER_MAX_TURNS") {
+            event.insert_prop("setting_max_turns", max_turns).ok();
+        }
+
+        if let Ok(lead_model) = config.get_param::<String>("ASTER_LEAD_MODEL") {
+            event.insert_prop("setting_lead_model", lead_model).ok();
+        }
+        if let Ok(lead_provider) = config.get_param::<String>("ASTER_LEAD_PROVIDER") {
+            event
+                .insert_prop("setting_lead_provider", lead_provider)
+                .ok();
+        }
+        if let Ok(lead_turns) = config.get_param::<i64>("ASTER_LEAD_TURNS") {
+            event.insert_prop("setting_lead_turns", lead_turns).ok();
+        }
+        if let Ok(lead_failure_threshold) = config.get_param::<i64>("ASTER_LEAD_FAILURE_THRESHOLD")
+        {
+            event
+                .insert_prop("setting_lead_failure_threshold", lead_failure_threshold)
+                .ok();
+        }
+        if let Ok(lead_fallback_turns) = config.get_param::<i64>("ASTER_LEAD_FALLBACK_TURNS") {
+            event
+                .insert_prop("setting_lead_fallback_turns", lead_fallback_turns)
+                .ok();
+        }
+
+        let extensions = get_enabled_extensions();
+        event.insert_prop("extensions_count", extensions.len()).ok();
+        let extension_names: Vec<String> = extensions.iter().map(|e| e.name()).collect();
+        event.insert_prop("extensions", extension_names).ok();
+
+        event
+            .insert_prop("db_schema_version", CURRENT_SCHEMA_VERSION)
+            .ok();
+
+        if let Ok(insights) = SessionManager::get_insights().await {
+            event
+                .insert_prop("total_sessions", insights.total_sessions)
+                .ok();
+            event
+                .insert_prop("total_tokens", insights.total_tokens)
+                .ok();
+        }
+
+        client.capture(event).await.map_err(|e| format!("{:?}", e))
     }
-
-    client.capture(event).await.map_err(|e| format!("{:?}", e))
 }
 
 // ============================================================================
@@ -518,49 +550,59 @@ fn sanitize_value(value: serde_json::Value) -> serde_json::Value {
 // ============================================================================
 pub async fn emit_event(
     event_name: &str,
-    mut properties: std::collections::HashMap<String, serde_json::Value>,
+    properties: std::collections::HashMap<String, serde_json::Value>,
 ) -> Result<(), String> {
     if !is_telemetry_enabled() {
         return Ok(());
     }
 
-    let installation = load_or_create_installation();
-    let client = posthog_rs::client(POSTHOG_API_KEY).await;
-    let mut event = posthog_rs::Event::new(event_name, &installation.installation_id);
-
-    event.insert_prop("os", std::env::consts::OS).ok();
-    event.insert_prop("arch", std::env::consts::ARCH).ok();
-    event.insert_prop("version", env!("CARGO_PKG_VERSION")).ok();
-    event.insert_prop("interface", "desktop").ok();
-    event.insert_prop("source", "ui").ok();
-
-    if let Some(platform_version) = get_platform_version() {
-        event.insert_prop("platform_version", platform_version).ok();
+    #[cfg(not(feature = "telemetry-posthog"))]
+    {
+        let _ = (event_name, properties);
+        return Ok(());
     }
 
-    if event_name == "error_occurred" || event_name == "app_crashed" {
-        if let Some(serde_json::Value::String(error_type)) = properties.get("error_type") {
-            let classified = classify_error(error_type);
-            properties.insert(
-                "error_category".to_string(),
-                serde_json::Value::String(classified.to_string()),
-            );
+    #[cfg(feature = "telemetry-posthog")]
+    {
+        let mut properties = properties;
+        let installation = load_or_create_installation();
+        let client = posthog_rs::client(POSTHOG_API_KEY).await;
+        let mut event = posthog_rs::Event::new(event_name, &installation.installation_id);
+
+        event.insert_prop("os", std::env::consts::OS).ok();
+        event.insert_prop("arch", std::env::consts::ARCH).ok();
+        event.insert_prop("version", env!("CARGO_PKG_VERSION")).ok();
+        event.insert_prop("interface", "desktop").ok();
+        event.insert_prop("source", "ui").ok();
+
+        if let Some(platform_version) = get_platform_version() {
+            event.insert_prop("platform_version", platform_version).ok();
         }
-    }
 
-    for (key, value) in properties {
-        let key_lower = key.to_lowercase();
-        if key_lower.contains("key")
-            || key_lower.contains("token")
-            || key_lower.contains("secret")
-            || key_lower.contains("password")
-            || key_lower.contains("credential")
-        {
-            continue;
+        if event_name == "error_occurred" || event_name == "app_crashed" {
+            if let Some(serde_json::Value::String(error_type)) = properties.get("error_type") {
+                let classified = classify_error(error_type);
+                properties.insert(
+                    "error_category".to_string(),
+                    serde_json::Value::String(classified.to_string()),
+                );
+            }
         }
-        let sanitized_value = sanitize_value(value);
-        event.insert_prop(&key, sanitized_value).ok();
-    }
 
-    client.capture(event).await.map_err(|e| format!("{:?}", e))
+        for (key, value) in properties {
+            let key_lower = key.to_lowercase();
+            if key_lower.contains("key")
+                || key_lower.contains("token")
+                || key_lower.contains("secret")
+                || key_lower.contains("password")
+                || key_lower.contains("credential")
+            {
+                continue;
+            }
+            let sanitized_value = sanitize_value(value);
+            event.insert_prop(&key, sanitized_value).ok();
+        }
+
+        client.capture(event).await.map_err(|e| format!("{:?}", e))
+    }
 }

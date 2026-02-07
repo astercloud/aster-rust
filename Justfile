@@ -434,6 +434,22 @@ fast-test:
 fast-test-one test_name:
   CARGO_TARGET_DIR=/tmp/aster-rust-target cargo test -p aster {{test_name}}
 
+# Fast check without telemetry feature.
+fast-check-lite:
+  CARGO_TARGET_DIR=/tmp/aster-rust-target cargo check -p aster --lib --tests --no-default-features
+
+# Fast tests without telemetry feature.
+fast-test-lite:
+  CARGO_TARGET_DIR=/tmp/aster-rust-target cargo test -p aster --lib --tests --no-default-features
+
+# Fast check for MCP crate without heavy developer/computercontroller modules.
+fast-check-mcp-lite:
+  CARGO_TARGET_DIR=/tmp/aster-rust-target cargo check -p aster-mcp --lib --tests --no-default-features
+
+# Fast test for MCP crate without heavy developer/computercontroller modules.
+fast-test-mcp-lite:
+  CARGO_TARGET_DIR=/tmp/aster-rust-target cargo test -p aster-mcp --lib --tests --no-default-features
+
 record-mcp-tests: build-test-tools
   ASTER_RECORD_MCP=1 cargo test --package aster --test mcp_integration_test
   git add crates/aster/tests/mcp_replays/

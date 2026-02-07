@@ -1,10 +1,10 @@
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use super::{
     anthropic::AnthropicProvider,
     azure::AzureProvider,
     base::{Provider, ProviderMetadata},
-    bedrock::BedrockProvider,
     claude_code::ClaudeCodeProvider,
     codex::CodexProvider,
     codex_stateful::CodexStatefulProvider,
@@ -20,12 +20,13 @@ use super::{
     openai::OpenAiProvider,
     openrouter::OpenRouterProvider,
     provider_registry::ProviderRegistry,
-    sagemaker_tgi::SageMakerTgiProvider,
     snowflake::SnowflakeProvider,
     tetrate::TetrateProvider,
     venice::VeniceProvider,
     xai::XaiProvider,
 };
+#[cfg(feature = "provider-aws")]
+use super::{bedrock::BedrockProvider, sagemaker_tgi::SageMakerTgiProvider};
 use crate::model::ModelConfig;
 use crate::providers::base::ProviderType;
 use crate::{
@@ -46,6 +47,7 @@ async fn init_registry() -> RwLock<ProviderRegistry> {
         registry
             .register::<AnthropicProvider, _>(|m| Box::pin(AnthropicProvider::from_env(m)), true);
         registry.register::<AzureProvider, _>(|m| Box::pin(AzureProvider::from_env(m)), false);
+        #[cfg(feature = "provider-aws")]
         registry.register::<BedrockProvider, _>(|m| Box::pin(BedrockProvider::from_env(m)), false);
         registry
             .register::<ClaudeCodeProvider, _>(|m| Box::pin(ClaudeCodeProvider::from_env(m)), true);
@@ -76,6 +78,7 @@ async fn init_registry() -> RwLock<ProviderRegistry> {
         registry.register::<OpenAiProvider, _>(|m| Box::pin(OpenAiProvider::from_env(m)), true);
         registry
             .register::<OpenRouterProvider, _>(|m| Box::pin(OpenRouterProvider::from_env(m)), true);
+        #[cfg(feature = "provider-aws")]
         registry.register::<SageMakerTgiProvider, _>(
             |m| Box::pin(SageMakerTgiProvider::from_env(m)),
             false,
@@ -125,10 +128,18 @@ async fn get_from_registry(name: &str) -> Result<ProviderEntry> {
     // 将各种 Provider 名称映射到 Aster 支持的 Provider
     let mapped_name = map_provider_alias(name);
 
+    #[cfg(not(feature = "provider-aws"))]
+    if mapped_name == "bedrock" || mapped_name == "sagemaker_tgi" {
+        return Err(anyhow::anyhow!(
+            "Provider {} is disabled at compile time; rebuild with feature provider-aws",
+            mapped_name
+        ));
+    }
+
     let guard = get_registry().await.read().unwrap();
     guard
         .entries
-        .get(mapped_name)
+        .get(mapped_name.as_str())
         .ok_or_else(|| anyhow::anyhow!("Unknown provider: {} (mapped to: {})", name, mapped_name))
         .cloned()
 }
@@ -141,8 +152,67 @@ async fn get_from_registry(name: &str) -> Result<ProviderEntry> {
 /// - snowflake, sagemaker_tgi, githubcopilot, gemini_cli, cursor_agent, claude_code
 ///
 /// 其他 Provider 会映射到兼容的 Provider
-fn map_provider_alias(name: &str) -> &str {
-    match name.to_lowercase().as_str() {
+fn parse_provider_alias_overrides(raw: &str) -> HashMap<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return HashMap::new();
+    }
+
+    if let Ok(json_map) = serde_json::from_str::<HashMap<String, String>>(trimmed) {
+        return json_map
+            .into_iter()
+            .map(|(alias, target)| (alias.trim().to_lowercase(), target.trim().to_lowercase()))
+            .filter(|(alias, target)| !alias.is_empty() && !target.is_empty())
+            .collect();
+    }
+
+    let mut overrides = HashMap::new();
+    for pair in trimmed.split(',') {
+        let entry = pair.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        let parsed = entry.split_once('=').or_else(|| entry.split_once(':'));
+
+        if let Some((alias, target)) = parsed {
+            let alias = alias.trim().to_lowercase();
+            let target = target.trim().to_lowercase();
+            if !alias.is_empty() && !target.is_empty() {
+                overrides.insert(alias, target);
+            }
+        }
+    }
+
+    overrides
+}
+
+fn load_provider_alias_overrides() -> HashMap<String, String> {
+    std::env::var("ASTER_PROVIDER_ALIAS_OVERRIDES")
+        .ok()
+        .map(|raw| parse_provider_alias_overrides(&raw))
+        .unwrap_or_default()
+}
+
+fn map_provider_alias(name: &str) -> String {
+    let normalized = name.trim().to_lowercase();
+
+    if normalized.is_empty() {
+        return normalized;
+    }
+
+    // 自定义 Provider（UUID 格式，如 custom-ba4e7574-dd00-4784-945a-0f383dfa1272）
+    // 这些是用户通过 API Key Provider 添加的自定义服务，通常是 OpenAI 兼容的
+    if normalized.starts_with("custom-") {
+        return "openai".to_string();
+    }
+
+    // 应用层可通过环境变量覆盖别名映射，避免框架层频繁改代码
+    if let Some(mapped) = load_provider_alias_overrides().get(normalized.as_str()) {
+        return mapped.clone();
+    }
+
+    let mapped = match normalized.as_str() {
         // ========== OpenAI 兼容格式 ==========
         // 国内 AI 服务
         "deepseek" | "deep_seek" | "deep-seek" => "openai",
@@ -193,13 +263,11 @@ fn map_provider_alias(name: &str) -> &str {
         "aws_bedrock" | "aws-bedrock" => "bedrock",
         "kiro" => "bedrock", // Kiro 使用 CodeWhisperer API
 
-        // 自定义 Provider（UUID 格式，如 custom-ba4e7574-dd00-4784-945a-0f383dfa1272）
-        // 这些是用户通过 API Key Provider 添加的自定义服务，通常是 OpenAI 兼容的
-        s if s.starts_with("custom-") => "openai",
+        // 默认返回小写原名称（让 Aster 原生处理）
+        _ => normalized.as_str(),
+    };
 
-        // 默认返回原名称（让 Aster 原生处理）
-        _ => name,
-    }
+    mapped.to_string()
 }
 
 pub async fn create(name: &str, model: ModelConfig) -> Result<Arc<dyn Provider>> {
@@ -236,9 +304,11 @@ async fn create_lead_worker_from_env(
 ) -> Result<Arc<dyn Provider>> {
     let config = crate::config::Config::global();
 
-    let lead_provider_name = config
+    let lead_provider_name_raw = config
         .get_param::<String>("ASTER_LEAD_PROVIDER")
         .unwrap_or_else(|_| default_provider_name.to_string());
+    let lead_provider_name = map_provider_alias(&lead_provider_name_raw);
+    let worker_provider_name = map_provider_alias(default_provider_name);
 
     let lead_turns = config
         .get_param::<usize>("ASTER_LEAD_TURNS")
@@ -263,8 +333,14 @@ async fn create_lead_worker_from_env(
         let guard = registry.read().unwrap();
         guard
             .entries
-            .get(&lead_provider_name)
-            .ok_or_else(|| anyhow::anyhow!("Unknown provider: {}", lead_provider_name))?
+            .get(lead_provider_name.as_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Unknown provider: {} (mapped to: {})",
+                    lead_provider_name_raw,
+                    lead_provider_name
+                )
+            })?
             .constructor
             .clone()
     };
@@ -273,8 +349,14 @@ async fn create_lead_worker_from_env(
         let guard = registry.read().unwrap();
         guard
             .entries
-            .get(default_provider_name)
-            .ok_or_else(|| anyhow::anyhow!("Unknown provider: {}", default_provider_name))?
+            .get(worker_provider_name.as_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Unknown provider: {} (mapped to: {})",
+                    default_provider_name,
+                    worker_provider_name
+                )
+            })?
             .constructor
             .clone()
     };
@@ -422,6 +504,8 @@ mod tests {
 
     #[test]
     fn test_map_provider_alias_custom_uuid() {
+        let _guard = env_lock::lock_env([("ASTER_PROVIDER_ALIAS_OVERRIDES", None::<&str>)]);
+
         // 自定义 Provider UUID 格式应该映射到 openai
         assert_eq!(
             map_provider_alias("custom-ba4e7574-dd00-4784-945a-0f383dfa1272"),
@@ -438,6 +522,8 @@ mod tests {
 
     #[test]
     fn test_map_provider_alias_known_providers() {
+        let _guard = env_lock::lock_env([("ASTER_PROVIDER_ALIAS_OVERRIDES", None::<&str>)]);
+
         // 已知的 Provider 应该正确映射
         assert_eq!(map_provider_alias("deepseek"), "openai");
         assert_eq!(map_provider_alias("qwen"), "openai");
@@ -448,5 +534,38 @@ mod tests {
         assert_eq!(map_provider_alias("openai"), "openai");
         assert_eq!(map_provider_alias("anthropic"), "anthropic");
         assert_eq!(map_provider_alias("google"), "google");
+    }
+
+    #[test]
+    fn test_map_provider_alias_fallback_to_lowercase() {
+        let _guard = env_lock::lock_env([("ASTER_PROVIDER_ALIAS_OVERRIDES", None::<&str>)]);
+
+        assert_eq!(map_provider_alias("OpenAI"), "openai");
+        assert_eq!(
+            map_provider_alias("My-Custom-Provider"),
+            "my-custom-provider"
+        );
+    }
+
+    #[test]
+    fn test_map_provider_alias_env_override_json() {
+        let _guard = env_lock::lock_env([(
+            "ASTER_PROVIDER_ALIAS_OVERRIDES",
+            Some(r#"{"moonshotai":"openrouter","gemini":"google"}"#),
+        )]);
+
+        assert_eq!(map_provider_alias("moonshotai"), "openrouter");
+        assert_eq!(map_provider_alias("gemini"), "google");
+    }
+
+    #[test]
+    fn test_map_provider_alias_env_override_kv() {
+        let _guard = env_lock::lock_env([(
+            "ASTER_PROVIDER_ALIAS_OVERRIDES",
+            Some("deepseek=openrouter,claude=openai"),
+        )]);
+
+        assert_eq!(map_provider_alias("deepseek"), "openrouter");
+        assert_eq!(map_provider_alias("claude"), "openai");
     }
 }

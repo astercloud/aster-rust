@@ -1,5 +1,10 @@
 pub mod langfuse_layer;
 mod observation_layer;
+#[cfg(feature = "telemetry-otlp")]
+#[path = "otlp_layer.rs"]
+pub mod otlp_layer;
+#[cfg(not(feature = "telemetry-otlp"))]
+#[path = "otlp_layer_stub.rs"]
 pub mod otlp_layer;
 pub mod rate_limiter;
 

@@ -165,7 +165,7 @@ pub fn create_otlp_metrics_layer() -> OtlpResult<OtlpMetricsLayer> {
     Ok(tracing_opentelemetry::MetricsLayer::new(meter_provider))
 }
 
-pub fn create_otlp_logs_layer() -> OtlpResult<OpenTelemetryTracingBridge<LoggerProvider, Logger>> {
+pub fn create_otlp_logs_layer() -> OtlpResult<OtlpLogsLayer> {
     let config = OtlpConfig::from_config().ok_or("OTEL_EXPORTER_OTLP_ENDPOINT not configured")?;
 
     let resource = Resource::new(vec![

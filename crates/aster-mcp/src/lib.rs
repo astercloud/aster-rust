@@ -8,14 +8,18 @@ pub static APP_STRATEGY: Lazy<AppStrategyArgs> = Lazy::new(|| AppStrategyArgs {
 });
 
 pub mod autovisualiser;
+#[cfg(feature = "mcp-computercontroller")]
 pub mod computercontroller;
+#[cfg(feature = "mcp-developer")]
 pub mod developer;
 pub mod mcp_server_runner;
 mod memory;
 pub mod tutorial;
 
 pub use autovisualiser::AutoVisualiserRouter;
+#[cfg(feature = "mcp-computercontroller")]
 pub use computercontroller::ComputerControllerServer;
+#[cfg(feature = "mcp-developer")]
 pub use developer::rmcp_developer::DeveloperServer;
 pub use memory::MemoryServer;
 pub use tutorial::TutorialServer;

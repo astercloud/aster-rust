@@ -1,4 +1,5 @@
 pub mod anthropic;
+#[cfg(feature = "provider-aws")]
 pub mod bedrock;
 pub mod databricks;
 pub mod gcpvertexai;
