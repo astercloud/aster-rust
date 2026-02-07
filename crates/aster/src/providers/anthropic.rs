@@ -31,7 +31,7 @@ const ANTHROPIC_KNOWN_MODELS: &[&str] = &[
     "claude-haiku-4-5",
     "claude-haiku-4-5-20251001",
     "claude-opus-4-5",
-    "claude-opus-4-5-20251101"
+    "claude-opus-4-5-20251101",
 ];
 
 const ANTHROPIC_DOC_URL: &str = "https://docs.anthropic.com/en/docs/about-claude/models";

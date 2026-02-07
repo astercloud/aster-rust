@@ -23,9 +23,7 @@ pub const BEDROCK_DOC_LINK: &str =
     "https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html";
 
 pub const BEDROCK_DEFAULT_MODEL: &str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0";
-pub const BEDROCK_KNOWN_MODELS: &[&str] = &[
-    "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-];
+pub const BEDROCK_KNOWN_MODELS: &[&str] = &["us.anthropic.claude-sonnet-4-5-20250929-v1:0"];
 
 pub const BEDROCK_DEFAULT_MAX_RETRIES: usize = 6;
 pub const BEDROCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS: u64 = 2000;
