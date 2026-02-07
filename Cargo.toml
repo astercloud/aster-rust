@@ -21,6 +21,19 @@ webbrowser = "1.0"
 which = "8.0.0"
 etcetera = "0.11.0"
 ignore = "0.4.25"
+tokio = { version = "1.43", features = [
+    "macros",
+    "rt-multi-thread",
+    "sync",
+    "time",
+    "fs",
+    "io-util",
+    "io-std",
+    "net",
+    "process",
+    "signal",
+] }
+reqwest = { version = "0.12.9", default-features = false }
 
 # Patch for Windows cross-compilation issue with crunchy
 [patch.crates-io]

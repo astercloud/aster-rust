@@ -21,12 +21,11 @@ use crate::subprocess::configure_command_no_window;
 use rmcp::model::Role;
 use rmcp::model::Tool;
 
-pub const CODEX_DEFAULT_MODEL: &str = "gpt-5.2-codex";
+pub const CODEX_DEFAULT_MODEL: &str = "gpt-5.3-codex";
 pub const CODEX_KNOWN_MODELS: &[&str] = &[
+    "gpt-5.3-codex",
     "gpt-5.2-codex",
-    "gpt-5.2",
-    "gpt-5.1-codex-max",
-    "gpt-5.1-codex-mini",
+    "gpt-5.2"
 ];
 pub const CODEX_DOC_URL: &str = "https://developers.openai.com/codex/cli";
 
@@ -150,6 +149,26 @@ impl CodexProvider {
         Ok(())
     }
 
+    /// 从 reader 中读取所有非空行
+    async fn read_lines_from<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> Vec<String> {
+        let mut lines = Vec::new();
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line).await {
+                Ok(0) => break,
+                Ok(_) => {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        lines.push(trimmed.to_string());
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        lines
+    }
+
     /// Execute codex CLI command
     async fn execute_command(
         &self,
@@ -244,44 +263,9 @@ impl CodexProvider {
 
         let mut stdout_reader = BufReader::new(stdout);
         let mut stderr_reader = BufReader::new(stderr);
-        let mut lines = Vec::new();
-        let mut stderr_lines = Vec::new();
-        let mut line = String::new();
 
-        // Read stdout
-        loop {
-            line.clear();
-            match stdout_reader.read_line(&mut line).await {
-                Ok(0) => break, // EOF
-                Ok(_) => {
-                    let trimmed = line.trim();
-                    if !trimmed.is_empty() {
-                        lines.push(trimmed.to_string());
-                    }
-                }
-                Err(e) => {
-                    return Err(ProviderError::RequestFailed(format!(
-                        "Failed to read output: {}",
-                        e
-                    )));
-                }
-            }
-        }
-
-        // Read stderr
-        loop {
-            line.clear();
-            match stderr_reader.read_line(&mut line).await {
-                Ok(0) => break, // EOF
-                Ok(_) => {
-                    let trimmed = line.trim();
-                    if !trimmed.is_empty() {
-                        stderr_lines.push(trimmed.to_string());
-                    }
-                }
-                Err(_) => break, // Ignore stderr read errors
-            }
-        }
+        let lines = Self::read_lines_from(&mut stdout_reader).await;
+        let stderr_lines = Self::read_lines_from(&mut stderr_reader).await;
 
         let exit_status = child.wait().await.map_err(|e| {
             ProviderError::RequestFailed(format!("Failed to wait for command: {}", e))

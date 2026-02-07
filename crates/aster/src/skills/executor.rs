@@ -542,20 +542,9 @@ impl<P: LlmProvider> SkillExecutor<P> {
 
         // 5. 循环执行步骤 (Requirement 5.3)
         for step in sorted_steps {
-            info!(
-                step_id = %step.id,
-                step_name = %step.name,
-                "准备执行步骤"
-            );
-
             // 5.1 执行变量插值 (Requirement 5.4)
             let interpolated_prompt = interpolate_variables(&step.prompt, &context);
-            debug!(
-                step_id = %step.id,
-                original_prompt = %step.prompt,
-                interpolated_prompt = %interpolated_prompt,
-                "变量插值完成"
-            );
+            debug!(step_id = %step.id, "执行步骤，变量插值完成");
 
             // 5.2 执行步骤（带重试机制）
             match self
@@ -569,58 +558,25 @@ impl<P: LlmProvider> SkillExecutor<P> {
                 .await
             {
                 Ok(output) => {
-                    // 步骤执行成功
-                    info!(
-                        step_id = %step.id,
-                        output_len = output.len(),
-                        "步骤执行成功"
-                    );
-
+                    info!(step_id = %step.id, output_len = output.len(), "步骤执行成功");
                     // 5.3 将输出存储到上下文 (Requirement 5.5)
-                    // 支持两种引用格式：${output_var} 和 ${step_id.output}
                     context.insert(step.output.clone(), output.clone());
                     context.insert(format!("{}.output", step.id), output.clone());
-
-                    // 通知步骤完成
                     callback.on_step_complete(&step.id, &output);
-
-                    // 记录步骤结果
                     steps_completed.push(StepResult::success(&step.id, &step.name, &output));
-
-                    // 更新最终输出
                     final_output = Some(output);
                 }
                 Err(e) => {
-                    // 步骤执行失败
                     let error_msg = e.to_string();
-                    error!(
-                        step_id = %step.id,
-                        error = %error_msg,
-                        continue_on_failure = workflow.continue_on_failure,
-                        "步骤执行失败"
-                    );
-
+                    error!(step_id = %step.id, error = %error_msg, "步骤执行失败");
                     had_failure = true;
-
-                    // 记录失败的步骤结果
                     steps_completed.push(StepResult::failure(&step.id, &step.name, &error_msg));
 
-                    // 5.4 处理 continue_on_failure 逻辑 (Requirements 8.3, 8.4)
                     if workflow.continue_on_failure {
-                        // continue_on_failure = true: 记录错误并继续执行下一步骤
-                        warn!(
-                            step_id = %step.id,
-                            "continue_on_failure 为 true，继续执行后续步骤"
-                        );
-                        // 将空字符串存入上下文，以便后续步骤可以引用（虽然值为空）
+                        warn!(step_id = %step.id, "continue_on_failure=true，继续执行");
                         context.insert(step.output.clone(), String::new());
                         context.insert(format!("{}.output", step.id), String::new());
                     } else {
-                        // continue_on_failure = false: 中止工作流
-                        error!(
-                            step_id = %step.id,
-                            "continue_on_failure 为 false，中止工作流"
-                        );
                         callback.on_complete(false, None);
                         return Ok(SkillExecutionResult {
                             success: false,
