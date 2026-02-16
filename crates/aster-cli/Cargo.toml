@@ -15,9 +15,9 @@ name = "aster"
 path = "src/main.rs"
 
 [dependencies]
-aster = { path = "../aster" }
-aster-bench = { path = "../aster-bench" }
-aster-mcp = { path = "../aster-mcp" }
+aster = { package = "aster-core", path = "../aster", version = "0.12.0" }
+aster-bench = { path = "../aster-bench", version = "0.12.0" }
+aster-mcp = { path = "../aster-mcp", version = "0.12.0" }
 rmcp = { workspace = true }
 sacp = { workspace = true }
 agent-client-protocol-schema = "0.10.5"

@@ -1,6 +1,13 @@
 //! Web 工具 - WebFetch 和 WebSearch
 //!
 //! 对齐 Claude Agent SDK 的 Web 工具功能
+//!
+//! ## 搜索引擎支持（按优先级）
+//!
+//! 1. Tavily Search API - 环境变量 `TAVILY_API_KEY`
+//! 2. Bing Search API - 环境变量 `BING_SEARCH_API_KEY`
+//! 3. Google Custom Search API - 环境变量 `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_ENGINE_ID`
+//! 4. DuckDuckGo Instant Answer API - 免费，无需配置（默认回退）
 
 use super::base::{PermissionCheckResult, Tool};
 use super::context::{ToolContext, ToolResult};
@@ -599,6 +606,16 @@ impl WebSearchTool {
 
     /// 执行搜索
     async fn perform_search(&self, query: &str) -> Result<Vec<SearchResult>, String> {
+        // 优先使用 Tavily Search API（如果配置）
+        if let Ok(tavily_api_key) = std::env::var("TAVILY_API_KEY") {
+            match self.search_with_tavily(query, &tavily_api_key).await {
+                Ok(results) => return Ok(results),
+                Err(e) => {
+                    tracing::warn!("Tavily 搜索失败，尝试其他引擎: {}", e);
+                }
+            }
+        }
+
         // 优先使用 Bing Search API（如果配置）
         if let Ok(bing_api_key) = std::env::var("BING_SEARCH_API_KEY") {
             if let Ok(results) = self.search_with_bing(query, &bing_api_key).await {
@@ -621,6 +638,70 @@ impl WebSearchTool {
 
         // 回退到 DuckDuckGo（免费，无需 API 密钥）
         self.search_with_duckduckgo(query).await
+    }
+
+    /// Tavily Search API 搜索
+    async fn search_with_tavily(
+        &self,
+        query: &str,
+        api_key: &str,
+    ) -> Result<Vec<SearchResult>, String> {
+        let body = serde_json::json!({
+            "api_key": api_key,
+            "query": query,
+            "max_results": 10,
+            "include_answer": false,
+        });
+
+        let response = self
+            .client
+            .post("https://api.tavily.com/search")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Tavily Search API 请求失败: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(format!("Tavily API 返回错误 {}: {}", status, text));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| format!("解析 Tavily 响应失败: {}", e))?;
+
+        let empty_vec = vec![];
+        let items = data
+            .get("results")
+            .and_then(|r| r.as_array())
+            .unwrap_or(&empty_vec);
+
+        let results = items
+            .iter()
+            .filter_map(|item| {
+                let title = item.get("title")?.as_str()?.to_string();
+                let url = item.get("url")?.as_str()?.to_string();
+                let snippet = item
+                    .get("content")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s.to_string());
+                let publish_date = item
+                    .get("published_date")
+                    .and_then(|d| d.as_str())
+                    .map(|d| d.to_string());
+
+                Some(SearchResult {
+                    title,
+                    url,
+                    snippet,
+                    publish_date,
+                })
+            })
+            .collect();
+
+        Ok(results)
     }
 
     /// DuckDuckGo Instant Answer API 搜索

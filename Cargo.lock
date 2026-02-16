@@ -204,12 +204,103 @@ dependencies = [
 ]
 
 [[package]]
-name = "aster"
-version = "0.11.0"
+name = "aster-a2ui"
+version = "0.12.0"
+dependencies = [
+ "chrono",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "uuid",
+]
+
+[[package]]
+name = "aster-bench"
+version = "0.12.0"
+dependencies = [
+ "anyhow",
+ "aster-core",
+ "async-trait",
+ "chrono",
+ "ctor",
+ "dotenvy",
+ "include_dir",
+ "once_cell",
+ "paste",
+ "regex",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "winapi",
+]
+
+[[package]]
+name = "aster-cli"
+version = "0.12.0"
+dependencies = [
+ "agent-client-protocol-schema",
+ "anstream",
+ "anyhow",
+ "aster-bench",
+ "aster-core",
+ "aster-mcp",
+ "async-trait",
+ "axum 0.8.8",
+ "base64 0.22.1",
+ "bat",
+ "chrono",
+ "clap",
+ "clap_complete",
+ "cliclack",
+ "console 0.16.2",
+ "dotenvy",
+ "etcetera 0.11.0",
+ "futures",
+ "http 1.4.0",
+ "indicatif",
+ "is-terminal",
+ "jsonschema",
+ "once_cell",
+ "open",
+ "rand 0.8.5",
+ "regex",
+ "rmcp",
+ "rustyline",
+ "sacp",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "serial_test",
+ "shlex",
+ "tar",
+ "temp-env",
+ "tempfile",
+ "test-case",
+ "tokio",
+ "tokio-util",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "url",
+ "urlencoding",
+ "uuid",
+ "webbrowser",
+ "winapi",
+]
+
+[[package]]
+name = "aster-core"
+version = "0.12.0"
 dependencies = [
  "agent-client-protocol-schema",
  "ahash",
  "anyhow",
+ "aster-models",
  "async-stream",
  "async-trait",
  "aws-config",
@@ -307,98 +398,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "aster-a2ui"
-version = "0.11.0"
-dependencies = [
- "chrono",
- "pretty_assertions",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "uuid",
-]
-
-[[package]]
-name = "aster-bench"
-version = "0.11.0"
-dependencies = [
- "anyhow",
- "aster",
- "async-trait",
- "chrono",
- "ctor",
- "dotenvy",
- "include_dir",
- "once_cell",
- "paste",
- "regex",
- "rmcp",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "winapi",
-]
-
-[[package]]
-name = "aster-cli"
-version = "0.11.0"
-dependencies = [
- "agent-client-protocol-schema",
- "anstream",
- "anyhow",
- "aster",
- "aster-bench",
- "aster-mcp",
- "async-trait",
- "axum 0.8.8",
- "base64 0.22.1",
- "bat",
- "chrono",
- "clap",
- "clap_complete",
- "cliclack",
- "console 0.16.2",
- "dotenvy",
- "etcetera 0.11.0",
- "futures",
- "http 1.4.0",
- "indicatif",
- "is-terminal",
- "jsonschema",
- "once_cell",
- "open",
- "rand 0.8.5",
- "regex",
- "rmcp",
- "rustyline",
- "sacp",
- "serde",
- "serde_json",
- "serde_yaml",
- "serial_test",
- "shlex",
- "tar",
- "temp-env",
- "tempfile",
- "test-case",
- "tokio",
- "tokio-util",
- "tower-http 0.5.2",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "url",
- "urlencoding",
- "uuid",
- "webbrowser",
- "winapi",
-]
-
-[[package]]
 name = "aster-mcp"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -462,11 +463,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aster-models"
+version = "0.12.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aster-server"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
- "aster",
+ "aster-core",
  "aster-mcp",
  "async-trait",
  "axum 0.8.8",
@@ -509,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "aster-test"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "clap",
  "serde_json",
