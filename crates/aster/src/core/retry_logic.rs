@@ -221,3 +221,204 @@ where
         attempts: options.max_retries,
     })
 }
+
+// ============================================================================
+// HTTP 错误分类与智能重试
+// ============================================================================
+
+/// HTTP 错误分类
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorCategory {
+    /// 可重试错误（429, 408, 5xx, 网络错误）
+    Retryable,
+    /// 不可重试错误（4xx 除 429/408）
+    NonRetryable,
+    /// 致命错误（认证失败等）
+    Fatal,
+}
+
+/// 根据 HTTP 状态码分类错误
+pub fn categorize_http_error(status: u16) -> ErrorCategory {
+    match status {
+        // 认证/授权失败 - 致命
+        401 | 403 => ErrorCategory::Fatal,
+        // 速率限制和超时 - 可重试
+        408 | 429 => ErrorCategory::Retryable,
+        // 其他 4xx - 不可重试
+        400..=499 => ErrorCategory::NonRetryable,
+        // 5xx 服务器错误 - 可重试
+        500..=599 => ErrorCategory::Retryable,
+        // 其他 - 不可重试
+        _ => ErrorCategory::NonRetryable,
+    }
+}
+
+/// 判断 HTTP 状态码是否为可重试错误
+pub fn is_retryable_error(status: u16) -> bool {
+    categorize_http_error(status) == ErrorCategory::Retryable
+}
+
+/// 判断 HTTP 状态码是否为不可重试错误
+pub fn is_non_retryable_error(status: u16) -> bool {
+    matches!(
+        categorize_http_error(status),
+        ErrorCategory::NonRetryable | ErrorCategory::Fatal
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- 错误分类测试 ---
+
+    #[test]
+    fn test_categorize_401_as_fatal() {
+        assert_eq!(categorize_http_error(401), ErrorCategory::Fatal);
+    }
+
+    #[test]
+    fn test_categorize_403_as_fatal() {
+        assert_eq!(categorize_http_error(403), ErrorCategory::Fatal);
+    }
+
+    #[test]
+    fn test_categorize_429_as_retryable() {
+        assert_eq!(categorize_http_error(429), ErrorCategory::Retryable);
+    }
+
+    #[test]
+    fn test_categorize_408_as_retryable() {
+        assert_eq!(categorize_http_error(408), ErrorCategory::Retryable);
+    }
+
+    #[test]
+    fn test_categorize_500_as_retryable() {
+        assert_eq!(categorize_http_error(500), ErrorCategory::Retryable);
+    }
+
+    #[test]
+    fn test_categorize_502_as_retryable() {
+        assert_eq!(categorize_http_error(502), ErrorCategory::Retryable);
+    }
+
+    #[test]
+    fn test_categorize_503_as_retryable() {
+        assert_eq!(categorize_http_error(503), ErrorCategory::Retryable);
+    }
+
+    #[test]
+    fn test_categorize_400_as_non_retryable() {
+        assert_eq!(categorize_http_error(400), ErrorCategory::NonRetryable);
+    }
+
+    #[test]
+    fn test_categorize_404_as_non_retryable() {
+        assert_eq!(categorize_http_error(404), ErrorCategory::NonRetryable);
+    }
+
+    #[test]
+    fn test_categorize_422_as_non_retryable() {
+        assert_eq!(categorize_http_error(422), ErrorCategory::NonRetryable);
+    }
+
+    #[test]
+    fn test_categorize_200_as_non_retryable() {
+        assert_eq!(categorize_http_error(200), ErrorCategory::NonRetryable);
+    }
+
+    // --- 辅助函数测试 ---
+
+    #[test]
+    fn test_is_retryable_for_429() {
+        assert!(is_retryable_error(429));
+    }
+
+    #[test]
+    fn test_is_retryable_for_500() {
+        assert!(is_retryable_error(500));
+    }
+
+    #[test]
+    fn test_is_not_retryable_for_400() {
+        assert!(!is_retryable_error(400));
+    }
+
+    #[test]
+    fn test_is_not_retryable_for_401() {
+        assert!(!is_retryable_error(401));
+    }
+
+    #[test]
+    fn test_is_non_retryable_for_400() {
+        assert!(is_non_retryable_error(400));
+    }
+
+    #[test]
+    fn test_is_non_retryable_for_401() {
+        assert!(is_non_retryable_error(401));
+    }
+
+    #[test]
+    fn test_is_not_non_retryable_for_429() {
+        assert!(!is_non_retryable_error(429));
+    }
+
+    #[test]
+    fn test_is_not_non_retryable_for_503() {
+        assert!(!is_non_retryable_error(503));
+    }
+
+    // --- 上下文溢出解析测试 ---
+
+    #[test]
+    fn test_parse_context_overflow_valid() {
+        let result = parse_context_overflow_error(
+            400,
+            "input length and `max_tokens` exceed context limit: 195000 + 8192 > 200000",
+        );
+        assert!(result.is_some());
+        let overflow = result.unwrap();
+        assert_eq!(overflow.input_tokens, 195000);
+        assert_eq!(overflow.max_tokens, 8192);
+        assert_eq!(overflow.context_limit, 200000);
+    }
+
+    #[test]
+    fn test_parse_context_overflow_wrong_status() {
+        let result = parse_context_overflow_error(
+            500,
+            "input length and `max_tokens` exceed context limit: 195000 + 8192 > 200000",
+        );
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_context_overflow_wrong_message() {
+        let result = parse_context_overflow_error(400, "some other error");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_calculate_adjusted_max_tokens_sufficient_space() {
+        let overflow = ContextOverflowError {
+            input_tokens: 190000,
+            max_tokens: 8192,
+            context_limit: 200000,
+        };
+        let result = calculate_adjusted_max_tokens(&overflow, 0);
+        assert!(result.is_some());
+        assert!(result.unwrap() >= MIN_OUTPUT_TOKENS);
+    }
+
+    #[test]
+    fn test_calculate_adjusted_max_tokens_insufficient_space() {
+        let overflow = ContextOverflowError {
+            input_tokens: 199000,
+            max_tokens: 8192,
+            context_limit: 200000,
+        };
+        let result = calculate_adjusted_max_tokens(&overflow, 0);
+        assert!(result.is_none());
+    }
+}

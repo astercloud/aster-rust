@@ -11,6 +11,7 @@ pub mod permission;
 pub mod search_path;
 pub mod signup_openrouter;
 pub mod signup_tetrate;
+pub mod watcher;
 
 pub use crate::agents::ExtensionConfig;
 pub use aster_mode::AsterMode;
@@ -25,6 +26,10 @@ pub use extensions::{
 pub use permission::PermissionManager;
 pub use signup_openrouter::configure_openrouter;
 pub use signup_tetrate::configure_tetrate;
+pub use watcher::{
+    AtomicConfigUpdate, CompositeValidator, ConfigValidator, DebouncedNotifier, NoopValidator,
+    RequiredFieldsValidator, UpdateResult,
+};
 
 pub use agents_md_parser::{AgentsMdInfo, AgentsMdParser, AgentsMdStats, ValidationResult};
 pub use config_command::{

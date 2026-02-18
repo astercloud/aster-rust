@@ -1,5 +1,6 @@
 pub mod classification_client;
 pub mod patterns;
+pub mod policy;
 pub mod scanner;
 pub mod security_inspector;
 
