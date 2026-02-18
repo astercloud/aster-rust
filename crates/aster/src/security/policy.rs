@@ -162,14 +162,19 @@ impl ConfigurableSecurityPolicy {
 impl SecurityPolicy for ConfigurableSecurityPolicy {
     fn is_command_allowed(&self, command: &str) -> bool {
         let lower = command.to_lowercase();
-        !self.blocked_commands.iter().any(|blocked| lower.contains(blocked))
+        !self
+            .blocked_commands
+            .iter()
+            .any(|blocked| lower.contains(blocked))
     }
 
     fn is_path_allowed(&self, path: &Path) -> bool {
         if self.allowed_paths.is_empty() {
             return true;
         }
-        self.allowed_paths.iter().any(|allowed| path.starts_with(allowed))
+        self.allowed_paths
+            .iter()
+            .any(|allowed| path.starts_with(allowed))
     }
 
     fn max_cost_per_day_cents(&self) -> Option<u32> {
@@ -284,8 +289,7 @@ mod tests {
 
     #[test]
     fn test_strict_with_custom_blocked_command() {
-        let policy = StrictSecurityPolicy::new("/workspace")
-            .with_blocked_command("drop table");
+        let policy = StrictSecurityPolicy::new("/workspace").with_blocked_command("drop table");
         assert!(!policy.is_command_allowed("DROP TABLE users"));
         assert!(policy.is_command_allowed("ls -la"));
     }

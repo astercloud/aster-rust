@@ -156,8 +156,7 @@ mod tests {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
 
-        let config = SupervisorConfig::new("test")
-            .with_restart_policy(RestartPolicy::OnFailure);
+        let config = SupervisorConfig::new("test").with_restart_policy(RestartPolicy::OnFailure);
 
         let handle = spawn_component_supervisor(config, move || {
             let c = counter_clone.clone();
@@ -176,8 +175,7 @@ mod tests {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
 
-        let config = SupervisorConfig::new("test")
-            .with_restart_policy(RestartPolicy::Never);
+        let config = SupervisorConfig::new("test").with_restart_policy(RestartPolicy::Never);
 
         let handle = spawn_component_supervisor(config, move || {
             let c = counter_clone.clone();
@@ -196,8 +194,7 @@ mod tests {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
 
-        let config = SupervisorConfig::new("test")
-            .with_restart_policy(RestartPolicy::Never);
+        let config = SupervisorConfig::new("test").with_restart_policy(RestartPolicy::Never);
 
         let handle = spawn_component_supervisor(config, move || {
             let c = counter_clone.clone();
@@ -241,8 +238,7 @@ mod tests {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
 
-        let config = SupervisorConfig::new("test")
-            .with_restart_policy(RestartPolicy::Always);
+        let config = SupervisorConfig::new("test").with_restart_policy(RestartPolicy::Always);
 
         let handle = spawn_component_supervisor(config, move || {
             let c = counter_clone.clone();

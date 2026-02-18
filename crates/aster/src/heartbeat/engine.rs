@@ -154,7 +154,10 @@ impl HeartbeatEngine {
             }
 
             // 检查是否是任务项（以 - 或 * 开头）
-            if let Some(task_text) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
+            if let Some(task_text) = trimmed
+                .strip_prefix("- ")
+                .or_else(|| trimmed.strip_prefix("* "))
+            {
                 // 保存上一个任务
                 if let Some(desc) = current_task.take() {
                     tasks.push(HeartbeatTask {
@@ -182,14 +185,13 @@ impl HeartbeatEngine {
         }
 
         // 按优先级排序（高优先级在前）
-        tasks.sort_by(|a, b| {
-            b.priority.unwrap_or(5).cmp(&a.priority.unwrap_or(5))
-        });
+        tasks.sort_by(|a, b| b.priority.unwrap_or(5).cmp(&a.priority.unwrap_or(5)));
 
         Ok(tasks)
     }
 
     /// 解析任务行，提取描述、优先级和超时
+    #[allow(clippy::string_slice)] // 索引来自 find()，模式均为 ASCII，字节偏移安全
     fn parse_task_line(line: &str) -> (String, Option<u8>, Option<Duration>) {
         let mut description = line.to_string();
         let mut priority = None;
@@ -201,7 +203,9 @@ impl HeartbeatEngine {
                 let priority_str = &line[start + 10..start + end];
                 if let Ok(p) = priority_str.trim().parse::<u8>() {
                     priority = Some(p.clamp(1, 10));
-                    description = format!("{}{}", &line[..start], &line[start + end + 1..]).trim().to_string();
+                    description = format!("{}{}", &line[..start], &line[start + end + 1..])
+                        .trim()
+                        .to_string();
                 }
             }
         }
@@ -213,7 +217,13 @@ impl HeartbeatEngine {
                 if let Some(secs_str) = timeout_str.strip_suffix('s') {
                     if let Ok(secs) = secs_str.trim().parse::<u64>() {
                         timeout = Some(Duration::from_secs(secs));
-                        description = format!("{}{}", &description[..start], &description[start + end + 1..]).trim().to_string();
+                        description = format!(
+                            "{}{}",
+                            &description[..start],
+                            &description[start + end + 1..]
+                        )
+                        .trim()
+                        .to_string();
                     }
                 }
             }

@@ -73,7 +73,7 @@ impl CompositeValidator {
         }
     }
 
-    pub fn add(mut self, validator: Box<dyn ConfigValidator>) -> Self {
+    pub fn with_validator(mut self, validator: Box<dyn ConfigValidator>) -> Self {
         self.validators.push(validator);
         self
     }
@@ -144,10 +144,7 @@ impl<T: Clone + Serialize> AtomicConfigUpdate<T> {
 
         // 验证
         if let Err(errors) = self.validator.validate(&json_value) {
-            tracing::warn!(
-                "[ConfigUpdate] 配置验证失败: {:?}",
-                errors
-            );
+            tracing::warn!("[ConfigUpdate] 配置验证失败: {:?}", errors);
             return UpdateResult::ValidationFailed(errors);
         }
 
@@ -257,8 +254,8 @@ mod tests {
     #[test]
     fn test_composite_validator_all_pass() {
         let composite = CompositeValidator::new()
-            .add(Box::new(NoopValidator))
-            .add(Box::new(RequiredFieldsValidator::new(vec!["name".into()])));
+            .with_validator(Box::new(NoopValidator))
+            .with_validator(Box::new(RequiredFieldsValidator::new(vec!["name".into()])));
         let config = json!({"name": "test"});
         assert!(composite.validate(&config).is_ok());
     }
@@ -266,8 +263,8 @@ mod tests {
     #[test]
     fn test_composite_validator_some_fail() {
         let composite = CompositeValidator::new()
-            .add(Box::new(RequiredFieldsValidator::new(vec!["a".into()])))
-            .add(Box::new(RequiredFieldsValidator::new(vec!["b".into()])));
+            .with_validator(Box::new(RequiredFieldsValidator::new(vec!["a".into()])))
+            .with_validator(Box::new(RequiredFieldsValidator::new(vec!["b".into()])));
         let config = json!({"c": 1});
         let err = composite.validate(&config).unwrap_err();
         assert_eq!(err.len(), 2);

@@ -18,10 +18,7 @@ pub enum ObserverEvent {
         success: bool,
     },
     /// 错误事件
-    Error {
-        component: String,
-        message: String,
-    },
+    Error { component: String, message: String },
     /// 自定义事件
     Custom {
         name: String,
