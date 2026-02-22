@@ -245,27 +245,57 @@ fn redact_trace_detail(detail: &str) -> String {
 }
 
 fn redact_key_value(input: &str, key: &str) -> String {
+    // 使用 collect() 和 chars() 更安全地处理
+    let chars: Vec<char> = input.chars().collect();
+    let key_chars: Vec<char> = key.chars().collect();
+
     let mut output = String::with_capacity(input.len());
-    let mut cursor = 0usize;
+    let mut cursor = 0;
 
-    while let Some(relative) = input[cursor..].find(key) {
-        let start = cursor + relative;
-        output.push_str(&input[cursor..start]);
-        output.push_str(key);
-        output.push_str("<redacted>");
+    while cursor < chars.len() {
+        // 查找关键字
+        let mut matches = false;
+        let mut match_end = cursor;
 
-        let value_start = start + key.len();
-        let mut value_end = value_start;
-        for (offset, ch) in input[value_start..].char_indices() {
-            if ch == ',' || ch.is_whitespace() {
+        for (i, &key_ch) in key_chars.iter().enumerate() {
+            if cursor + i >= chars.len() {
                 break;
             }
-            value_end = value_start + offset + ch.len_utf8();
+            if chars[cursor + i] != key_ch {
+                break;
+            }
+            if i == key_chars.len() - 1 {
+                matches = true;
+                match_end = cursor + i + 1;
+            }
         }
-        cursor = value_end;
+
+        if matches {
+            // 添加之前的内容
+            for i in cursor..cursor {
+                output.push(chars[i]);
+            }
+            output.push_str(key);
+            output.push_str("<redacted>");
+
+            // 跳过值
+            cursor = match_end;
+            while cursor < chars.len() {
+                let ch = chars[cursor];
+                if ch == ',' || ch.is_whitespace() {
+                    break;
+                }
+                cursor += 1;
+            }
+        } else {
+            cursor += 1;
+        }
     }
 
-    output.push_str(&input[cursor..]);
+    // 添加剩余字符
+    for i in cursor..chars.len() {
+        output.push(chars[i]);
+    }
     output
 }
 
