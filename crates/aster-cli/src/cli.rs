@@ -10,6 +10,9 @@ use clap_complete::{generate, Shell as ClapShell};
 use crate::commands::acp::run_acp_agent;
 use crate::commands::bench::agent_generator;
 use crate::commands::configure::handle_configure;
+use crate::commands::context::{
+    handle_context_abstract, handle_context_overview, handle_context_read, handle_context_status,
+};
 use crate::commands::info::handle_info;
 use crate::commands::project::{handle_project_default, handle_projects_interactive};
 use crate::commands::recipe::{handle_deeplink, handle_list, handle_open, handle_validate};
@@ -663,6 +666,40 @@ enum RecipeCommand {
 }
 
 #[derive(Subcommand)]
+enum ContextCommand {
+    /// 读取 L0 摘要层
+    Abstract {
+        /// 上下文 URI，例如 aster://resources/docs/getting-started.md
+        uri: String,
+        /// 输出解析轨迹
+        #[arg(long, help = "输出 context 解析轨迹")]
+        trace: bool,
+    },
+    /// 读取 L1 概览层
+    Overview {
+        /// 上下文 URI，例如 aster://resources/docs/getting-started.md
+        uri: String,
+        /// 输出解析轨迹
+        #[arg(long, help = "输出 context 解析轨迹")]
+        trace: bool,
+    },
+    /// 读取 L2 详情层
+    Read {
+        /// 上下文 URI，例如 aster://resources/docs/getting-started.md
+        uri: String,
+        /// 输出解析轨迹
+        #[arg(long, help = "输出 context 解析轨迹")]
+        trace: bool,
+    },
+    /// 查看 context pipeline 状态
+    Status {
+        /// 以 JSON 输出
+        #[arg(long, help = "以 JSON 格式输出")]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum Command {
     /// Configure aster settings
     #[command(about = "Configure aster settings")]
@@ -849,6 +886,13 @@ enum Command {
         #[command(subcommand)]
         command: TermCommand,
     },
+
+    /// 读取统一上下文接口（L0/L1/L2）
+    #[command(about = "Read context layers by aster:// URI")]
+    Context {
+        #[command(subcommand)]
+        command: ContextCommand,
+    },
     /// Generate completions for various shells
     #[command(about = "Generate the autocompletion script for the specified shell")]
     Completion {
@@ -956,6 +1000,7 @@ fn get_command_name(command: &Option<Command>) -> &'static str {
         Some(Command::Recipe { .. }) => "recipe",
         Some(Command::Web { .. }) => "web",
         Some(Command::Term { .. }) => "term",
+        Some(Command::Context { .. }) => "context",
         Some(Command::Completion { .. }) => "completion",
         None => "default_session",
     }
@@ -1389,6 +1434,15 @@ async fn handle_term_subcommand(command: TermCommand) -> Result<()> {
     }
 }
 
+fn handle_context_subcommand(command: ContextCommand) -> Result<()> {
+    match command {
+        ContextCommand::Abstract { uri, trace } => handle_context_abstract(&uri, trace),
+        ContextCommand::Overview { uri, trace } => handle_context_overview(&uri, trace),
+        ContextCommand::Read { uri, trace } => handle_context_read(&uri, trace),
+        ContextCommand::Status { json } => handle_context_status(json),
+    }
+}
+
 async fn handle_default_session() -> Result<()> {
     if !Config::global().exists() {
         return handle_configure().await;
@@ -1507,6 +1561,7 @@ pub async fn cli() -> anyhow::Result<()> {
             auth_token,
         }) => crate::commands::web::handle_web(port, host, open, auth_token).await,
         Some(Command::Term { command }) => handle_term_subcommand(command).await,
+        Some(Command::Context { command }) => handle_context_subcommand(command),
         None => handle_default_session().await,
     }
 }

@@ -27,6 +27,7 @@ use crate::agents::subagent_tool::{
 use crate::agents::types::SessionConfig;
 use crate::agents::types::{FrontendTool, SharedProvider, ToolResultReceiver};
 use crate::config::{get_enabled_extensions, AsterMode, Config};
+use crate::context::ContextTraceStep;
 use crate::context_mgmt::{
     check_if_compaction_needed, compact_messages, DEFAULT_COMPACTION_THRESHOLD,
 };
@@ -73,6 +74,7 @@ pub struct ReplyContext {
     pub system_prompt: String,
     pub aster_mode: AsterMode,
     pub initial_messages: Vec<Message>,
+    pub context_trace: Vec<ContextTraceStep>,
 }
 
 pub struct ToolCategorizeResult {
@@ -118,6 +120,7 @@ pub enum AgentEvent {
     McpNotification((String, ServerNotification)),
     ModelChange { model: String, mode: String },
     HistoryReplaced(Conversation),
+    ContextTrace { steps: Vec<ContextTraceStep> },
 }
 
 impl Default for Agent {
@@ -493,9 +496,30 @@ impl Agent {
         unfixed_conversation: Conversation,
         working_dir: &std::path::Path,
         session_config: &SessionConfig,
+        include_context_trace: bool,
     ) -> Result<ReplyContext> {
+        let mut context_trace = Vec::new();
+        let mut push_trace = |stage: &str, detail: String| {
+            if include_context_trace {
+                context_trace.push(ContextTraceStep {
+                    stage: stage.to_string(),
+                    detail,
+                });
+            }
+        };
+
+        push_trace("session", format!("session_id={}", session_config.id));
+        push_trace(
+            "conversation_input",
+            format!("messages={}", unfixed_conversation.len()),
+        );
+
         let unfixed_messages = unfixed_conversation.messages().clone();
         let (conversation, issues) = fix_conversation(unfixed_conversation.clone());
+        push_trace(
+            "conversation_fixed",
+            format!("messages={}, issues={}", conversation.len(), issues.len()),
+        );
         if !issues.is_empty() {
             debug!(
                 "Conversation issue fixed: {}",
@@ -513,7 +537,17 @@ impl Agent {
         let (tools, toolshim_tools, system_prompt) = self
             .prepare_tools_and_prompt(working_dir, session_prompt)
             .await?;
+        push_trace(
+            "tools_ready",
+            format!(
+                "tools={}, toolshim_tools={}, system_prompt_chars={}",
+                tools.len(),
+                toolshim_tools.len(),
+                system_prompt.chars().count()
+            ),
+        );
         let aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
+        push_trace("mode", format!("aster_mode={:?}", aster_mode));
 
         self.tool_inspection_manager
             .update_permission_inspector_mode(aster_mode)
@@ -526,6 +560,7 @@ impl Agent {
             system_prompt,
             aster_mode,
             initial_messages,
+            context_trace,
         })
     }
 
@@ -1185,8 +1220,14 @@ impl Agent {
         session: Session,
         cancel_token: Option<CancellationToken>,
     ) -> Result<BoxStream<'_, Result<AgentEvent>>> {
+        let emit_context_trace = session_config.include_context_trace.unwrap_or(false);
         let context = self
-            .prepare_reply_context(conversation, &session.working_dir, &session_config)
+            .prepare_reply_context(
+                conversation,
+                &session.working_dir,
+                &session_config,
+                emit_context_trace,
+            )
             .await?;
         let ReplyContext {
             mut conversation,
@@ -1195,6 +1236,7 @@ impl Agent {
             mut system_prompt,
             aster_mode,
             initial_messages,
+            context_trace,
         } = context;
         let reply_span = tracing::Span::current();
         self.reset_retry_attempts().await;
@@ -1213,6 +1255,10 @@ impl Agent {
             let mut turns_taken = 0u32;
             let max_turns = session_config.max_turns.unwrap_or(DEFAULT_MAX_TURNS);
             let mut overflow_handler = OverflowHandler::new(2);
+
+            if emit_context_trace && !context_trace.is_empty() {
+                yield AgentEvent::ContextTrace { steps: context_trace };
+            }
 
             loop {
                 if is_token_cancelled(&cancel_token) {

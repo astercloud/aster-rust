@@ -399,6 +399,7 @@ mod tests {
                 max_turns: Some(1),
                 retry_config: None,
                 system_prompt: None,
+                include_context_trace: None,
             };
 
             let reply_stream = agent.reply(user_message, session_config, None).await?;
@@ -428,6 +429,7 @@ mod tests {
                     Ok(AgentEvent::HistoryReplaced(_updated_conversation)) => {
                         // We should update the conversation here, but we're not reading it
                     }
+                    Ok(AgentEvent::ContextTrace { .. }) => {}
                     Err(e) => {
                         return Err(e);
                     }

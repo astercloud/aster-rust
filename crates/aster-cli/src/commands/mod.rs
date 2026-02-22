@@ -1,6 +1,7 @@
 pub mod acp;
 pub mod bench;
 pub mod configure;
+pub mod context;
 pub mod info;
 pub mod project;
 pub mod recipe;

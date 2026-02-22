@@ -71,6 +71,8 @@
 pub mod agents_md_parser;
 pub mod cache_controller;
 pub mod compressor;
+pub mod context_service;
+pub mod context_uri;
 pub mod file_mention;
 pub mod manager;
 pub mod priority_sorter;
@@ -124,6 +126,11 @@ pub use summarizer::{
 
 /// Prompt caching support for reducing API costs
 pub use cache_controller::{CacheController, CacheEligibility};
+pub use context_service::{
+    ContextDocument, ContextLayer, ContextNamespaceStatus, ContextReadResult, ContextService,
+    ContextServiceStatus, ContextTraceStep,
+};
+pub use context_uri::{ContextNamespace, ContextUri};
 
 /// Message priority sorting for intelligent compression decisions
 pub use priority_sorter::PrioritySorter;

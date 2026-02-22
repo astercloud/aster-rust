@@ -852,6 +852,7 @@ impl CliSession {
             max_turns: self.max_turns,
             retry_config: self.retry_config.clone(),
             system_prompt: None,
+            include_context_trace: None,
         };
         let user_message = self
             .messages
@@ -1216,6 +1217,14 @@ impl CliSession {
                                 });
                             } else if self.debug {
                                 eprintln!("Model changed to {} in {} mode", model, mode);
+                            }
+                        }
+                        Some(Ok(AgentEvent::ContextTrace { steps })) => {
+                            if self.debug {
+                                eprintln!(
+                                    "Context trace received: {} step(s)",
+                                    steps.len()
+                                );
                             }
                         }
 

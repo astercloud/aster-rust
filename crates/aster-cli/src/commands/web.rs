@@ -515,6 +515,7 @@ async fn process_message_streaming(
         max_turns: None,
         retry_config: None,
         system_prompt: None,
+        include_context_trace: None,
     };
 
     match agent.reply(user_message, session_config, None).await {
@@ -613,6 +614,12 @@ async fn process_message_streaming(
                     }
                     Ok(AgentEvent::ModelChange { model, mode }) => {
                         tracing::info!("Model changed to {} in {} mode", model, mode);
+                    }
+                    Ok(AgentEvent::ContextTrace { steps }) => {
+                        tracing::info!(
+                            "Received context trace in web interface: {} step(s)",
+                            steps.len()
+                        );
                     }
                     Err(e) => {
                         error!("Error in message stream: {}", e);

@@ -1,5 +1,6 @@
 use crate::state::AppState;
 use aster::agents::{AgentEvent, SessionConfig};
+use aster::context::ContextTraceStep;
 use aster::conversation::message::{Message, MessageContent, TokenState};
 use aster::conversation::Conversation;
 use aster::session::SessionManager;
@@ -81,6 +82,12 @@ pub struct ChatRequest {
     session_id: String,
     recipe_name: Option<String>,
     recipe_version: Option<String>,
+    #[serde(default)]
+    include_context_trace: Option<bool>,
+    #[serde(default)]
+    context_trace_level: Option<ContextTraceLevel>,
+    #[serde(default)]
+    context_trace_redact: Option<bool>,
 }
 
 pub struct SseResponse {
@@ -143,7 +150,157 @@ pub enum MessageEvent {
     UpdateConversation {
         conversation: Conversation,
     },
+    ContextTrace {
+        steps: Vec<ContextTraceStepResponse>,
+    },
     Ping,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextTraceStepResponse {
+    pub stage: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, utoipa::ToSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextTraceLevel {
+    #[default]
+    Basic,
+    Verbose,
+}
+
+impl From<ContextTraceStep> for ContextTraceStepResponse {
+    fn from(value: ContextTraceStep) -> Self {
+        Self {
+            stage: value.stage,
+            detail: value.detail,
+        }
+    }
+}
+
+fn transform_context_trace_steps(
+    steps: Vec<ContextTraceStep>,
+    level: ContextTraceLevel,
+    redact: bool,
+) -> Vec<ContextTraceStepResponse> {
+    steps
+        .into_iter()
+        .map(|step| {
+            let mut detail = match level {
+                ContextTraceLevel::Basic => simplify_trace_detail(&step.stage, &step.detail),
+                ContextTraceLevel::Verbose => step.detail,
+            };
+
+            if redact {
+                detail = redact_trace_detail(&detail);
+            }
+
+            ContextTraceStepResponse {
+                stage: step.stage,
+                detail,
+            }
+        })
+        .collect()
+}
+
+fn simplify_trace_detail(stage: &str, detail: &str) -> String {
+    match stage {
+        "session" => "session initialized".to_string(),
+        "conversation_input" => {
+            if let Some(count) = extract_key_value(detail, "messages=") {
+                format!("messages={count}")
+            } else {
+                "conversation captured".to_string()
+            }
+        }
+        "conversation_fixed" => {
+            let messages =
+                extract_key_value(detail, "messages=").unwrap_or_else(|| "?".to_string());
+            let issues = extract_key_value(detail, "issues=").unwrap_or_else(|| "?".to_string());
+            format!("messages={messages}, issues={issues}")
+        }
+        "tools_ready" => {
+            let tools = extract_key_value(detail, "tools=").unwrap_or_else(|| "?".to_string());
+            let toolshim =
+                extract_key_value(detail, "toolshim_tools=").unwrap_or_else(|| "?".to_string());
+            format!("tools={tools}, toolshim_tools={toolshim}")
+        }
+        "mode" => detail.to_string(),
+        _ => "step completed".to_string(),
+    }
+}
+
+fn extract_key_value(detail: &str, key: &str) -> Option<String> {
+    detail
+        .split(',')
+        .map(str::trim)
+        .find_map(|part| part.strip_prefix(key).map(ToString::to_string))
+}
+
+fn redact_trace_detail(detail: &str) -> String {
+    let with_session_redacted = redact_key_value(detail, "session_id=");
+    redact_unix_paths(&with_session_redacted)
+}
+
+fn redact_key_value(input: &str, key: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut cursor = 0usize;
+
+    while let Some(relative) = input[cursor..].find(key) {
+        let start = cursor + relative;
+        output.push_str(&input[cursor..start]);
+        output.push_str(key);
+        output.push_str("<redacted>");
+
+        let value_start = start + key.len();
+        let mut value_end = value_start;
+        for (offset, ch) in input[value_start..].char_indices() {
+            if ch == ',' || ch.is_whitespace() {
+                break;
+            }
+            value_end = value_start + offset + ch.len_utf8();
+        }
+        cursor = value_end;
+    }
+
+    output.push_str(&input[cursor..]);
+    output
+}
+
+fn redact_unix_paths(input: &str) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let mut output = String::with_capacity(input.len());
+    let mut index = 0usize;
+
+    while index < chars.len() {
+        let current = chars[index];
+        let prev = if index == 0 {
+            None
+        } else {
+            Some(chars[index - 1])
+        };
+        let is_path_start = current == '/'
+            && prev
+                .map(|ch| ch.is_whitespace() || ch == ',' || ch == '=' || ch == ':' || ch == '(')
+                .unwrap_or(true);
+
+        if is_path_start {
+            let mut end = index + 1;
+            while end < chars.len() && !chars[end].is_whitespace() && chars[end] != ',' {
+                end += 1;
+            }
+            output.push_str("<path>");
+            index = end;
+            continue;
+        }
+
+        output.push(current);
+        index += 1;
+    }
+
+    output
 }
 
 async fn get_token_state(session_id: &str) -> TokenState {
@@ -212,6 +369,9 @@ pub async fn reply(
     );
 
     let session_id = request.session_id.clone();
+    let include_context_trace = request.include_context_trace.unwrap_or(false);
+    let context_trace_level = request.context_trace_level.unwrap_or_default();
+    let context_trace_redact = request.context_trace_redact.unwrap_or(true);
 
     if let Some(recipe_name) = request.recipe_name.clone() {
         if state.mark_recipe_run_if_absent(&session_id).await {
@@ -280,6 +440,7 @@ pub async fn reply(
             max_turns: None,
             retry_config: None,
             system_prompt: None,
+            include_context_trace: Some(include_context_trace),
         };
 
         let mut all_messages = match conversation_so_far {
@@ -351,6 +512,20 @@ pub async fn reply(
                         }
                         Ok(Some(Ok(AgentEvent::ModelChange { model, mode }))) => {
                             stream_event(MessageEvent::ModelChange { model, mode }, &tx, &cancel_token).await;
+                        }
+                        Ok(Some(Ok(AgentEvent::ContextTrace { steps }))) => {
+                            stream_event(
+                                MessageEvent::ContextTrace {
+                                    steps: transform_context_trace_steps(
+                                        steps,
+                                        context_trace_level,
+                                        context_trace_redact,
+                                    ),
+                                },
+                                &tx,
+                                &cancel_token,
+                            )
+                            .await;
                         }
                         Ok(Some(Ok(AgentEvent::McpNotification((request_id, n))))) => {
                             stream_event(MessageEvent::Notification{
@@ -462,6 +637,42 @@ pub fn routes(state: Arc<AppState>) -> Router {
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_transform_context_trace_basic_and_redacted() {
+        let steps = vec![
+            ContextTraceStep {
+                stage: "session".to_string(),
+                detail: "session_id=test-session-123".to_string(),
+            },
+            ContextTraceStep {
+                stage: "tools_ready".to_string(),
+                detail: "tools=4, toolshim_tools=1, system_prompt_chars=1200".to_string(),
+            },
+        ];
+
+        let transformed = transform_context_trace_steps(steps, ContextTraceLevel::Basic, true);
+
+        assert_eq!(transformed.len(), 2);
+        assert_eq!(transformed[0].detail, "session initialized");
+        assert_eq!(transformed[1].detail, "tools=4, toolshim_tools=1");
+    }
+
+    #[test]
+    fn test_transform_context_trace_verbose_redacts_sensitive_values() {
+        let steps = vec![ContextTraceStep {
+            stage: "session".to_string(),
+            detail:
+                "session_id=test-session-123, cwd=/Users/coso/Documents/dev/ai/astercloud/aster-rust"
+                    .to_string(),
+        }];
+
+        let transformed = transform_context_trace_steps(steps, ContextTraceLevel::Verbose, true);
+
+        assert_eq!(transformed.len(), 1);
+        assert!(transformed[0].detail.contains("session_id=<redacted>"));
+        assert!(transformed[0].detail.contains("cwd=<path>"));
+    }
+
     mod integration_tests {
         use super::*;
         use aster::conversation::message::Message;
@@ -486,6 +697,9 @@ mod tests {
                         session_id: "test-session".to_string(),
                         recipe_name: None,
                         recipe_version: None,
+                        include_context_trace: None,
+                        context_trace_level: None,
+                        context_trace_redact: None,
                     })
                     .unwrap(),
                 ))

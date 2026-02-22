@@ -611,6 +611,7 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
         max_turns: None,
         retry_config: None,
         system_prompt: None,
+        include_context_trace: None,
     };
 
     if let Err(e) = session

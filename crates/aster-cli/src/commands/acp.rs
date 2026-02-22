@@ -887,6 +887,7 @@ impl AsterAcpAgent {
             max_turns: None,
             retry_config: None,
             system_prompt: None,
+            include_context_trace: None,
         };
 
         let mut stream = self

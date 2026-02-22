@@ -795,6 +795,7 @@ async fn execute_job(
         max_turns: None,
         retry_config: None,
         system_prompt: None,
+        include_context_trace: None,
     };
 
     let session_id = session_config.id.clone();

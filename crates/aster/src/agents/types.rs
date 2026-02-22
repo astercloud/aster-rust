@@ -96,4 +96,8 @@ pub struct SessionConfig {
     /// 会话级别的系统提示词，用于定义特定会话的行为上下文
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub system_prompt: Option<String>,
+    /// Whether to emit context preparation trace events in reply stream
+    /// 是否在回复流中输出上下文准备轨迹事件
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub include_context_trace: Option<bool>,
 }
