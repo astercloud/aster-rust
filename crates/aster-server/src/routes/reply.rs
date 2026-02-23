@@ -245,57 +245,35 @@ fn redact_trace_detail(detail: &str) -> String {
 }
 
 fn redact_key_value(input: &str, key: &str) -> String {
-    // 使用 collect() 和 chars() 更安全地处理
-    let chars: Vec<char> = input.chars().collect();
-    let key_chars: Vec<char> = key.chars().collect();
+    if key.is_empty() {
+        return input.to_string();
+    }
+
+    let mut segments = input.split(key);
+    let Some(first) = segments.next() else {
+        return String::new();
+    };
 
     let mut output = String::with_capacity(input.len());
-    let mut cursor = 0;
+    output.push_str(first);
 
-    while cursor < chars.len() {
-        // 查找关键字
-        let mut matches = false;
-        let mut match_end = cursor;
+    for segment in segments {
+        output.push_str(key);
+        output.push_str("<redacted>");
 
-        for (i, &key_ch) in key_chars.iter().enumerate() {
-            if cursor + i >= chars.len() {
+        let mut chars = segment.chars();
+        loop {
+            let Some(ch) = chars.next() else {
                 break;
-            }
-            if chars[cursor + i] != key_ch {
+            };
+            if ch == ',' || ch.is_whitespace() {
                 break;
-            }
-            if i == key_chars.len() - 1 {
-                matches = true;
-                match_end = cursor + i + 1;
             }
         }
 
-        if matches {
-            // 添加之前的内容
-            for i in cursor..cursor {
-                output.push(chars[i]);
-            }
-            output.push_str(key);
-            output.push_str("<redacted>");
-
-            // 跳过值
-            cursor = match_end;
-            while cursor < chars.len() {
-                let ch = chars[cursor];
-                if ch == ',' || ch.is_whitespace() {
-                    break;
-                }
-                cursor += 1;
-            }
-        } else {
-            cursor += 1;
-        }
+        output.extend(chars);
     }
 
-    // 添加剩余字符
-    for i in cursor..chars.len() {
-        output.push(chars[i]);
-    }
     output
 }
 
