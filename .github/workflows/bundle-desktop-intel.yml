@@ -111,8 +111,13 @@ jobs:
             intel-npm-cache-v1-${{ runner.os }}-
             
       - name: Install dependencies
-        run: npm ci
         working-directory: ui/desktop
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       # Configure Electron builder for Intel architecture
       - name: Configure for Intel build
