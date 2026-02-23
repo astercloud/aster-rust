@@ -26,8 +26,12 @@ parse_violation() {
 
     case "$violation_parser" in
         "function_name")
-            jq -r 'select(.message.code.code == "'"$rule_code"'") |
-                   "\(.message.spans[0].file_name)::\(.message.spans[0].text[0].text | split("fn ")[1] | split("(")[0])"'
+            jq -r '
+                select(.message.code.code == "'"$rule_code"'") |
+                (.message.spans[0].text[0].text // "") as $text |
+                select(($text | contains("fn "))) |
+                "\(.message.spans[0].file_name)::\(($text | capture("fn\\s+(?<name>[^\\(\\s]+)").name))"
+            '
             ;;
         "type_name")
             jq -r 'select(.message.code.code == "'"$rule_code"'") |
@@ -67,7 +71,7 @@ generate_baseline() {
 
     cargo clippy --jobs 2 --message-format=json -- -W "$rule_name" | \
         parse_violation "$rule_name" "$violation_parser" | \
-        sort > "$baseline_file"
+        sort -u > "$baseline_file"
 
     echo "✅ Generated baseline for $rule_name ($(wc -l < "$baseline_file") violations)"
 }
@@ -88,10 +92,10 @@ check_rule_from_json() {
     fi
 
     local temp_parsed=$(mktemp)
-    cat "$temp_json" | parse_violation "$rule_name" "$violation_parser" | sort > "$temp_parsed"
+    cat "$temp_json" | parse_violation "$rule_name" "$violation_parser" | sort -u > "$temp_parsed"
 
     local new_violations_file=$(mktemp)
-    diff <(sort "$baseline_file") <(sort "$temp_parsed") | grep "^>" | cut -c3- > "$new_violations_file"
+    diff <(sort -u "$baseline_file") <(sort -u "$temp_parsed") | grep "^>" | cut -c3- > "$new_violations_file"
 
     if [[ -s "$new_violations_file" ]]; then
         echo "  ❌ $rule_name: NEW violations found:"

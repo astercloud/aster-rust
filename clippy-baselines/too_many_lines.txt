@@ -21,12 +21,12 @@ crates/aster/src/agents/monitor/analyzer.rs::suggest_optimizations
 crates/aster/src/agents/parallel/executor.rs::execute_tasks_with_deps
 crates/aster/src/agents/specialized/plan.rs::assess_risks
 crates/aster/src/agents/specialized/plan.rs::generate_steps
+crates/aster/src/agents/subagent_handler.rs::get_agent_messages
 crates/aster/src/blueprint/codebase_analyzer.rs::generate_blueprint
 crates/aster/src/config/config_manager.rs::load_and_merge_config
 crates/aster/src/map/server/services/architecture.rs::build_architecture_map
 crates/aster/src/map/symbol_reference_analyzer.rs::analyze_calls_in_function
 crates/aster/src/map/symbol_reference_analyzer.rs::build_symbol_index
-crates/aster/src/mcp/lifecycle_manager.rs::#[async_trait]
 crates/aster/src/prompt/builder.rs::build
 crates/aster/src/providers/formats/anthropic.rs::format_messages
 crates/aster/src/providers/formats/anthropic.rs::response_to_streaming_message<S>
