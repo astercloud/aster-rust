@@ -78,6 +78,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
+        with:
+          fetch-depth: 0
+
       - name: Create or update GitHub release
         shell: bash
         env:
@@ -89,8 +94,7 @@ jobs:
           if gh release view "${TAG}" >/dev/null 2>&1; then
             echo "Release ${TAG} 已存在，更新标题与说明..."
             gh release edit "${TAG}" \
-              --title "${TAG}" \
-              --generate-notes
+              --title "${TAG}"
           else
             echo "创建 Release ${TAG}..."
             gh release create "${TAG}" \
