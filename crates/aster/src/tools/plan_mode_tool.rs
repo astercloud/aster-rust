@@ -867,6 +867,7 @@ mod tests {
     use super::*;
     use crate::tools::{context::ToolContext, PermissionBehavior};
     use serde_json::json;
+    use serial_test::serial;
     use std::collections::HashMap;
     use tempfile::TempDir;
     use tokio;
@@ -991,6 +992,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_enter_plan_mode_execution() {
         let tool = EnterPlanModeTool::new();
         let context = create_test_context();
@@ -1011,9 +1013,13 @@ mod tests {
 
         // 验证状态已更新
         assert!(GLOBAL_STATE.is_plan_mode_active());
+
+        // 清理全局状态，避免影响并发测试
+        GLOBAL_STATE.set_plan_mode(false, None, None);
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_exit_plan_mode_execution_not_in_plan_mode() {
         let tool = ExitPlanModeTool::new();
         let context = create_test_context();
@@ -1029,6 +1035,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_exit_plan_mode_execution_in_plan_mode() {
         let tool = ExitPlanModeTool::new();
         let context = create_test_context();

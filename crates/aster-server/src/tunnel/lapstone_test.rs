@@ -71,6 +71,7 @@ async fn start_test_http_server(port: u16) -> tokio::task::JoinHandle<()> {
 }
 
 #[tokio::test]
+#[ignore = "requires external tunnel service"]
 async fn test_tunnel_end_to_end() {
     let port = find_available_port().await;
     let server_handle = start_test_http_server(port).await;
@@ -121,6 +122,7 @@ async fn test_tunnel_end_to_end() {
 }
 
 #[tokio::test]
+#[ignore = "requires external tunnel service"]
 async fn test_tunnel_post_request() {
     let port = find_available_port().await;
     let server_handle = start_test_http_server(port).await;

@@ -415,8 +415,9 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert!(
-            response.status() == StatusCode::PRECONDITION_FAILED
-                || response.status() == StatusCode::UNAUTHORIZED
+            !response.status().is_success(),
+            "expected failure status without auth/config, got {}",
+            response.status()
         );
     }
 

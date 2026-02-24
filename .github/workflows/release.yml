@@ -10,11 +10,6 @@ on:
         description: "要发布的标签（例如 v0.14.1）"
         required: true
         type: string
-      signing:
-        description: "是否启用代码签名"
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -31,7 +26,6 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       version: ${{ steps.meta.outputs.version }}
       ref: ${{ steps.meta.outputs.ref }}
-      signing: ${{ steps.meta.outputs.signing }}
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
@@ -46,10 +40,8 @@ jobs:
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             tag="${{ inputs.tag }}"
-            signing="${{ inputs.signing }}"
           else
             tag="${GITHUB_REF_NAME}"
-            signing="false"
           fi
 
           if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -78,89 +70,14 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "ref=${tag}" >> "$GITHUB_OUTPUT"
-          echo "signing=${signing}" >> "$GITHUB_OUTPUT"
-
-  build-macos-arm64:
-    name: Build macOS arm64 bundle
-    needs: preflight
-    permissions:
-      id-token: write
-      contents: read
-    uses: ./.github/workflows/bundle-desktop.yml
-    with:
-      version: ${{ needs.preflight.outputs.version }}
-      ref: ${{ needs.preflight.outputs.ref }}
-      signing: ${{ needs.preflight.outputs.signing == 'true' }}
-      quick_test: true
-    secrets: inherit
-
-  build-macos-intel:
-    name: Build macOS intel bundle
-    needs: preflight
-    permissions:
-      id-token: write
-      contents: read
-    uses: ./.github/workflows/bundle-desktop-intel.yml
-    with:
-      version: ${{ needs.preflight.outputs.version }}
-      ref: ${{ needs.preflight.outputs.ref }}
-      signing: ${{ needs.preflight.outputs.signing == 'true' }}
-      quick_test: true
-    secrets: inherit
-
-  build-linux:
-    name: Build Linux bundle
-    needs: preflight
-    uses: ./.github/workflows/bundle-desktop-linux.yml
-    with:
-      version: ${{ needs.preflight.outputs.version }}
-      ref: ${{ needs.preflight.outputs.ref }}
-    secrets: inherit
-
-  build-windows:
-    name: Build Windows bundle
-    needs: preflight
-    permissions:
-      id-token: write
-      contents: read
-      actions: read
-    uses: ./.github/workflows/bundle-desktop-windows.yml
-    with:
-      version: ${{ needs.preflight.outputs.version }}
-      ref: ${{ needs.preflight.outputs.ref }}
-      signing: ${{ needs.preflight.outputs.signing == 'true' }}
-    secrets: inherit
 
   publish-release:
     name: Publish GitHub release
     runs-on: ubuntu-latest
-    needs:
-      - preflight
-      - build-macos-arm64
-      - build-macos-intel
-      - build-linux
-      - build-windows
+    needs: preflight
     permissions:
       contents: write
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-artifacts
-
-      - name: Verify collected artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Collected artifacts:"
-          find release-artifacts -type f | sort
-
-          file_count="$(find release-artifacts -type f | wc -l | tr -d ' ')"
-          if [[ "${file_count}" == "0" ]]; then
-            echo "::error::未找到可发布产物"
-            exit 1
-          fi
-
       - name: Create or update GitHub release
         shell: bash
         env:
@@ -169,14 +86,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -d '' files < <(find release-artifacts -type f -print0 | sort -z)
-
           if gh release view "${TAG}" >/dev/null 2>&1; then
-            echo "Release ${TAG} 已存在，更新产物..."
-            gh release upload "${TAG}" "${files[@]}" --clobber
+            echo "Release ${TAG} 已存在，更新标题与说明..."
+            gh release edit "${TAG}" \
+              --title "${TAG}" \
+              --generate-notes
           else
             echo "创建 Release ${TAG}..."
-            gh release create "${TAG}" "${files[@]}" \
+            gh release create "${TAG}" \
               --title "${TAG}" \
               --generate-notes
           fi

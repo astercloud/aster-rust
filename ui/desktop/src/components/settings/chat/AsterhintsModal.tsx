@@ -1,0 +1,1 @@
+export { AsterhintsModal } from './GoosehintsModal';
