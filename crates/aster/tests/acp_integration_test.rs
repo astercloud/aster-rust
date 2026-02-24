@@ -29,6 +29,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 const FAKE_CODE: &str = "test-uuid-12345-67890";
 
 #[tokio::test]
+#[ignore = "requires ACP subprocess integration environment"]
 async fn test_acp_basic_completion() {
     let prompt = "what is 1+1";
     let mock_server = setup_mock_openai(vec![(
@@ -60,6 +61,7 @@ async fn test_acp_basic_completion() {
 }
 
 #[tokio::test]
+#[ignore = "requires ACP subprocess integration environment"]
 async fn test_acp_with_mcp_http_server() {
     let prompt = "Use the get_code tool and output only its result.";
     let (mcp_url, _handle) = spawn_mcp_http_server().await;
@@ -99,6 +101,7 @@ async fn test_acp_with_mcp_http_server() {
 }
 
 #[tokio::test]
+#[ignore = "requires ACP subprocess integration environment"]
 async fn test_acp_with_builtin_and_mcp() {
     let prompt =
         "Search for get_code and text_editor tools. Use them to save the code to /tmp/result.txt.";
