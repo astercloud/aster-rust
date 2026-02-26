@@ -14,6 +14,7 @@ use crate::commands::context::{
     handle_context_abstract, handle_context_overview, handle_context_read, handle_context_status,
 };
 use crate::commands::info::handle_info;
+use crate::commands::memory::{handle_memory_extract, handle_memory_search, handle_memory_stats};
 use crate::commands::project::{handle_project_default, handle_projects_interactive};
 use crate::commands::recipe::{handle_deeplink, handle_list, handle_open, handle_validate};
 use crate::commands::term::{
@@ -700,6 +701,36 @@ enum ContextCommand {
 }
 
 #[derive(Subcommand)]
+enum MemoryCommand {
+    #[command(about = "Extract memories from a session conversation")]
+    Extract {
+        #[arg(long = "session-id", value_name = "SESSION_ID")]
+        session_id: String,
+        #[arg(long, help = "Reprocess all messages, ignoring last commit position")]
+        force: bool,
+        #[arg(long = "max-messages", value_name = "N")]
+        max_messages: Option<usize>,
+    },
+    #[command(about = "Search extracted memories")]
+    Search {
+        #[arg(value_name = "QUERY")]
+        query: String,
+        #[arg(short, long)]
+        limit: Option<usize>,
+        #[arg(long = "session-id")]
+        session_id: Option<String>,
+        #[arg(
+            long = "category",
+            value_name = "CATEGORY",
+            action = clap::ArgAction::Append
+        )]
+        categories: Vec<String>,
+    },
+    #[command(about = "Show memory subsystem health and stats")]
+    Stats,
+}
+
+#[derive(Subcommand)]
 enum Command {
     /// Configure aster settings
     #[command(about = "Configure aster settings")]
@@ -893,6 +924,12 @@ enum Command {
         #[command(subcommand)]
         command: ContextCommand,
     },
+    /// Session memory extraction and retrieval commands
+    #[command(about = "Manage session memory extraction and retrieval")]
+    Memory {
+        #[command(subcommand)]
+        command: MemoryCommand,
+    },
     /// Generate completions for various shells
     #[command(about = "Generate the autocompletion script for the specified shell")]
     Completion {
@@ -1001,6 +1038,7 @@ fn get_command_name(command: &Option<Command>) -> &'static str {
         Some(Command::Web { .. }) => "web",
         Some(Command::Term { .. }) => "term",
         Some(Command::Context { .. }) => "context",
+        Some(Command::Memory { .. }) => "memory",
         Some(Command::Completion { .. }) => "completion",
         None => "default_session",
     }
@@ -1443,6 +1481,30 @@ fn handle_context_subcommand(command: ContextCommand) -> Result<()> {
     }
 }
 
+async fn handle_memory_subcommand(command: MemoryCommand) -> Result<()> {
+    match command {
+        MemoryCommand::Extract {
+            session_id,
+            force,
+            max_messages,
+        } => handle_memory_extract(session_id, force, max_messages).await,
+        MemoryCommand::Search {
+            query,
+            limit,
+            session_id,
+            categories,
+        } => {
+            let categories = if categories.is_empty() {
+                None
+            } else {
+                Some(categories)
+            };
+            handle_memory_search(query, limit, session_id, categories).await
+        }
+        MemoryCommand::Stats => handle_memory_stats().await,
+    }
+}
+
 async fn handle_default_session() -> Result<()> {
     if !Config::global().exists() {
         return handle_configure().await;
@@ -1562,6 +1624,7 @@ pub async fn cli() -> anyhow::Result<()> {
         }) => crate::commands::web::handle_web(port, host, open, auth_token).await,
         Some(Command::Term { command }) => handle_term_subcommand(command).await,
         Some(Command::Context { command }) => handle_context_subcommand(command),
+        Some(Command::Memory { command }) => handle_memory_subcommand(command).await,
         None => handle_default_session().await,
     }
 }

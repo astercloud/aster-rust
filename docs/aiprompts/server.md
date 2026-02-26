@@ -73,6 +73,15 @@ asterd agent
 | POST | `/extensions` | 添加扩展 |
 | DELETE | `/extensions/:name` | 移除扩展 |
 
+### 会话记忆
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/memory/extract` | 提取/提交会话记忆 |
+| POST | `/memory/search` | 搜索会话记忆 |
+| GET | `/memory/stats` | 记忆统计 |
+| GET | `/memory/health` | 记忆健康检查 |
+
 ## 内置 MCP 服务器
 
 ### Developer

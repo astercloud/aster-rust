@@ -3,7 +3,7 @@ use aster::agents::{AgentEvent, SessionConfig};
 use aster::context::ContextTraceStep;
 use aster::conversation::message::{Message, MessageContent, TokenState};
 use aster::conversation::Conversation;
-use aster::session::SessionManager;
+use aster::session::{CommitOptions, SessionManager};
 use axum::{
     extract::{DefaultBodyLimit, State},
     http::{self, StatusCode},
@@ -615,6 +615,12 @@ pub async fn reply(
                 interface = "ui",
                 "Session duration"
             );
+        }
+
+        if let Err(err) =
+            SessionManager::commit_session(&session_id, CommitOptions::default()).await
+        {
+            tracing::warn!("Memory commit failed for session {}: {}", session_id, err);
         }
 
         let final_token_state = get_token_state(&session_id).await;

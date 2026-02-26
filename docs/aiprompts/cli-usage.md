@@ -183,6 +183,22 @@ aster mcp computer-controller
 aster mcp auto-visualiser
 ```
 
+## 会话记忆命令
+
+```bash
+# 从会话消息提取记忆
+aster memory extract --session-id 20260225_1
+
+# 强制全量重建记忆（忽略上次提交位置）
+aster memory extract --session-id 20260225_1 --force --max-messages 400
+
+# 搜索记忆（支持按 session/category 过滤）
+aster memory search "偏好" --session-id 20260225_1 --category preferences --limit 10
+
+# 查看记忆子系统状态
+aster memory stats
+```
+
 ## 其他命令
 
 ```bash

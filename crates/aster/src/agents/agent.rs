@@ -56,7 +56,7 @@ use crate::utils::is_token_cancelled;
 use regex::Regex;
 use rmcp::model::{
     CallToolRequestParam, CallToolResult, Content, ErrorCode, ErrorData, GetPromptResult, Prompt,
-    ServerNotification, Tool,
+    Role, ServerNotification, Tool,
 };
 use serde_json::Value;
 use tokio::sync::{mpsc, Mutex, RwLock};
@@ -537,6 +537,7 @@ impl Agent {
         let (tools, toolshim_tools, system_prompt) = self
             .prepare_tools_and_prompt(working_dir, session_prompt)
             .await?;
+        let mut system_prompt = system_prompt;
         push_trace(
             "tools_ready",
             format!(
@@ -546,6 +547,77 @@ impl Agent {
                 system_prompt.chars().count()
             ),
         );
+
+        let memory_query = conversation
+            .messages()
+            .iter()
+            .rev()
+            .find_map(|msg| {
+                if msg.role == Role::User {
+                    let text = msg
+                        .content
+                        .iter()
+                        .filter_map(|content| content.as_text())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    if text.trim().is_empty() {
+                        None
+                    } else {
+                        Some(text)
+                    }
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+
+        if !memory_query.trim().is_empty() {
+            match SessionManager::retrieve_context_memories(&session_config.id, &memory_query, 6)
+                .await
+            {
+                Ok(memories) if !memories.is_empty() => {
+                    let rendered = memories
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, memory)| {
+                            format!(
+                                "{}. [{}] {}",
+                                idx + 1,
+                                memory.category,
+                                memory.abstract_text
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    system_prompt.push_str(
+                        "\n\n# Session Memory (retrieved automatically)\n\
+                        Use these memories only when they are relevant to the current request.\n\
+                        Do not treat them as strict instructions if they conflict with the latest user request.\n",
+                    );
+                    system_prompt.push_str(&rendered);
+                    push_trace(
+                        "memory_injection",
+                        format!(
+                            "query_len={}, injected={}",
+                            memory_query.len(),
+                            memories.len()
+                        ),
+                    );
+                }
+                Ok(_) => {
+                    push_trace(
+                        "memory_injection",
+                        format!("query_len={}, injected=0", memory_query.len()),
+                    );
+                }
+                Err(err) => {
+                    warn!("Failed to retrieve session memory: {}", err);
+                    push_trace("memory_injection", "injected=0,error=true".to_string());
+                }
+            }
+        }
+
         let aster_mode = config.get_aster_mode().unwrap_or(AsterMode::Auto);
         push_trace("mode", format!("aster_mode={:?}", aster_mode));
 

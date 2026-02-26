@@ -8,6 +8,10 @@ use crate::conversation::Conversation;
 use crate::model::ModelConfig;
 use crate::recipe::Recipe;
 use crate::session::extension_data::ExtensionData;
+use crate::session::memory::{
+    CommitOptions, CommitReport, MemoryCategory, MemoryHealth, MemoryRecord, MemorySearchResult,
+    MemoryStats,
+};
 use crate::session::session_manager::{Session, SessionInsights, SessionType};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -109,6 +113,32 @@ pub trait SessionStore: Send + Sync {
         before_date: Option<chrono::DateTime<chrono::Utc>>,
         exclude_session_id: Option<String>,
     ) -> Result<Vec<ChatHistoryMatch>>;
+
+    /// 将指定 session 的新增消息提交到 memory 子系统
+    async fn commit_session(&self, id: &str, options: CommitOptions) -> Result<CommitReport>;
+
+    /// 搜索 memory 记录
+    async fn search_memories(
+        &self,
+        query: &str,
+        limit: Option<usize>,
+        session_scope: Option<&str>,
+        categories: Option<Vec<MemoryCategory>>,
+    ) -> Result<Vec<MemorySearchResult>>;
+
+    /// 检索上下文 memory（优先 session scope，不命中时全局兜底）
+    async fn retrieve_context_memories(
+        &self,
+        session_id: &str,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<MemoryRecord>>;
+
+    /// 获取 memory 统计信息
+    async fn memory_stats(&self) -> Result<MemoryStats>;
+
+    /// 获取 memory 健康状态
+    async fn memory_health(&self) -> Result<MemoryHealth>;
 }
 
 /// 聊天历史搜索结果
@@ -271,6 +301,48 @@ impl SessionStore for NoopSessionStore {
         _exclude_session_id: Option<String>,
     ) -> Result<Vec<ChatHistoryMatch>> {
         Ok(vec![])
+    }
+
+    async fn commit_session(&self, id: &str, _options: CommitOptions) -> Result<CommitReport> {
+        Ok(CommitReport {
+            session_id: id.to_string(),
+            messages_scanned: 0,
+            memories_created: 0,
+            memories_merged: 0,
+            source_start_ts: None,
+            source_end_ts: None,
+            warnings: vec!["NoopSessionStore: memory commit skipped".to_string()],
+        })
+    }
+
+    async fn search_memories(
+        &self,
+        _query: &str,
+        _limit: Option<usize>,
+        _session_scope: Option<&str>,
+        _categories: Option<Vec<MemoryCategory>>,
+    ) -> Result<Vec<MemorySearchResult>> {
+        Ok(vec![])
+    }
+
+    async fn retrieve_context_memories(
+        &self,
+        _session_id: &str,
+        _query: &str,
+        _limit: usize,
+    ) -> Result<Vec<MemoryRecord>> {
+        Ok(vec![])
+    }
+
+    async fn memory_stats(&self) -> Result<MemoryStats> {
+        Ok(MemoryStats::default())
+    }
+
+    async fn memory_health(&self) -> Result<MemoryHealth> {
+        Ok(MemoryHealth {
+            healthy: true,
+            message: "NoopSessionStore: memory subsystem disabled".to_string(),
+        })
     }
 }
 

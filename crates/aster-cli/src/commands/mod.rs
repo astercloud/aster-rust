@@ -3,6 +3,7 @@ pub mod bench;
 pub mod configure;
 pub mod context;
 pub mod info;
+pub mod memory;
 pub mod project;
 pub mod recipe;
 pub mod schedule;

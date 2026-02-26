@@ -5,6 +5,13 @@ use crate::model::ModelConfig;
 use crate::providers::base::{Provider, MSG_COUNT_FOR_SESSION_NAME_GENERATION};
 use crate::recipe::Recipe;
 use crate::session::extension_data::ExtensionData;
+use crate::session::memory::{
+    CommitOptions, CommitReport, MemoryCategory, MemoryHealth, MemoryRecord, MemorySearchResult,
+    MemoryStats,
+};
+use crate::session::memory_pipeline;
+use crate::session::memory_repository::MemoryRepository;
+use crate::session::memory_retriever;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use rmcp::model::Role;
@@ -19,7 +26,7 @@ use tokio::sync::OnceCell;
 use tracing::{info, warn};
 use utoipa::ToSchema;
 
-pub const CURRENT_SCHEMA_VERSION: i32 = 6;
+pub const CURRENT_SCHEMA_VERSION: i32 = 7;
 pub const SESSIONS_FOLDER: &str = "sessions";
 pub const DB_NAME: &str = "sessions.db";
 
@@ -363,6 +370,41 @@ impl SessionManager {
             .search_chat_history(query, limit, after_date, before_date, exclude_session_id)
             .await
     }
+
+    pub async fn commit_session(id: &str, options: CommitOptions) -> Result<CommitReport> {
+        Self::instance().await?.commit_session(id, options).await
+    }
+
+    pub async fn search_memories(
+        query: &str,
+        limit: Option<usize>,
+        session_scope: Option<&str>,
+        categories: Option<Vec<MemoryCategory>>,
+    ) -> Result<Vec<MemorySearchResult>> {
+        Self::instance()
+            .await?
+            .search_memories(query, limit, session_scope, categories)
+            .await
+    }
+
+    pub async fn retrieve_context_memories(
+        session_id: &str,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<MemoryRecord>> {
+        Self::instance()
+            .await?
+            .retrieve_context_memories(session_id, query, limit)
+            .await
+    }
+
+    pub async fn memory_stats() -> Result<MemoryStats> {
+        Self::instance().await?.memory_stats().await
+    }
+
+    pub async fn memory_health() -> Result<MemoryHealth> {
+        Self::instance().await?.memory_health().await
+    }
 }
 
 pub struct SessionStorage {
@@ -600,6 +642,129 @@ impl SessionStorage {
             .execute(&pool)
             .await?;
 
+        sqlx::query(
+            r#"
+            CREATE TABLE memories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                category TEXT NOT NULL,
+                abstract_text TEXT NOT NULL,
+                overview_text TEXT NOT NULL,
+                content_text TEXT NOT NULL,
+                content_hash TEXT NOT NULL UNIQUE,
+                source_start_ts INTEGER NOT NULL,
+                source_end_ts INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE memory_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+                session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                relation_type TEXT NOT NULL DEFAULT 'session',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE memory_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                event_type TEXT NOT NULL,
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                source_end_ts INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE VIRTUAL TABLE memories_fts
+            USING fts5(
+                abstract_text,
+                overview_text,
+                content_text,
+                content='memories',
+                content_rowid='id'
+            )
+        "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TRIGGER memories_ai AFTER INSERT ON memories BEGIN
+              INSERT INTO memories_fts(rowid, abstract_text, overview_text, content_text)
+              VALUES (new.id, new.abstract_text, new.overview_text, new.content_text);
+            END;
+        "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TRIGGER memories_ad AFTER DELETE ON memories BEGIN
+              INSERT INTO memories_fts(memories_fts, rowid, abstract_text, overview_text, content_text)
+              VALUES('delete', old.id, old.abstract_text, old.overview_text, old.content_text);
+            END;
+        "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
+              INSERT INTO memories_fts(memories_fts, rowid, abstract_text, overview_text, content_text)
+              VALUES('delete', old.id, old.abstract_text, old.overview_text, old.content_text);
+              INSERT INTO memories_fts(rowid, abstract_text, overview_text, content_text)
+              VALUES (new.id, new.abstract_text, new.overview_text, new.content_text);
+            END;
+        "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            "CREATE INDEX idx_memories_session_updated ON memories(session_id, updated_at DESC)",
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query(
+            "CREATE INDEX idx_memories_category_updated ON memories(category, updated_at DESC)",
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query(
+            "CREATE INDEX idx_memory_events_session ON memory_events(session_id, created_at DESC)",
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query("CREATE INDEX idx_memory_links_memory ON memory_links(memory_id)")
+            .execute(&pool)
+            .await?;
+        sqlx::query(
+            "CREATE UNIQUE INDEX idx_memory_links_unique ON memory_links(memory_id, session_id, relation_type)",
+        )
+        .execute(&pool)
+        .await?;
+
         Ok(Self { pool })
     }
 
@@ -834,6 +999,150 @@ impl SessionStorage {
                     r#"
                     ALTER TABLE sessions ADD COLUMN model_config_json TEXT
                 "#,
+                )
+                .execute(&self.pool)
+                .await?;
+            }
+            7 => {
+                sqlx::query(
+                    r#"
+                    CREATE TABLE IF NOT EXISTS memories (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                        category TEXT NOT NULL,
+                        abstract_text TEXT NOT NULL,
+                        overview_text TEXT NOT NULL,
+                        content_text TEXT NOT NULL,
+                        content_hash TEXT NOT NULL UNIQUE,
+                        source_start_ts INTEGER NOT NULL,
+                        source_end_ts INTEGER NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                "#,
+                )
+                .execute(&self.pool)
+                .await?;
+
+                sqlx::query(
+                    r#"
+                    CREATE TABLE IF NOT EXISTS memory_links (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+                        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                        relation_type TEXT NOT NULL DEFAULT 'session',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                "#,
+                )
+                .execute(&self.pool)
+                .await?;
+
+                sqlx::query(
+                    r#"
+                    CREATE TABLE IF NOT EXISTS memory_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                        event_type TEXT NOT NULL,
+                        payload_json TEXT NOT NULL DEFAULT '{}',
+                        source_end_ts INTEGER,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                "#,
+                )
+                .execute(&self.pool)
+                .await?;
+
+                sqlx::query(
+                    r#"
+                    CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts
+                    USING fts5(
+                        abstract_text,
+                        overview_text,
+                        content_text,
+                        content='memories',
+                        content_rowid='id'
+                    )
+                "#,
+                )
+                .execute(&self.pool)
+                .await?;
+
+                sqlx::query("DROP TRIGGER IF EXISTS memories_ai")
+                    .execute(&self.pool)
+                    .await?;
+                sqlx::query("DROP TRIGGER IF EXISTS memories_ad")
+                    .execute(&self.pool)
+                    .await?;
+                sqlx::query("DROP TRIGGER IF EXISTS memories_au")
+                    .execute(&self.pool)
+                    .await?;
+
+                sqlx::query(
+                    r#"
+                    CREATE TRIGGER memories_ai AFTER INSERT ON memories BEGIN
+                      INSERT INTO memories_fts(rowid, abstract_text, overview_text, content_text)
+                      VALUES (new.id, new.abstract_text, new.overview_text, new.content_text);
+                    END;
+                "#,
+                )
+                .execute(&self.pool)
+                .await?;
+
+                sqlx::query(
+                    r#"
+                    CREATE TRIGGER memories_ad AFTER DELETE ON memories BEGIN
+                      INSERT INTO memories_fts(memories_fts, rowid, abstract_text, overview_text, content_text)
+                      VALUES('delete', old.id, old.abstract_text, old.overview_text, old.content_text);
+                    END;
+                "#,
+                )
+                .execute(&self.pool)
+                .await?;
+
+                sqlx::query(
+                    r#"
+                    CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
+                      INSERT INTO memories_fts(memories_fts, rowid, abstract_text, overview_text, content_text)
+                      VALUES('delete', old.id, old.abstract_text, old.overview_text, old.content_text);
+                      INSERT INTO memories_fts(rowid, abstract_text, overview_text, content_text)
+                      VALUES (new.id, new.abstract_text, new.overview_text, new.content_text);
+                    END;
+                "#,
+                )
+                .execute(&self.pool)
+                .await?;
+
+                sqlx::query(
+                    r#"
+                    INSERT INTO memories_fts(memories_fts) VALUES('rebuild')
+                "#,
+                )
+                .execute(&self.pool)
+                .await?;
+
+                sqlx::query(
+                    "CREATE INDEX IF NOT EXISTS idx_memories_session_updated ON memories(session_id, updated_at DESC)",
+                )
+                .execute(&self.pool)
+                .await?;
+                sqlx::query(
+                    "CREATE INDEX IF NOT EXISTS idx_memories_category_updated ON memories(category, updated_at DESC)",
+                )
+                .execute(&self.pool)
+                .await?;
+                sqlx::query(
+                    "CREATE INDEX IF NOT EXISTS idx_memory_events_session ON memory_events(session_id, created_at DESC)",
+                )
+                .execute(&self.pool)
+                .await?;
+                sqlx::query(
+                    "CREATE INDEX IF NOT EXISTS idx_memory_links_memory ON memory_links(memory_id)",
+                )
+                .execute(&self.pool)
+                .await?;
+                sqlx::query(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_links_unique ON memory_links(memory_id, session_id, relation_type)",
                 )
                 .execute(&self.pool)
                 .await?;
@@ -1304,6 +1613,41 @@ impl SessionStorage {
         .execute()
         .await
     }
+
+    async fn commit_session(
+        &self,
+        session_id: &str,
+        options: CommitOptions,
+    ) -> Result<CommitReport> {
+        memory_pipeline::commit_session(&self.pool, session_id, options).await
+    }
+
+    async fn search_memories(
+        &self,
+        query: &str,
+        limit: Option<usize>,
+        session_scope: Option<&str>,
+        categories: Option<Vec<MemoryCategory>>,
+    ) -> Result<Vec<MemorySearchResult>> {
+        memory_retriever::search_memories(&self.pool, query, limit, session_scope, categories).await
+    }
+
+    async fn retrieve_context_memories(
+        &self,
+        session_id: &str,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<MemoryRecord>> {
+        memory_retriever::retrieve_context_memories(&self.pool, session_id, query, limit).await
+    }
+
+    async fn memory_stats(&self) -> Result<MemoryStats> {
+        MemoryRepository::new(&self.pool).memory_stats().await
+    }
+
+    async fn memory_health(&self) -> Result<MemoryHealth> {
+        MemoryRepository::new(&self.pool).memory_health().await
+    }
 }
 
 #[cfg(test)]
@@ -1497,5 +1841,222 @@ mod tests {
         assert_eq!(imported.name, "Old format session");
         assert!(imported.user_set_name);
         assert_eq!(imported.working_dir, PathBuf::from("/tmp/test"));
+    }
+
+    #[tokio::test]
+    async fn test_memory_commit_and_search() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_memory.db");
+        let storage = Arc::new(SessionStorage::create(&db_path).await.unwrap());
+
+        let session = storage
+            .create_session(
+                PathBuf::from("/tmp/test-memory"),
+                "Memory Session".to_string(),
+                SessionType::User,
+            )
+            .await
+            .unwrap();
+
+        storage
+            .add_message(
+                &session.id,
+                &Message {
+                    id: None,
+                    role: Role::User,
+                    created: chrono::Utc::now().timestamp_millis(),
+                    content: vec![MessageContent::text(
+                        "我希望你以后回答尽量简洁，并优先给出可执行命令。",
+                    )],
+                    metadata: Default::default(),
+                },
+            )
+            .await
+            .unwrap();
+
+        storage
+            .add_message(
+                &session.id,
+                &Message {
+                    id: None,
+                    role: Role::Assistant,
+                    created: chrono::Utc::now().timestamp_millis() + 1,
+                    content: vec![MessageContent::text(
+                        "解决方案模式：先定位报错，再最小变更修复，最后回归验证。",
+                    )],
+                    metadata: Default::default(),
+                },
+            )
+            .await
+            .unwrap();
+
+        let report = storage
+            .commit_session(&session.id, CommitOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(report.session_id, session.id);
+        assert!(report.messages_scanned >= 2);
+        assert!(report.memories_created >= 1);
+
+        let hits = storage
+            .search_memories("", Some(5), Some(&session.id), None)
+            .await
+            .unwrap();
+        assert!(!hits.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_memory_stats_and_health() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_memory_health.db");
+        let storage = Arc::new(SessionStorage::create(&db_path).await.unwrap());
+
+        let health = storage.memory_health().await.unwrap();
+        assert!(health.healthy);
+
+        let stats = storage.memory_stats().await.unwrap();
+        assert_eq!(stats.total_memories, 0);
+        assert_eq!(stats.total_events, 0);
+    }
+
+    #[tokio::test]
+    async fn test_memory_cross_session_dedup_keeps_scope_recall() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_memory_cross_session.db");
+        let storage = Arc::new(SessionStorage::create(&db_path).await.unwrap());
+
+        let session_a = storage
+            .create_session(
+                PathBuf::from("/tmp/memory-a"),
+                "Memory A".to_string(),
+                SessionType::User,
+            )
+            .await
+            .unwrap();
+        let session_b = storage
+            .create_session(
+                PathBuf::from("/tmp/memory-b"),
+                "Memory B".to_string(),
+                SessionType::User,
+            )
+            .await
+            .unwrap();
+
+        let shared_text = "请记住：这个项目优先使用最小改动修复策略，并先运行定向测试再回归。";
+
+        storage
+            .add_message(
+                &session_a.id,
+                &Message {
+                    id: None,
+                    role: Role::User,
+                    created: chrono::Utc::now().timestamp_millis(),
+                    content: vec![MessageContent::text(shared_text)],
+                    metadata: Default::default(),
+                },
+            )
+            .await
+            .unwrap();
+
+        storage
+            .add_message(
+                &session_b.id,
+                &Message {
+                    id: None,
+                    role: Role::User,
+                    created: chrono::Utc::now().timestamp_millis() + 1,
+                    content: vec![MessageContent::text(shared_text)],
+                    metadata: Default::default(),
+                },
+            )
+            .await
+            .unwrap();
+
+        let first_commit = storage
+            .commit_session(&session_a.id, CommitOptions::default())
+            .await
+            .unwrap();
+        assert!(first_commit.memories_created >= 1);
+
+        let second_commit = storage
+            .commit_session(&session_b.id, CommitOptions::default())
+            .await
+            .unwrap();
+        assert!(second_commit.memories_merged >= 1);
+
+        let scoped_hits = storage
+            .search_memories("", Some(5), Some(&session_b.id), None)
+            .await
+            .unwrap();
+        assert!(!scoped_hits.is_empty());
+
+        let stats = storage.memory_stats().await.unwrap();
+        assert_eq!(stats.total_memories, 1);
+        assert_eq!(stats.total_links, 2);
+    }
+
+    #[tokio::test]
+    async fn test_memory_commit_without_new_messages_keeps_watermark() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_memory_watermark.db");
+        let storage = Arc::new(SessionStorage::create(&db_path).await.unwrap());
+
+        let session = storage
+            .create_session(
+                PathBuf::from("/tmp/memory-watermark"),
+                "Memory Watermark".to_string(),
+                SessionType::User,
+            )
+            .await
+            .unwrap();
+
+        let first_ts = chrono::Utc::now().timestamp_millis();
+        storage
+            .add_message(
+                &session.id,
+                &Message {
+                    id: None,
+                    role: Role::User,
+                    created: first_ts,
+                    content: vec![MessageContent::text(
+                        "请记住：优先收敛范围后再修改代码，最后执行定向测试。",
+                    )],
+                    metadata: Default::default(),
+                },
+            )
+            .await
+            .unwrap();
+
+        let first_commit = storage
+            .commit_session(&session.id, CommitOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(first_commit.messages_scanned, 1);
+
+        let second_commit = storage
+            .commit_session(&session.id, CommitOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(second_commit.messages_scanned, 0);
+
+        storage
+            .add_message(
+                &session.id,
+                &Message {
+                    id: None,
+                    role: Role::Assistant,
+                    created: first_ts + 1,
+                    content: vec![MessageContent::text("已按步骤完成：定位、修复、验证。")],
+                    metadata: Default::default(),
+                },
+            )
+            .await
+            .unwrap();
+
+        let third_commit = storage
+            .commit_session(&session.id, CommitOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(third_commit.messages_scanned, 1);
     }
 }

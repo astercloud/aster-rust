@@ -32,7 +32,7 @@ use aster::agents::extension::{Envs, ExtensionConfig, PLATFORM_EXTENSIONS};
 use aster::agents::types::RetryConfig;
 use aster::agents::{Agent, SessionConfig, COMPACT_TRIGGERS};
 use aster::config::{AsterMode, Config};
-use aster::session::SessionManager;
+use aster::session::{CommitOptions, SessionManager};
 use completion::AsterCompleter;
 use input::InputResult;
 use rmcp::model::PromptMessage;
@@ -1276,6 +1276,15 @@ impl CliSession {
                     break;
                 }
             }
+        }
+
+        if let Err(err) =
+            SessionManager::commit_session(&self.session_id, CommitOptions::default()).await
+        {
+            warn!(
+                "Memory commit failed for session {}: {}",
+                self.session_id, err
+            );
         }
 
         // Output based on format
