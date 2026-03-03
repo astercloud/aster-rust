@@ -296,7 +296,8 @@ pub fn build_request_fingerprint(value: &Value) -> String {
     let normalized = normalize_request_value(value);
     let content = serde_json::to_string(&normalized).unwrap_or_else(|_| value.to_string());
     let digest = Sha256::digest(content.as_bytes());
-    format!("{digest:x}")[..32].to_string()
+    let hex = format!("{digest:x}");
+    hex.chars().take(32).collect()
 }
 
 fn normalize_request_value(value: &Value) -> Value {

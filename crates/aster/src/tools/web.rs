@@ -855,7 +855,7 @@ impl WebFetchTool {
             DEFAULT_WEB_FETCH_MAX_CHARS
         };
         let max_chars = input.max_chars.unwrap_or(default_max_chars);
-        let max_chars = max_chars.min(DEFAULT_WEB_FETCH_MAX_CHARS).max(500);
+        let max_chars = max_chars.clamp(500, DEFAULT_WEB_FETCH_MAX_CHARS);
 
         let query = input
             .focus_query
