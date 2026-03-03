@@ -1137,6 +1137,9 @@ mod tests {
             timeout: None,
             bundled: Some(false),
             available_tools: vec![],
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         })
     )]
     #[test_case(
