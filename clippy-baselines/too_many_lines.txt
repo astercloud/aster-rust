@@ -13,6 +13,7 @@ crates/aster-server/src/openapi.rs::convert_typed_schema
 crates/aster-server/src/routes/audio.rs::transcribe_elevenlabs_handler
 crates/aster/src/agents/agent.rs::create_recipe
 crates/aster/src/agents/agent.rs::dispatch_tool_call
+crates/aster/src/agents/agent.rs::prepare_reply_context
 crates/aster/src/agents/agent.rs::reply
 crates/aster/src/agents/agent.rs::reply_internal
 crates/aster/src/agents/extension_manager.rs::add_extension
@@ -37,4 +38,7 @@ crates/aster/src/providers/formats/openai.rs::response_to_streaming_message<S>
 crates/aster/src/providers/gcpvertexai.rs::post_with_location
 crates/aster/src/providers/snowflake.rs::post
 crates/aster/src/session/export.rs::export_to_html
+crates/aster/src/session/memory_repository.rs::search_memories
+crates/aster/src/session/session_manager.rs::apply_migration
+crates/aster/src/session/session_manager.rs::create
 crates/aster/src/tools/lsp.rs::format_lsp_result
