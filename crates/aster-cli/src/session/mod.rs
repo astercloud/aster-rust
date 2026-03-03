@@ -288,6 +288,9 @@ impl CliSession {
             timeout: Some(aster::config::DEFAULT_EXTENSION_TIMEOUT),
             bundled: None,
             available_tools: Vec::new(),
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         };
 
         self.agent
@@ -317,6 +320,9 @@ impl CliSession {
             timeout: Some(aster::config::DEFAULT_EXTENSION_TIMEOUT),
             bundled: None,
             available_tools: Vec::new(),
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         };
 
         self.agent
@@ -344,6 +350,9 @@ impl CliSession {
                     bundled: None,
                     description: name.to_string(),
                     available_tools: Vec::new(),
+                    deferred_loading: false,
+                    always_expose_tools: Vec::new(),
+                    allowed_caller: None,
                 }
             } else {
                 ExtensionConfig::Builtin {
@@ -353,6 +362,9 @@ impl CliSession {
                     bundled: None,
                     description: name.to_string(),
                     available_tools: Vec::new(),
+                    deferred_loading: false,
+                    always_expose_tools: Vec::new(),
+                    allowed_caller: None,
                 }
             };
             self.agent

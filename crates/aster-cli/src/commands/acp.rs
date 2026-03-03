@@ -56,6 +56,9 @@ fn mcp_server_to_extension_config(mcp_server: McpServer) -> Result<ExtensionConf
             timeout: None,
             bundled: Some(false),
             available_tools: vec![],
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         }),
         McpServer::Http(http) => Ok(ExtensionConfig::StreamableHttp {
             name: http.name,
@@ -71,6 +74,9 @@ fn mcp_server_to_extension_config(mcp_server: McpServer) -> Result<ExtensionConf
             timeout: None,
             bundled: Some(false),
             available_tools: vec![],
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         }),
         McpServer::Sse(_) => Err("SSE is unsupported, migrate to streamable_http".to_string()),
         _ => Err("Unknown MCP server type".to_string()),
@@ -248,6 +254,9 @@ async fn add_builtins(agent: &Agent, builtins: Vec<String>) {
                 bundled: None,
                 description: builtin.clone(),
                 available_tools: Vec::new(),
+                deferred_loading: false,
+                always_expose_tools: Vec::new(),
+                allowed_caller: None,
             }
         } else {
             ExtensionConfig::Builtin {
@@ -257,6 +266,9 @@ async fn add_builtins(agent: &Agent, builtins: Vec<String>) {
                 bundled: None,
                 description: builtin.clone(),
                 available_tools: Vec::new(),
+                deferred_loading: false,
+                always_expose_tools: Vec::new(),
+                allowed_caller: None,
             }
         };
         match agent.add_extension(config).await {
@@ -1102,6 +1114,9 @@ mod tests {
             timeout: None,
             bundled: Some(false),
             available_tools: vec![],
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         })
     )]
     #[test_case(

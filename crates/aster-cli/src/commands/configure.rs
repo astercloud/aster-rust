@@ -845,6 +845,9 @@ fn configure_builtin_extension() -> anyhow::Result<()> {
             bundled: Some(true),
             description,
             available_tools: Vec::new(),
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         },
     });
 
@@ -887,6 +890,9 @@ fn configure_stdio_extension() -> anyhow::Result<()> {
             timeout: Some(timeout),
             bundled: None,
             available_tools: Vec::new(),
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         },
     });
 
@@ -930,6 +936,9 @@ fn configure_streamable_http_extension() -> anyhow::Result<()> {
             timeout: Some(timeout),
             bundled: None,
             available_tools: Vec::new(),
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         },
     });
 
@@ -1543,6 +1552,9 @@ pub async fn handle_openrouter_auth() -> anyhow::Result<()> {
                                 bundled: Some(true),
                                 description: "Developer extension".to_string(),
                                 available_tools: Vec::new(),
+                                deferred_loading: false,
+                                always_expose_tools: Vec::new(),
+                                allowed_caller: None,
                             },
                         });
                         println!("✓ Developer extension enabled");
@@ -1619,6 +1631,9 @@ pub async fn handle_tetrate_auth() -> anyhow::Result<()> {
                                 bundled: Some(true),
                                 description: "Developer extension".to_string(),
                                 available_tools: Vec::new(),
+                                deferred_loading: false,
+                                always_expose_tools: Vec::new(),
+                                allowed_caller: None,
                             },
                         });
                         println!("✓ Developer extension enabled");
