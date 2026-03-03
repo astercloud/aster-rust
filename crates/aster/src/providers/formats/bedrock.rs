@@ -16,6 +16,7 @@ use serde_json::Value;
 
 use super::super::base::Usage;
 use crate::conversation::message::{Message, MessageContent};
+use crate::providers::formats::tool_description_with_examples;
 
 pub fn to_bedrock_message(message: &Message) -> Result<bedrock::Message> {
     bedrock::Message::builder()
@@ -206,12 +207,7 @@ pub fn to_bedrock_tool(tool: &Tool) -> Result<bedrock::Tool> {
     Ok(bedrock::Tool::ToolSpec(
         bedrock::ToolSpecification::builder()
             .name(tool.name.to_string())
-            .description(
-                tool.description
-                    .as_ref()
-                    .map(|d| d.to_string())
-                    .unwrap_or_default(),
-            )
+            .description(tool_description_with_examples(tool))
             .input_schema(bedrock::ToolInputSchema::Json(to_bedrock_json(
                 &Value::Object(input_schema),
             )))

@@ -1,6 +1,7 @@
 use crate::conversation::message::{Message, MessageContent};
 use crate::model::ModelConfig;
 use crate::providers::formats::google as gemini_schema;
+use crate::providers::formats::tool_description_with_examples;
 use crate::providers::utils::{
     convert_image, detect_image_path, is_valid_function_name, load_image_file, safely_parse_json,
     sanitize_function_name, ImageFormat,
@@ -242,7 +243,7 @@ pub fn format_tools(tools: &[Tool], model_name: &str) -> anyhow::Result<Vec<Valu
             "type": "function",
             "function": {
                 "name": tool.name,
-                "description": tool.description,
+                "description": tool_description_with_examples(tool),
                 "parameters": parameters,
             }
         }));
@@ -714,6 +715,38 @@ mod tests {
         let spec = format_tools(&[tool], "databricks-gemini-3-pro")?;
         assert!(spec[0]["function"]["parameters"].get("$schema").is_none());
         assert_eq!(spec[0]["function"]["parameters"]["type"], "object");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_format_tools_with_input_examples_in_description() -> anyhow::Result<()> {
+        let mut tool = Tool::new(
+            "create_ticket",
+            "Create ticket",
+            object!({
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string" }
+                },
+                "required": ["title"]
+            }),
+        );
+        tool.meta = Some(rmcp::model::Meta(object!({
+            "input_examples": [
+                {
+                    "description": "Urgent",
+                    "input": {
+                        "title": "service unavailable"
+                    }
+                }
+            ]
+        })));
+
+        let spec = format_tools(&[tool], "gpt-4o")?;
+        let description = spec[0]["function"]["description"].as_str().unwrap_or("");
+        assert!(description.contains("Input examples:"));
+        assert!(description.contains("Urgent"));
 
         Ok(())
     }

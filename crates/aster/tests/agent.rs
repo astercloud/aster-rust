@@ -476,6 +476,9 @@ mod tests {
                             .to_string(),
                     bundled: Some(true),
                     available_tools: vec![],
+                    deferred_loading: false,
+                    always_expose_tools: vec![],
+                    allowed_caller: None,
                 },
             };
             set_extension(todo_extension_entry);
@@ -496,6 +499,9 @@ mod tests {
                 description: "Extension Manager".to_string(),
                 bundled: Some(true),
                 available_tools: vec![],
+                deferred_loading: false,
+                always_expose_tools: vec![],
+                allowed_caller: None,
             };
 
             agent

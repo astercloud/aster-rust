@@ -68,9 +68,23 @@ pub struct ListResourcesParams {
     pub extension_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SearchToolsParams {
+    pub query: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct LoadToolsParams {
+    pub tool_names: Vec<String>,
+}
+
 pub const READ_RESOURCE_TOOL_NAME: &str = "read_resource";
 pub const LIST_RESOURCES_TOOL_NAME: &str = "list_resources";
 pub const SEARCH_AVAILABLE_EXTENSIONS_TOOL_NAME: &str = "search_available_extensions";
+pub const SEARCH_TOOLS_TOOL_NAME: &str = "search_tools";
+pub const LOAD_TOOLS_TOOL_NAME: &str = "load_tools";
 pub const MANAGE_EXTENSIONS_TOOL_NAME: &str = "manage_extensions";
 pub const MANAGE_EXTENSIONS_TOOL_NAME_COMPLETE: &str = "extensionmanager__manage_extensions";
 
@@ -108,11 +122,15 @@ impl ExtensionManagerClient {
 
                 Available tools:
                 - search_available_extensions: Find extensions available to enable/disable
+                - search_tools: Search tools (including deferred tools not currently exposed)
+                - load_tools: Load deferred tools into current context
                 - manage_extensions: Enable or disable extensions
                 - list_resources: List resources from extensions
                 - read_resource: Read specific resources from extensions
 
                 Use search_available_extensions when you need to find what extensions are available.
+                Use search_tools before calling tools when tool count is large.
+                Use load_tools to activate deferred tools returned by search_tools.
                 Use manage_extensions to enable or disable specific extensions by name.
                 Use list_resources and read_resource to work with extension data and resources.
             "#}.to_string()),
@@ -160,6 +178,55 @@ impl ExtensionManagerClient {
                 message: error_data.message.to_string(),
             }),
         }
+    }
+
+    async fn handle_search_tools(
+        &self,
+        arguments: Option<JsonObject>,
+    ) -> Result<Vec<Content>, ExtensionManagerToolError> {
+        let arguments = arguments.ok_or(ExtensionManagerToolError::MissingParameter {
+            param_name: "arguments".to_string(),
+        })?;
+        let params: SearchToolsParams =
+            serde_json::from_value(serde_json::Value::Object(arguments))?;
+
+        let extension_manager = self
+            .context
+            .extension_manager
+            .as_ref()
+            .and_then(|weak| weak.upgrade())
+            .ok_or(ExtensionManagerToolError::ManagerUnavailable)?;
+
+        extension_manager
+            .search_tools(&params.query, params.limit.unwrap_or(20))
+            .await
+            .map_err(|e| ExtensionManagerToolError::OperationFailed {
+                message: e.message.to_string(),
+            })
+    }
+
+    async fn handle_load_tools(
+        &self,
+        arguments: Option<JsonObject>,
+    ) -> Result<Vec<Content>, ExtensionManagerToolError> {
+        let arguments = arguments.ok_or(ExtensionManagerToolError::MissingParameter {
+            param_name: "arguments".to_string(),
+        })?;
+        let params: LoadToolsParams = serde_json::from_value(serde_json::Value::Object(arguments))?;
+
+        let extension_manager = self
+            .context
+            .extension_manager
+            .as_ref()
+            .and_then(|weak| weak.upgrade())
+            .ok_or(ExtensionManagerToolError::ManagerUnavailable)?;
+
+        extension_manager
+            .load_deferred_tools(&params.tool_names)
+            .await
+            .map_err(|e| ExtensionManagerToolError::OperationFailed {
+                message: e.message.to_string(),
+            })
     }
 
     async fn manage_extensions_impl(
@@ -300,6 +367,42 @@ impl ExtensionManagerClient {
                 open_world_hint: Some(false),
             }),
             Tool::new(
+                SEARCH_TOOLS_TOOL_NAME.to_string(),
+                "Search available tools by keyword. This includes deferred tools that are not currently exposed in context.".to_string(),
+                Arc::new(
+                    serde_json::to_value(schema_for!(SearchToolsParams))
+                        .expect("Failed to serialize schema")
+                        .as_object()
+                        .expect("Schema must be an object")
+                        .clone(),
+                ),
+            )
+            .annotate(ToolAnnotations {
+                title: Some("Search tools".to_string()),
+                read_only_hint: Some(true),
+                destructive_hint: Some(false),
+                idempotent_hint: Some(true),
+                open_world_hint: Some(false),
+            }),
+            Tool::new(
+                LOAD_TOOLS_TOOL_NAME.to_string(),
+                "Load deferred tools into context so they can be called directly.".to_string(),
+                Arc::new(
+                    serde_json::to_value(schema_for!(LoadToolsParams))
+                        .expect("Failed to serialize schema")
+                        .as_object()
+                        .expect("Schema must be an object")
+                        .clone(),
+                ),
+            )
+            .annotate(ToolAnnotations {
+                title: Some("Load deferred tools".to_string()),
+                read_only_hint: Some(false),
+                destructive_hint: Some(false),
+                idempotent_hint: Some(true),
+                open_world_hint: Some(false),
+            }),
+            Tool::new(
                 MANAGE_EXTENSIONS_TOOL_NAME.to_string(),
                 "Tool to manage extensions and tools in aster context.
             Enable or disable extensions to help complete tasks.
@@ -424,6 +527,8 @@ impl McpClientTrait for ExtensionManagerClient {
             SEARCH_AVAILABLE_EXTENSIONS_TOOL_NAME => {
                 self.handle_search_available_extensions().await
             }
+            SEARCH_TOOLS_TOOL_NAME => self.handle_search_tools(arguments).await,
+            LOAD_TOOLS_TOOL_NAME => self.handle_load_tools(arguments).await,
             MANAGE_EXTENSIONS_TOOL_NAME => self.handle_manage_extensions(arguments).await,
             LIST_RESOURCES_TOOL_NAME => self.handle_list_resources(arguments).await,
             READ_RESOURCE_TOOL_NAME => self.handle_read_resource(arguments).await,

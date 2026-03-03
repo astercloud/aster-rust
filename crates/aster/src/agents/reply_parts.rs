@@ -570,6 +570,9 @@ mod tests {
                 instructions: None,
                 bundled: None,
                 available_tools: vec![],
+                deferred_loading: false,
+                always_expose_tools: vec![],
+                allowed_caller: None,
             })
             .await
             .unwrap();

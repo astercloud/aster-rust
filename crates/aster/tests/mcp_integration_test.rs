@@ -198,6 +198,9 @@ async fn test_replayed_session(
         timeout: Some(30),
         bundled: Some(false),
         available_tools: vec![],
+        deferred_loading: false,
+        always_expose_tools: vec![],
+        allowed_caller: None,
     };
 
     let provider = Arc::new(tokio::sync::Mutex::new(Some(Arc::new(MockProvider {

@@ -2,6 +2,7 @@ use crate::conversation::message::{Message, MessageContent};
 use crate::model::ModelConfig;
 use crate::providers::base::Usage;
 use crate::providers::errors::ProviderError;
+use crate::providers::formats::tool_input_examples;
 use crate::providers::utils::{convert_image, ImageFormat};
 use anyhow::{anyhow, Result};
 use rmcp::model::{object, CallToolRequestParam, ErrorCode, ErrorData, JsonObject, Role, Tool};
@@ -190,11 +191,20 @@ pub fn format_tools(tools: &[Tool]) -> Vec<Value> {
 
     for tool in tools {
         if unique_tools.insert(tool.name.clone()) {
-            tool_specs.push(json!({
+            let mut tool_spec = json!({
                 NAME_FIELD: tool.name,
                 "description": tool.description,
                 "input_schema": anthropic_flavored_input_schema(tool.input_schema.clone())
-            }));
+            });
+
+            if let Some(input_examples) = tool_input_examples(tool) {
+                tool_spec
+                    .as_object_mut()
+                    .expect("tool spec should be json object")
+                    .insert("input_examples".to_string(), input_examples.clone());
+            }
+
+            tool_specs.push(tool_spec);
         }
     }
 
@@ -921,6 +931,38 @@ mod tests {
 
         // Verify cache control is added to last tool
         assert!(spec[1].get("cache_control").is_some());
+    }
+
+    #[test]
+    fn test_tools_to_anthropic_spec_with_input_examples() {
+        let mut tool = Tool::new(
+            "create_ticket",
+            "Create a support ticket",
+            object!({
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string" },
+                    "priority": { "type": "string" }
+                },
+                "required": ["title"]
+            }),
+        );
+        tool.meta = Some(rmcp::model::Meta(object!({
+            "input_examples": [
+                {
+                    "description": "高优先级工单",
+                    "input": {
+                        "title": "生产故障",
+                        "priority": "high"
+                    }
+                }
+            ]
+        })));
+
+        let spec = format_tools(&[tool]);
+        assert_eq!(spec.len(), 1);
+        assert_eq!(spec[0]["name"], "create_ticket");
+        assert_eq!(spec[0]["input_examples"][0]["input"]["priority"], "high");
     }
 
     #[test]

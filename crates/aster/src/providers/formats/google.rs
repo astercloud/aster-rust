@@ -1,6 +1,7 @@
 use crate::model::ModelConfig;
 use crate::providers::base::Usage;
 use crate::providers::errors::ProviderError;
+use crate::providers::formats::tool_description_with_examples;
 use crate::providers::utils::{is_valid_function_name, sanitize_function_name};
 use anyhow::Result;
 use rmcp::model::{
@@ -195,7 +196,10 @@ pub fn format_tools(tools: &[Tool]) -> Vec<Value> {
         .map(|tool| {
             let mut parameters = Map::new();
             parameters.insert("name".to_string(), json!(tool.name));
-            parameters.insert("description".to_string(), json!(tool.description));
+            parameters.insert(
+                "description".to_string(),
+                json!(tool_description_with_examples(tool)),
+            );
             let tool_input_schema = &tool.input_schema;
 
             if tool_input_schema
@@ -1428,5 +1432,35 @@ data: [DONE]"#;
 
         // Only "Complete" should be captured, stream should stop at [DONE]
         assert_eq!(text_parts, vec!["Complete"]);
+    }
+
+    #[test]
+    fn test_format_tools_with_input_examples_in_description() {
+        let mut tool = Tool::new(
+            "create_ticket",
+            "Create support ticket",
+            object!({
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string" }
+                },
+                "required": ["title"]
+            }),
+        );
+        tool.meta = Some(rmcp::model::Meta(object!({
+            "input_examples": [
+                {
+                    "description": "Critical alert",
+                    "input": {
+                        "title": "prod outage"
+                    }
+                }
+            ]
+        })));
+
+        let result = format_tools(&[tool]);
+        let description = result[0]["description"].as_str().unwrap_or("");
+        assert!(description.contains("Input examples:"));
+        assert!(description.contains("Critical alert"));
     }
 }

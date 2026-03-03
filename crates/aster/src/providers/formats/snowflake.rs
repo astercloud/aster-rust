@@ -2,6 +2,7 @@ use crate::conversation::message::{Message, MessageContent};
 use crate::model::ModelConfig;
 use crate::providers::base::Usage;
 use crate::providers::errors::ProviderError;
+use crate::providers::formats::tool_description_with_examples;
 use anyhow::{anyhow, Result};
 use rmcp::model::{object, CallToolRequestParam, Role, Tool};
 use rmcp::object;
@@ -100,7 +101,7 @@ pub fn format_tools(tools: &[Tool]) -> Vec<Value> {
             let tool_spec = json!({
                 "type": "generic",
                 "name": tool.name,
-                "description": tool.description,
+                "description": tool_description_with_examples(tool),
                 "input_schema": tool.input_schema
             });
 
@@ -518,6 +519,36 @@ mod tests {
 
         assert_eq!(spec["role"], "system");
         assert_eq!(spec["content"], system);
+    }
+
+    #[test]
+    fn test_tools_to_snowflake_spec_with_input_examples() {
+        let mut tool = Tool::new(
+            "create_ticket",
+            "Create ticket",
+            object!({
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string" }
+                },
+                "required": ["title"]
+            }),
+        );
+        tool.meta = Some(rmcp::model::Meta(object!({
+            "input_examples": [
+                {
+                    "description": "P0",
+                    "input": {
+                        "title": "api down"
+                    }
+                }
+            ]
+        })));
+
+        let spec = format_tools(&[tool]);
+        let description = spec[0]["tool_spec"]["description"].as_str().unwrap_or("");
+        assert!(description.contains("Input examples:"));
+        assert!(description.contains("P0"));
     }
 
     #[test]

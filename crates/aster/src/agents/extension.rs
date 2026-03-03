@@ -266,6 +266,12 @@ pub enum ExtensionConfig {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
     /// Built-in extension that is part of the bundled aster MCP server
     #[serde(rename = "builtin")]
@@ -282,6 +288,12 @@ pub enum ExtensionConfig {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
     /// Platform extensions that have direct access to the agent etc and run in the agent process
     #[serde(rename = "platform")]
@@ -295,6 +307,12 @@ pub enum ExtensionConfig {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
     /// Streamable HTTP client with a URI endpoint using MCP Streamable HTTP specification
     #[serde(rename = "streamable_http")]
@@ -318,6 +336,12 @@ pub enum ExtensionConfig {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
     /// Frontend-provided tools that will be called through the frontend
     #[serde(rename = "frontend")]
@@ -335,6 +359,12 @@ pub enum ExtensionConfig {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
     /// Inline Python code that will be executed using uvx
     #[serde(rename = "inline_python")]
@@ -353,6 +383,12 @@ pub enum ExtensionConfig {
         dependencies: Option<Vec<String>>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
 }
 
@@ -365,6 +401,9 @@ impl Default for ExtensionConfig {
             timeout: Some(config::DEFAULT_EXTENSION_TIMEOUT),
             bundled: Some(true),
             available_tools: Vec::new(),
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         }
     }
 }
@@ -386,6 +425,9 @@ impl ExtensionConfig {
             timeout: Some(timeout.into()),
             bundled: None,
             available_tools: Vec::new(),
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         }
     }
 
@@ -405,6 +447,9 @@ impl ExtensionConfig {
             timeout: Some(timeout.into()),
             bundled: None,
             available_tools: Vec::new(),
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         }
     }
 
@@ -421,6 +466,9 @@ impl ExtensionConfig {
             timeout: Some(timeout.into()),
             dependencies: None,
             available_tools: Vec::new(),
+            deferred_loading: false,
+            always_expose_tools: Vec::new(),
+            allowed_caller: None,
         }
     }
 
@@ -439,6 +487,9 @@ impl ExtensionConfig {
                 description,
                 bundled,
                 available_tools,
+                deferred_loading,
+                always_expose_tools,
+                allowed_caller,
                 ..
             } => Self::Stdio {
                 name,
@@ -450,6 +501,9 @@ impl ExtensionConfig {
                 timeout,
                 bundled,
                 available_tools,
+                deferred_loading,
+                always_expose_tools,
+                allowed_caller,
             },
             other => other,
         }
@@ -501,6 +555,81 @@ impl ExtensionConfig {
         // If no tools are specified, all tools are available
         // If tools are specified, only those tools are available
         available_tools.is_empty() || available_tools.contains(&tool_name.to_string())
+    }
+
+    pub fn deferred_loading(&self) -> bool {
+        match self {
+            Self::Sse { .. } => false,
+            Self::StreamableHttp {
+                deferred_loading, ..
+            }
+            | Self::Stdio {
+                deferred_loading, ..
+            }
+            | Self::Builtin {
+                deferred_loading, ..
+            }
+            | Self::Platform {
+                deferred_loading, ..
+            }
+            | Self::InlinePython {
+                deferred_loading, ..
+            }
+            | Self::Frontend {
+                deferred_loading, ..
+            } => *deferred_loading,
+        }
+    }
+
+    pub fn always_expose_tools(&self) -> &[String] {
+        match self {
+            Self::Sse { .. } => &[],
+            Self::StreamableHttp {
+                always_expose_tools,
+                ..
+            }
+            | Self::Stdio {
+                always_expose_tools,
+                ..
+            }
+            | Self::Builtin {
+                always_expose_tools,
+                ..
+            }
+            | Self::Platform {
+                always_expose_tools,
+                ..
+            }
+            | Self::InlinePython {
+                always_expose_tools,
+                ..
+            }
+            | Self::Frontend {
+                always_expose_tools,
+                ..
+            } => always_expose_tools,
+        }
+    }
+
+    pub fn is_tool_exposed_by_default(&self, tool_name: &str) -> bool {
+        !self.deferred_loading() || self.always_expose_tools().contains(&tool_name.to_string())
+    }
+
+    pub fn allowed_caller(&self) -> Option<&str> {
+        match self {
+            Self::Sse { .. } => None,
+            Self::StreamableHttp { allowed_caller, .. }
+            | Self::Stdio { allowed_caller, .. }
+            | Self::Builtin { allowed_caller, .. }
+            | Self::Platform { allowed_caller, .. }
+            | Self::InlinePython { allowed_caller, .. }
+            | Self::Frontend { allowed_caller, .. } => allowed_caller.as_deref(),
+        }
+    }
+
+    pub fn is_caller_allowed(&self, caller: &str) -> bool {
+        self.allowed_caller()
+            .is_none_or(|required| required == caller)
     }
 }
 

@@ -11,7 +11,7 @@ use rmcp::transport::streamable_http_client::{
 use rmcp::transport::{
     ConfigureCommandExt, DynamicTransportError, StreamableHttpClientTransport, TokioChildProcess,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::option::Option;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -94,6 +94,7 @@ impl Extension {
 /// Manages aster extensions / MCP clients and their interactions
 pub struct ExtensionManager {
     extensions: Mutex<HashMap<String, Extension>>,
+    loaded_deferred_tools: Mutex<HashSet<String>>,
     context: Mutex<PlatformExtensionContext>,
     provider: SharedProvider,
 }
@@ -445,6 +446,7 @@ impl ExtensionManager {
     pub fn new(provider: SharedProvider) -> Self {
         Self {
             extensions: Mutex::new(HashMap::new()),
+            loaded_deferred_tools: Mutex::new(HashSet::new()),
             context: Mutex::new(PlatformExtensionContext {
                 session_id: None,
                 extension_manager: None,
@@ -669,14 +671,26 @@ impl ExtensionManager {
         &self,
         extension_name: Option<String>,
     ) -> ExtensionResult<Vec<Tool>> {
-        self.get_prefixed_tools_impl(extension_name, None).await
+        self.get_prefixed_tools_impl(extension_name, None, false)
+            .await
+    }
+
+    pub async fn get_prefixed_tools_for_search(
+        &self,
+        extension_name: Option<String>,
+    ) -> ExtensionResult<Vec<Tool>> {
+        self.get_prefixed_tools_impl(extension_name, None, true)
+            .await
     }
 
     async fn get_prefixed_tools_impl(
         &self,
         extension_name: Option<String>,
         exclude: Option<&str>,
+        include_deferred_hidden: bool,
     ) -> ExtensionResult<Vec<Tool>> {
+        let loaded_deferred_tools = self.loaded_deferred_tools.lock().await.clone();
+
         // Filter clients based on the provided extension_name or include all if None
         let filtered_clients: Vec<_> = self
             .extensions
@@ -702,6 +716,7 @@ impl ExtensionManager {
         let cancel_token = CancellationToken::default();
         let client_futures = filtered_clients.into_iter().map(|(name, config, client)| {
             let cancel_token = cancel_token.clone();
+            let loaded_deferred_tools = loaded_deferred_tools.clone();
             task::spawn(async move {
                 let mut tools = Vec::new();
                 let client_guard = client.lock().await;
@@ -710,10 +725,14 @@ impl ExtensionManager {
                 loop {
                     for tool in client_tools.tools {
                         let is_available = config.is_tool_available(&tool.name);
+                        let prefixed_name = format!("{}__{}", name, tool.name);
+                        let is_visible = include_deferred_hidden
+                            || config.is_tool_exposed_by_default(&tool.name)
+                            || loaded_deferred_tools.contains(&prefixed_name);
 
-                        if is_available {
+                        if is_available && is_visible {
                             tools.push(Tool {
-                                name: format!("{}__{}", name, tool.name).into(),
+                                name: prefixed_name.into(),
                                 description: tool.description,
                                 input_schema: tool.input_schema,
                                 annotations: tool.annotations,
@@ -755,7 +774,177 @@ impl ExtensionManager {
     }
 
     pub async fn get_prefixed_tools_excluding(&self, exclude: &str) -> ExtensionResult<Vec<Tool>> {
-        self.get_prefixed_tools_impl(None, Some(exclude)).await
+        self.get_prefixed_tools_impl(None, Some(exclude), false)
+            .await
+    }
+
+    pub async fn search_tools(&self, query: &str, limit: usize) -> Result<Vec<Content>, ErrorData> {
+        let terms: Vec<String> = query
+            .split_whitespace()
+            .filter(|term| !term.is_empty())
+            .map(|term| term.to_lowercase())
+            .collect();
+
+        let mut tools = self
+            .get_prefixed_tools_for_search(None)
+            .await
+            .map_err(|e| ErrorData::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None))?;
+
+        // Stable ordering for deterministic output before scoring.
+        tools.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let loaded_deferred_tools = self.loaded_deferred_tools.lock().await.clone();
+        let extensions = self.extensions.lock().await;
+
+        let mut scored = Vec::new();
+        for tool in tools {
+            let name = tool.name.to_string();
+            let lower_name = name.to_lowercase();
+            let description = tool.description.as_deref().unwrap_or("").to_string();
+            let lower_desc = description.to_lowercase();
+
+            let score = if terms.is_empty() {
+                1
+            } else {
+                terms.iter().fold(0_i32, |acc, term| {
+                    let mut next = acc;
+                    if lower_name.contains(term) {
+                        next += 3;
+                    }
+                    if lower_desc.contains(term) {
+                        next += 1;
+                    }
+                    next
+                })
+            };
+
+            if score == 0 {
+                continue;
+            }
+
+            let status = if let Some((_, ext, tool_name)) = extensions
+                .iter()
+                .filter_map(|(ext_name, ext)| {
+                    name.strip_prefix(ext_name.as_str())
+                        .and_then(|rest| rest.strip_prefix("__"))
+                        .map(|tool_name| (ext_name, ext, tool_name))
+                })
+                .max_by_key(|(ext_name, _, _)| ext_name.len())
+            {
+                if ext.config.deferred_loading()
+                    && !ext.config.is_tool_exposed_by_default(tool_name)
+                    && !loaded_deferred_tools.contains(&name)
+                {
+                    "deferred"
+                } else if ext.config.deferred_loading() {
+                    "loaded"
+                } else {
+                    "visible"
+                }
+            } else {
+                "visible"
+            };
+
+            scored.push((score, name, status.to_string(), description));
+        }
+
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        scored.truncate(limit.max(1));
+
+        if scored.is_empty() {
+            return Ok(vec![Content::text(format!(
+                "未找到匹配工具。query='{}'",
+                query
+            ))]);
+        }
+
+        let mut output = format!("找到 {} 个匹配工具（query='{}'）：\n", scored.len(), query);
+        for (_, name, status, description) in scored {
+            output.push_str(&format!("- {} [{}] {}\n", name, status, description));
+        }
+
+        Ok(vec![Content::text(output)])
+    }
+
+    pub async fn load_deferred_tools(
+        &self,
+        prefixed_tool_names: &[String],
+    ) -> Result<Vec<Content>, ErrorData> {
+        if prefixed_tool_names.is_empty() {
+            return Err(ErrorData::new(
+                ErrorCode::INVALID_PARAMS,
+                "tool_names 不能为空".to_string(),
+                None,
+            ));
+        }
+
+        let all_tools = self
+            .get_prefixed_tools_for_search(None)
+            .await
+            .map_err(|e| ErrorData::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None))?;
+        let all_tool_names: HashSet<String> =
+            all_tools.into_iter().map(|t| t.name.to_string()).collect();
+
+        let extensions = self.extensions.lock().await;
+        let mut loaded = self.loaded_deferred_tools.lock().await;
+        let mut activated = Vec::new();
+        let mut skipped = Vec::new();
+        let mut missing = Vec::new();
+
+        for prefixed_tool in prefixed_tool_names {
+            if !all_tool_names.contains(prefixed_tool) {
+                missing.push(prefixed_tool.clone());
+                continue;
+            }
+
+            let matched = extensions
+                .iter()
+                .filter_map(|(ext_name, ext)| {
+                    prefixed_tool
+                        .strip_prefix(ext_name.as_str())
+                        .and_then(|rest| rest.strip_prefix("__"))
+                        .map(|tool_name| (ext_name, ext, tool_name))
+                })
+                .max_by_key(|(ext_name, _, _)| ext_name.len());
+
+            let Some((_, ext, tool_name)) = matched else {
+                missing.push(prefixed_tool.clone());
+                continue;
+            };
+
+            if !ext.config.deferred_loading() || ext.config.is_tool_exposed_by_default(tool_name) {
+                skipped.push(prefixed_tool.clone());
+                continue;
+            }
+
+            if loaded.insert(prefixed_tool.clone()) {
+                activated.push(prefixed_tool.clone());
+            } else {
+                skipped.push(prefixed_tool.clone());
+            }
+        }
+
+        let mut output = String::new();
+        if !activated.is_empty() {
+            output.push_str("已加载工具：\n");
+            for tool in &activated {
+                output.push_str(&format!("- {}\n", tool));
+            }
+        }
+        if !skipped.is_empty() {
+            output.push_str("已跳过（可能已可见或已加载）：\n");
+            for tool in &skipped {
+                output.push_str(&format!("- {}\n", tool));
+            }
+        }
+        if !missing.is_empty() {
+            output.push_str("未找到：\n");
+            for tool in &missing {
+                output.push_str(&format!("- {}\n", tool));
+            }
+        }
+
+        Ok(vec![Content::text(output)])
     }
 
     /// Get the extension prompt including client instructions
@@ -766,14 +955,29 @@ impl ExtensionManager {
         prompt_template::render_global_file("plan.md", &context).expect("Prompt should render")
     }
 
-    /// Find and return a reference to the appropriate client for a tool call
-    async fn get_client_for_tool(&self, prefixed_name: &str) -> Option<(String, McpClientBox)> {
+    /// Find and return extension, extracted tool name and client for a prefixed tool call.
+    async fn get_client_for_tool(
+        &self,
+        prefixed_name: &str,
+    ) -> Option<(String, String, ExtensionConfig, McpClientBox)> {
         self.extensions
             .lock()
             .await
             .iter()
-            .find(|(key, _)| prefixed_name.starts_with(*key))
-            .map(|(name, extension)| (name.clone(), extension.get_client()))
+            .filter_map(|(name, extension)| {
+                prefixed_name
+                    .strip_prefix(name.as_str())
+                    .and_then(|rest| rest.strip_prefix("__"))
+                    .map(|tool_name| {
+                        (
+                            name.clone(),
+                            tool_name.to_string(),
+                            extension.config.clone(),
+                            extension.get_client(),
+                        )
+                    })
+            })
+            .max_by_key(|(name, _, _, _)| name.len())
     }
 
     // Function that gets executed for read_resource tool
@@ -1027,31 +1231,63 @@ impl ExtensionManager {
         tool_call: CallToolRequestParam,
         cancellation_token: CancellationToken,
     ) -> Result<ToolCallResult> {
-        // Dispatch tool call based on the prefix naming convention
-        let (client_name, client) =
-            self.get_client_for_tool(&tool_call.name)
-                .await
-                .ok_or_else(|| {
-                    ErrorData::new(ErrorCode::RESOURCE_NOT_FOUND, tool_call.name.clone(), None)
-                })?;
+        self.dispatch_tool_call_from_caller(tool_call, cancellation_token, None)
+            .await
+    }
 
-        // rsplit returns the iterator in reverse, tool_name is then at 0
-        let tool_name = tool_call
-            .name
-            .strip_prefix(client_name.as_str())
-            .and_then(|s| s.strip_prefix("__"))
+    pub async fn dispatch_tool_call_from_caller(
+        &self,
+        tool_call: CallToolRequestParam,
+        cancellation_token: CancellationToken,
+        caller: Option<&str>,
+    ) -> Result<ToolCallResult> {
+        // Dispatch tool call based on the prefix naming convention
+        let (client_name, tool_name, config, client) = self
+            .get_client_for_tool(&tool_call.name)
+            .await
             .ok_or_else(|| {
                 ErrorData::new(ErrorCode::RESOURCE_NOT_FOUND, tool_call.name.clone(), None)
-            })?
-            .to_string();
+            })?;
 
-        if let Some(extension) = self.extensions.lock().await.get(&client_name) {
-            if !extension.config.is_tool_available(&tool_name) {
+        if !config.is_tool_available(&tool_name) {
+            return Err(ErrorData::new(
+                ErrorCode::RESOURCE_NOT_FOUND,
+                format!(
+                    "Tool '{}' is not available for extension '{}'",
+                    tool_name, client_name
+                ),
+                None,
+            )
+            .into());
+        }
+
+        if config.deferred_loading()
+            && !config.is_tool_exposed_by_default(&tool_name)
+            && !self
+                .loaded_deferred_tools
+                .lock()
+                .await
+                .contains(tool_call.name.as_ref())
+        {
+            return Err(ErrorData::new(
+                ErrorCode::RESOURCE_NOT_FOUND,
+                format!(
+                    "Tool '{}' is deferred. Use extensionmanager__load_tools first.",
+                    tool_call.name
+                ),
+                None,
+            )
+            .into());
+        }
+
+        if let Some(caller_name) = caller {
+            if !config.is_caller_allowed(caller_name) {
                 return Err(ErrorData::new(
-                    ErrorCode::RESOURCE_NOT_FOUND,
+                    ErrorCode::INVALID_REQUEST,
                     format!(
-                        "Tool '{}' is not available for extension '{}'",
-                        tool_name, client_name
+                        "Tool '{}' only allows caller '{}'",
+                        tool_call.name,
+                        config.allowed_caller().unwrap_or_default()
                     ),
                     None,
                 )
@@ -1285,7 +1521,7 @@ impl ExtensionManager {
 mod tests {
     use super::*;
     use rmcp::model::CallToolResult;
-    use rmcp::model::{InitializeResult, JsonObject};
+    use rmcp::model::{InitializeResult, JsonObject, RawContent};
     use rmcp::{object, ServiceError as Error};
 
     use rmcp::model::ListPromptsResult;
@@ -1308,6 +1544,26 @@ mod tests {
             client: McpClientBox,
             available_tools: Vec<String>,
         ) {
+            self.add_mock_extension_with_tool_config(
+                name,
+                client,
+                available_tools,
+                false,
+                vec![],
+                None,
+            )
+            .await;
+        }
+
+        async fn add_mock_extension_with_tool_config(
+            &self,
+            name: String,
+            client: McpClientBox,
+            available_tools: Vec<String>,
+            deferred_loading: bool,
+            always_expose_tools: Vec<String>,
+            allowed_caller: Option<String>,
+        ) {
             let sanitized_name = normalize(name.clone());
             let config = ExtensionConfig::Builtin {
                 name: name.clone(),
@@ -1316,6 +1572,9 @@ mod tests {
                 timeout: None,
                 bundled: None,
                 available_tools,
+                deferred_loading,
+                always_expose_tools,
+                allowed_caller,
             };
             let extension = Extension::new(config, client, None, None);
             self.extensions
@@ -1649,6 +1908,111 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_deferred_loading_hides_tools_by_default() {
+        let extension_manager = ExtensionManager::new_without_provider();
+        extension_manager
+            .add_mock_extension_with_tool_config(
+                "test_extension".to_string(),
+                Arc::new(Mutex::new(Box::new(MockClient {}))),
+                vec![],
+                true,
+                vec![],
+                None,
+            )
+            .await;
+
+        let visible_tools = extension_manager.get_prefixed_tools(None).await.unwrap();
+        assert!(visible_tools.is_empty());
+
+        let searchable_tools = extension_manager
+            .get_prefixed_tools_for_search(None)
+            .await
+            .unwrap();
+        let names: Vec<String> = searchable_tools
+            .iter()
+            .map(|tool| tool.name.to_string())
+            .collect();
+        assert!(names.iter().any(|name| name == "test_extension__tool"));
+        assert!(names
+            .iter()
+            .any(|name| name == "test_extension__available_tool"));
+        assert!(names
+            .iter()
+            .any(|name| name == "test_extension__hidden_tool"));
+    }
+
+    #[tokio::test]
+    async fn test_deferred_loading_always_expose_tools() {
+        let extension_manager = ExtensionManager::new_without_provider();
+        extension_manager
+            .add_mock_extension_with_tool_config(
+                "test_extension".to_string(),
+                Arc::new(Mutex::new(Box::new(MockClient {}))),
+                vec![],
+                true,
+                vec!["available_tool".to_string()],
+                None,
+            )
+            .await;
+
+        let tools = extension_manager.get_prefixed_tools(None).await.unwrap();
+        let names: Vec<String> = tools.iter().map(|tool| tool.name.to_string()).collect();
+        assert_eq!(names.len(), 1);
+        assert!(names
+            .iter()
+            .any(|name| name == "test_extension__available_tool"));
+    }
+
+    #[tokio::test]
+    async fn test_load_deferred_tools_makes_tool_visible() {
+        let extension_manager = ExtensionManager::new_without_provider();
+        extension_manager
+            .add_mock_extension_with_tool_config(
+                "test_extension".to_string(),
+                Arc::new(Mutex::new(Box::new(MockClient {}))),
+                vec![],
+                true,
+                vec![],
+                None,
+            )
+            .await;
+
+        let before = extension_manager.get_prefixed_tools(None).await.unwrap();
+        assert!(before.is_empty());
+
+        extension_manager
+            .load_deferred_tools(&["test_extension__tool".to_string()])
+            .await
+            .unwrap();
+
+        let after = extension_manager.get_prefixed_tools(None).await.unwrap();
+        let names: Vec<String> = after.iter().map(|tool| tool.name.to_string()).collect();
+        assert!(names.iter().any(|name| name == "test_extension__tool"));
+    }
+
+    #[tokio::test]
+    async fn test_search_tools_shows_deferred_status() {
+        let extension_manager = ExtensionManager::new_without_provider();
+        extension_manager
+            .add_mock_extension_with_tool_config(
+                "test_extension".to_string(),
+                Arc::new(Mutex::new(Box::new(MockClient {}))),
+                vec![],
+                true,
+                vec![],
+                None,
+            )
+            .await;
+
+        let results = extension_manager.search_tools("tool", 10).await.unwrap();
+        let text = match &results[0].raw {
+            RawContent::Text(t) => t.text.clone(),
+            _ => panic!("Expected text"),
+        };
+        assert!(text.contains("test_extension__tool [deferred]"));
+    }
+
+    #[tokio::test]
     async fn test_dispatch_unavailable_tool_returns_error() {
         let extension_manager = ExtensionManager::new_without_provider();
 
@@ -1692,6 +2056,45 @@ mod tests {
             .await;
 
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_dispatch_tool_call_from_caller_honors_allowed_caller() {
+        let extension_manager = ExtensionManager::new_without_provider();
+
+        extension_manager
+            .add_mock_extension_with_tool_config(
+                "test_extension".to_string(),
+                Arc::new(Mutex::new(Box::new(MockClient {}))),
+                vec![],
+                false,
+                vec![],
+                Some("code_execution".to_string()),
+            )
+            .await;
+
+        let tool_call = CallToolRequestParam {
+            name: "test_extension__tool".to_string().into(),
+            arguments: Some(object!({})),
+        };
+
+        let denied = extension_manager
+            .dispatch_tool_call_from_caller(
+                tool_call.clone(),
+                CancellationToken::default(),
+                Some("other_caller"),
+            )
+            .await;
+        assert!(denied.is_err());
+
+        let allowed = extension_manager
+            .dispatch_tool_call_from_caller(
+                tool_call,
+                CancellationToken::default(),
+                Some("code_execution"),
+            )
+            .await;
+        assert!(allowed.is_ok());
     }
 
     #[tokio::test]

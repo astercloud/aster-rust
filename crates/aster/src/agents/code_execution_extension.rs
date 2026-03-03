@@ -18,7 +18,7 @@ use rmcp::model::{
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::rc::Rc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -199,6 +199,7 @@ struct ToolInfo {
     description: String,
     params: Vec<(String, String, bool)>,
     return_type: String,
+    allowed_caller: Option<String>,
 }
 
 impl ToolInfo {
@@ -245,6 +246,12 @@ impl ToolInfo {
                 .unwrap_or_default(),
             params,
             return_type,
+            allowed_caller: tool
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.get("allowed_caller"))
+                .and_then(|value| value.as_str())
+                .map(ToString::to_string),
         })
     }
 
@@ -506,10 +513,15 @@ impl CodeExecutionClient {
             .to_string();
 
         let tools = self.get_tool_infos().await;
+        let allowed_callers: HashMap<String, Option<String>> = tools
+            .iter()
+            .map(|tool| (tool.full_name.clone(), tool.allowed_caller.clone()))
+            .collect();
         let (call_tx, call_rx) = mpsc::unbounded_channel();
         let tool_handler = tokio::spawn(Self::run_tool_handler(
             call_rx,
             self.context.extension_manager.clone(),
+            allowed_callers,
         ));
 
         let js_result = tokio::task::spawn_blocking(move || run_js_module(&code, &tools, call_tx))
@@ -674,16 +686,22 @@ impl CodeExecutionClient {
     async fn run_tool_handler(
         mut call_rx: mpsc::UnboundedReceiver<ToolCallRequest>,
         extension_manager: Option<std::sync::Weak<crate::agents::ExtensionManager>>,
+        allowed_callers: HashMap<String, Option<String>>,
     ) {
         while let Some((tool_name, arguments, response_tx)) = call_rx.recv().await {
+            let caller_check = Self::validate_allowed_caller(&tool_name, &allowed_callers);
             let result = match extension_manager.as_ref().and_then(|w| w.upgrade()) {
-                Some(manager) => {
+                Some(manager) if caller_check.is_ok() => {
                     let tool_call = CallToolRequestParam {
                         name: tool_name.into(),
                         arguments: serde_json::from_str(&arguments).ok(),
                     };
                     match manager
-                        .dispatch_tool_call(tool_call, CancellationToken::new())
+                        .dispatch_tool_call_from_caller(
+                            tool_call,
+                            CancellationToken::new(),
+                            Some(EXTENSION_NAME),
+                        )
                         .await
                     {
                         Ok(dispatch_result) => match dispatch_result.result.await {
@@ -705,10 +723,26 @@ impl CodeExecutionClient {
                         Err(e) => Err(format!("Dispatch error: {e}")),
                     }
                 }
+                Some(_) => Err(caller_check.unwrap_err()),
                 None => Err("Extension manager not available".to_string()),
             };
             let _ = response_tx.send(result);
         }
+    }
+
+    fn validate_allowed_caller(
+        tool_name: &str,
+        allowed_callers: &HashMap<String, Option<String>>,
+    ) -> Result<(), String> {
+        if let Some(Some(required_caller)) = allowed_callers.get(tool_name) {
+            if required_caller != EXTENSION_NAME {
+                return Err(format!(
+                    "Tool '{}' only allows caller '{}'",
+                    tool_name, required_caller
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -930,6 +964,7 @@ impl McpClientTrait for CodeExecutionClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use std::sync::Arc;
     use test_case::test_case;
 
@@ -985,6 +1020,7 @@ mod tests {
                 description: "Execute shell commands".to_string(),
                 params: vec![("command".to_string(), "string".to_string(), true)],
                 return_type: "string".to_string(),
+                allowed_caller: None,
             },
             ToolInfo {
                 server_name: "developer".to_string(),
@@ -993,6 +1029,7 @@ mod tests {
                 description: "Edit text files".to_string(),
                 params: vec![("path".to_string(), "string".to_string(), true)],
                 return_type: "string".to_string(),
+                allowed_caller: None,
             },
             ToolInfo {
                 server_name: "git".to_string(),
@@ -1001,6 +1038,7 @@ mod tests {
                 description: "Commit changes to git".to_string(),
                 params: vec![("message".to_string(), "string".to_string(), true)],
                 return_type: "string".to_string(),
+                allowed_caller: None,
             },
         ];
 
@@ -1062,6 +1100,7 @@ mod tests {
                 description: "Execute shell commands".to_string(),
                 params: vec![],
                 return_type: "string".to_string(),
+                allowed_caller: None,
             },
             ToolInfo {
                 server_name: "developer".to_string(),
@@ -1070,6 +1109,7 @@ mod tests {
                 description: "Edit text files".to_string(),
                 params: vec![],
                 return_type: "string".to_string(),
+                allowed_caller: None,
             },
         ];
 
@@ -1095,6 +1135,30 @@ mod tests {
         let result = CodeExecutionClient::handle_search(&tools, &["[invalid".to_string()], true);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid regex"));
+    }
+
+    #[test]
+    fn test_validate_allowed_caller() {
+        let mut allowed = HashMap::new();
+        allowed.insert(
+            "developer__shell".to_string(),
+            Some(EXTENSION_NAME.to_string()),
+        );
+        allowed.insert(
+            "developer__text_editor".to_string(),
+            Some("another_caller".to_string()),
+        );
+        allowed.insert("developer__read".to_string(), None);
+
+        assert!(CodeExecutionClient::validate_allowed_caller("developer__shell", &allowed).is_ok());
+        assert!(CodeExecutionClient::validate_allowed_caller("developer__read", &allowed).is_ok());
+
+        let denied =
+            CodeExecutionClient::validate_allowed_caller("developer__text_editor", &allowed);
+        assert!(denied.is_err());
+        assert!(denied
+            .unwrap_err()
+            .contains("only allows caller 'another_caller'"));
     }
 
     #[test_case(
@@ -1229,6 +1293,7 @@ mod tests {
             description: "Get a value".to_string(),
             params: vec![],
             return_type: "string".to_string(),
+            allowed_caller: None,
         }];
 
         let (tx, _rx) = mpsc::unbounded_channel();

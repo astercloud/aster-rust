@@ -5,9 +5,10 @@
 //! ## 搜索引擎支持（按优先级）
 //!
 //! 1. Tavily Search API - 环境变量 `TAVILY_API_KEY`
-//! 2. Bing Search API - 环境变量 `BING_SEARCH_API_KEY`
-//! 3. Google Custom Search API - 环境变量 `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_ENGINE_ID`
-//! 4. DuckDuckGo Instant Answer API - 免费，无需配置（默认回退）
+//! 2. Multi Search Engine v2.0.1 - 环境变量 `MULTI_SEARCH_ENGINE_CONFIG_JSON`
+//! 3. Bing Search API - 环境变量 `BING_SEARCH_API_KEY`
+//! 4. Google Custom Search API - 环境变量 `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_ENGINE_ID`
+//! 5. DuckDuckGo Instant Answer API - 免费，无需配置（默认回退）
 
 use super::base::{PermissionCheckResult, Tool};
 use super::context::{ToolContext, ToolResult};
@@ -15,15 +16,20 @@ use super::error::ToolError;
 use async_trait::async_trait;
 use lru::LruCache;
 use reqwest::Client;
-use scraper::Html;
+use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use url::Url;
+use urlencoding::encode;
 
 /// 响应体大小限制 (10MB)
 const MAX_RESPONSE_SIZE: usize = 10 * 1024 * 1024;
+const DEFAULT_WEB_FETCH_MAX_CHARS: usize = 100_000;
+const DEFAULT_DYNAMIC_FILTER_MAX_CHARS: usize = 20_000;
+const DEFAULT_DYNAMIC_FILTER_MAX_CHUNKS: usize = 8;
 
 /// WebFetch 缓存 TTL (15分钟)
 const WEB_FETCH_CACHE_TTL: Duration = Duration::from_secs(15 * 60);
@@ -49,6 +55,451 @@ pub struct SearchResult {
     pub publish_date: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+enum SearchProviderKind {
+    Tavily,
+    MultiSearchEngine,
+    BingSearchApi,
+    GoogleCustomSearch,
+    DuckduckgoInstant,
+}
+
+impl SearchProviderKind {
+    fn as_env_value(self) -> &'static str {
+        match self {
+            SearchProviderKind::Tavily => "tavily",
+            SearchProviderKind::MultiSearchEngine => "multi_search_engine",
+            SearchProviderKind::BingSearchApi => "bing_search_api",
+            SearchProviderKind::GoogleCustomSearch => "google_custom_search",
+            SearchProviderKind::DuckduckgoInstant => "duckduckgo_instant",
+        }
+    }
+
+    fn from_env_value(raw: &str) -> Option<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "tavily" => Some(SearchProviderKind::Tavily),
+            "multi_search_engine" => Some(SearchProviderKind::MultiSearchEngine),
+            "bing_search_api" => Some(SearchProviderKind::BingSearchApi),
+            "google_custom_search" => Some(SearchProviderKind::GoogleCustomSearch),
+            "duckduckgo_instant" => Some(SearchProviderKind::DuckduckgoInstant),
+            _ => None,
+        }
+    }
+}
+
+const DEFAULT_SEARCH_PROVIDER_PRIORITY: [SearchProviderKind; 5] = [
+    SearchProviderKind::Tavily,
+    SearchProviderKind::MultiSearchEngine,
+    SearchProviderKind::BingSearchApi,
+    SearchProviderKind::GoogleCustomSearch,
+    SearchProviderKind::DuckduckgoInstant,
+];
+
+#[derive(Debug, Clone)]
+struct SearchRuntimeConfig {
+    priority: Vec<SearchProviderKind>,
+}
+
+impl SearchRuntimeConfig {
+    fn push_unique(resolved: &mut Vec<SearchProviderKind>, provider: SearchProviderKind) {
+        if !resolved.contains(&provider) {
+            resolved.push(provider);
+        }
+    }
+
+    fn from_env() -> Self {
+        let mut env = HashMap::new();
+        for key in ["WEB_SEARCH_PROVIDER", "WEB_SEARCH_PROVIDER_PRIORITY"] {
+            if let Ok(value) = std::env::var(key) {
+                env.insert(key.to_string(), value);
+            }
+        }
+        Self::from_env_map(&env)
+    }
+
+    fn from_env_map(env: &HashMap<String, String>) -> Self {
+        let mut resolved: Vec<SearchProviderKind> = Vec::new();
+
+        if let Some(raw_priority) = env
+            .get("WEB_SEARCH_PROVIDER_PRIORITY")
+            .map(|v| v.trim())
+            .filter(|v| !v.is_empty())
+        {
+            for raw in raw_priority.split(',') {
+                if let Some(provider) = SearchProviderKind::from_env_value(raw) {
+                    Self::push_unique(&mut resolved, provider);
+                } else {
+                    tracing::warn!("忽略未知 WEB_SEARCH_PROVIDER_PRIORITY 值: {}", raw.trim());
+                }
+            }
+        }
+
+        if resolved.is_empty() {
+            if let Some(provider) = env
+                .get("WEB_SEARCH_PROVIDER")
+                .and_then(|v| SearchProviderKind::from_env_value(v))
+            {
+                Self::push_unique(&mut resolved, provider);
+            } else if let Some(raw) = env.get("WEB_SEARCH_PROVIDER") {
+                tracing::warn!("忽略未知 WEB_SEARCH_PROVIDER 值: {}", raw);
+            }
+        }
+
+        for provider in DEFAULT_SEARCH_PROVIDER_PRIORITY {
+            Self::push_unique(&mut resolved, provider);
+        }
+
+        Self { priority: resolved }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SearchAttempt {
+    provider: SearchProviderKind,
+    status: &'static str,
+    result_count: usize,
+    error: Option<String>,
+}
+
+impl SearchAttempt {
+    fn success(provider: SearchProviderKind, result_count: usize) -> Self {
+        Self {
+            provider,
+            status: "success",
+            result_count,
+            error: None,
+        }
+    }
+
+    fn empty(provider: SearchProviderKind) -> Self {
+        Self {
+            provider,
+            status: "empty",
+            result_count: 0,
+            error: None,
+        }
+    }
+
+    fn error(provider: SearchProviderKind, error: String) -> Self {
+        Self {
+            provider,
+            status: "error",
+            result_count: 0,
+            error: Some(error),
+        }
+    }
+
+    fn as_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "provider": self.provider.as_env_value(),
+            "status": self.status,
+            "result_count": self.result_count,
+            "error": self.error,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SearchProviderOutput {
+    results: Vec<SearchResult>,
+    metadata: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+struct SearchExecution {
+    selected_provider: SearchProviderKind,
+    configured_priority: Vec<SearchProviderKind>,
+    attempts: Vec<SearchAttempt>,
+    provider_metadata: serde_json::Value,
+    results: Vec<SearchResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MultiSearchEngineConfig {
+    #[serde(default = "default_multi_search_engines")]
+    engines: Vec<MultiSearchEngineEntry>,
+    #[serde(default)]
+    priority: Vec<String>,
+    #[serde(default = "default_mse_max_results_per_engine")]
+    max_results_per_engine: usize,
+    #[serde(default = "default_mse_max_total_results")]
+    max_total_results: usize,
+    #[serde(default = "default_mse_timeout_ms")]
+    timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MultiSearchEngineEntry {
+    name: String,
+    url_template: String,
+    #[serde(default = "default_enabled")]
+    enabled: bool,
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
+fn default_mse_max_results_per_engine() -> usize {
+    5
+}
+
+fn default_mse_max_total_results() -> usize {
+    20
+}
+
+fn default_mse_timeout_ms() -> u64 {
+    4000
+}
+
+fn default_multi_search_engines() -> Vec<MultiSearchEngineEntry> {
+    vec![
+        ("google", "https://www.google.com/search?q={query}"),
+        ("bing", "https://www.bing.com/search?q={query}"),
+        ("duckduckgo", "https://duckduckgo.com/?q={query}"),
+        ("yahoo", "https://search.yahoo.com/search?p={query}"),
+        ("baidu", "https://www.baidu.com/s?wd={query}"),
+        ("yandex", "https://yandex.com/search/?text={query}"),
+        ("ecosia", "https://www.ecosia.org/search?q={query}"),
+        ("brave", "https://search.brave.com/search?q={query}"),
+        (
+            "startpage",
+            "https://www.startpage.com/do/search?query={query}",
+        ),
+        ("qwant", "https://www.qwant.com/?q={query}&t=web"),
+        ("sogou", "https://www.sogou.com/web?query={query}"),
+        ("so360", "https://www.so.com/s?q={query}"),
+        ("aol", "https://search.aol.com/aol/search?q={query}"),
+        ("ask", "https://www.ask.com/web?q={query}"),
+        (
+            "naver",
+            "https://search.naver.com/search.naver?query={query}",
+        ),
+        ("seznam", "https://search.seznam.cz/?q={query}"),
+        ("dogpile", "https://www.dogpile.com/serp?q={query}"),
+    ]
+    .into_iter()
+    .map(|(name, url_template)| MultiSearchEngineEntry {
+        name: name.to_string(),
+        url_template: url_template.to_string(),
+        enabled: true,
+    })
+    .collect()
+}
+
+#[async_trait]
+trait SearchProviderStrategy: Send + Sync {
+    fn kind(&self) -> SearchProviderKind;
+
+    async fn search(
+        &self,
+        tool: &WebSearchTool,
+        query: &str,
+    ) -> Result<SearchProviderOutput, String>;
+}
+
+struct TavilySearchStrategy;
+struct MultiSearchEngineStrategy;
+struct BingSearchStrategy;
+struct GoogleSearchStrategy;
+struct DuckduckgoSearchStrategy;
+
+#[async_trait]
+impl SearchProviderStrategy for TavilySearchStrategy {
+    fn kind(&self) -> SearchProviderKind {
+        SearchProviderKind::Tavily
+    }
+
+    async fn search(
+        &self,
+        tool: &WebSearchTool,
+        query: &str,
+    ) -> Result<SearchProviderOutput, String> {
+        let api_key = std::env::var("TAVILY_API_KEY")
+            .map_err(|_| "缺少环境变量 TAVILY_API_KEY".to_string())?;
+        let results = tool.search_with_tavily(query, &api_key).await?;
+        Ok(SearchProviderOutput {
+            results,
+            metadata: serde_json::json!({ "provider": self.kind().as_env_value() }),
+        })
+    }
+}
+
+#[async_trait]
+impl SearchProviderStrategy for MultiSearchEngineStrategy {
+    fn kind(&self) -> SearchProviderKind {
+        SearchProviderKind::MultiSearchEngine
+    }
+
+    async fn search(
+        &self,
+        tool: &WebSearchTool,
+        query: &str,
+    ) -> Result<SearchProviderOutput, String> {
+        tool.search_with_multi_search_engine(query).await
+    }
+}
+
+#[async_trait]
+impl SearchProviderStrategy for BingSearchStrategy {
+    fn kind(&self) -> SearchProviderKind {
+        SearchProviderKind::BingSearchApi
+    }
+
+    async fn search(
+        &self,
+        tool: &WebSearchTool,
+        query: &str,
+    ) -> Result<SearchProviderOutput, String> {
+        let api_key = std::env::var("BING_SEARCH_API_KEY")
+            .map_err(|_| "缺少环境变量 BING_SEARCH_API_KEY".to_string())?;
+        let results = tool.search_with_bing(query, &api_key).await?;
+        Ok(SearchProviderOutput {
+            results,
+            metadata: serde_json::json!({ "provider": self.kind().as_env_value() }),
+        })
+    }
+}
+
+#[async_trait]
+impl SearchProviderStrategy for GoogleSearchStrategy {
+    fn kind(&self) -> SearchProviderKind {
+        SearchProviderKind::GoogleCustomSearch
+    }
+
+    async fn search(
+        &self,
+        tool: &WebSearchTool,
+        query: &str,
+    ) -> Result<SearchProviderOutput, String> {
+        let api_key = std::env::var("GOOGLE_SEARCH_API_KEY")
+            .map_err(|_| "缺少环境变量 GOOGLE_SEARCH_API_KEY".to_string())?;
+        let engine_id = std::env::var("GOOGLE_SEARCH_ENGINE_ID")
+            .map_err(|_| "缺少环境变量 GOOGLE_SEARCH_ENGINE_ID".to_string())?;
+        let results = tool.search_with_google(query, &api_key, &engine_id).await?;
+        Ok(SearchProviderOutput {
+            results,
+            metadata: serde_json::json!({ "provider": self.kind().as_env_value() }),
+        })
+    }
+}
+
+#[async_trait]
+impl SearchProviderStrategy for DuckduckgoSearchStrategy {
+    fn kind(&self) -> SearchProviderKind {
+        SearchProviderKind::DuckduckgoInstant
+    }
+
+    async fn search(
+        &self,
+        tool: &WebSearchTool,
+        query: &str,
+    ) -> Result<SearchProviderOutput, String> {
+        let results = tool.search_with_duckduckgo(query).await?;
+        Ok(SearchProviderOutput {
+            results,
+            metadata: serde_json::json!({ "provider": self.kind().as_env_value() }),
+        })
+    }
+}
+
+struct SearchOrchestrator {
+    runtime_config: SearchRuntimeConfig,
+    strategies: HashMap<SearchProviderKind, Arc<dyn SearchProviderStrategy>>,
+}
+
+impl SearchOrchestrator {
+    fn from_env() -> Self {
+        let mut strategies: HashMap<SearchProviderKind, Arc<dyn SearchProviderStrategy>> =
+            HashMap::new();
+        strategies.insert(SearchProviderKind::Tavily, Arc::new(TavilySearchStrategy));
+        strategies.insert(
+            SearchProviderKind::MultiSearchEngine,
+            Arc::new(MultiSearchEngineStrategy),
+        );
+        strategies.insert(
+            SearchProviderKind::BingSearchApi,
+            Arc::new(BingSearchStrategy),
+        );
+        strategies.insert(
+            SearchProviderKind::GoogleCustomSearch,
+            Arc::new(GoogleSearchStrategy),
+        );
+        strategies.insert(
+            SearchProviderKind::DuckduckgoInstant,
+            Arc::new(DuckduckgoSearchStrategy),
+        );
+
+        Self {
+            runtime_config: SearchRuntimeConfig::from_env(),
+            strategies,
+        }
+    }
+
+    async fn search(&self, tool: &WebSearchTool, query: &str) -> Result<SearchExecution, String> {
+        let mut attempts: Vec<SearchAttempt> = Vec::new();
+        let mut fallback_empty: Option<(SearchProviderKind, serde_json::Value)> = None;
+
+        for provider in &self.runtime_config.priority {
+            let Some(strategy) = self.strategies.get(provider) else {
+                attempts.push(SearchAttempt::error(
+                    *provider,
+                    "provider strategy not registered".to_string(),
+                ));
+                continue;
+            };
+
+            match strategy.search(tool, query).await {
+                Ok(output) if !output.results.is_empty() => {
+                    attempts.push(SearchAttempt::success(*provider, output.results.len()));
+                    return Ok(SearchExecution {
+                        selected_provider: *provider,
+                        configured_priority: self.runtime_config.priority.clone(),
+                        attempts,
+                        provider_metadata: output.metadata,
+                        results: output.results,
+                    });
+                }
+                Ok(output) => {
+                    attempts.push(SearchAttempt::empty(*provider));
+                    if fallback_empty.is_none() {
+                        fallback_empty = Some((*provider, output.metadata));
+                    }
+                }
+                Err(error) => {
+                    attempts.push(SearchAttempt::error(*provider, error));
+                }
+            }
+        }
+
+        if let Some((selected_provider, provider_metadata)) = fallback_empty {
+            return Ok(SearchExecution {
+                selected_provider,
+                configured_priority: self.runtime_config.priority.clone(),
+                attempts,
+                provider_metadata,
+                results: vec![],
+            });
+        }
+
+        let errors: Vec<String> = attempts
+            .iter()
+            .filter_map(|attempt| {
+                attempt
+                    .error
+                    .as_ref()
+                    .map(|error| format!("{}: {}", attempt.provider.as_env_value(), error))
+            })
+            .collect();
+        if errors.is_empty() {
+            Err("所有搜索提供商均未返回结果".to_string())
+        } else {
+            Err(format!("所有搜索提供商均失败: {}", errors.join(" | ")))
+        }
+    }
+}
+
 /// 缓存的搜索结果
 #[derive(Debug, Clone)]
 struct CachedSearchResults {
@@ -66,6 +517,18 @@ pub struct WebFetchInput {
     pub url: String,
     /// 处理内容的提示词
     pub prompt: String,
+    /// 聚焦查询，用于动态过滤无关内容
+    #[serde(default)]
+    pub focus_query: Option<String>,
+    /// 是否启用动态过滤
+    #[serde(default)]
+    pub dynamic_filter: bool,
+    /// 返回内容最大字符数
+    #[serde(default)]
+    pub max_chars: Option<usize>,
+    /// 动态过滤保留的最大片段数
+    #[serde(default)]
+    pub max_chunks: Option<usize>,
 }
 
 /// WebSearchTool 输入参数
@@ -289,6 +752,132 @@ impl WebFetchTool {
             .to_string()
     }
 
+    fn truncate_chars(&self, text: &str, max_chars: usize) -> String {
+        if text.chars().count() <= max_chars {
+            return text.to_string();
+        }
+        let truncated = text.chars().take(max_chars).collect::<String>();
+        format!("{}...\n\n[内容已截断]", truncated)
+    }
+
+    fn split_into_chunks(&self, content: &str, max_chunk_chars: usize) -> Vec<String> {
+        let mut chunks = Vec::new();
+
+        for paragraph in content.split("\n\n") {
+            let paragraph = paragraph.trim();
+            if paragraph.is_empty() {
+                continue;
+            }
+
+            if paragraph.chars().count() <= max_chunk_chars {
+                chunks.push(paragraph.to_string());
+                continue;
+            }
+
+            // 超长段落按字符窗口切分，避免单块过大失去过滤效果。
+            let mut current = String::new();
+            for ch in paragraph.chars() {
+                current.push(ch);
+                if current.chars().count() >= max_chunk_chars {
+                    chunks.push(current.clone());
+                    current.clear();
+                }
+            }
+            if !current.is_empty() {
+                chunks.push(current);
+            }
+        }
+
+        if chunks.is_empty() {
+            chunks.push(content.to_string());
+        }
+
+        chunks
+    }
+
+    fn dynamic_filter_content(
+        &self,
+        content: &str,
+        query: &str,
+        max_chars: usize,
+        max_chunks: usize,
+    ) -> Option<String> {
+        let terms: Vec<String> = query
+            .split_whitespace()
+            .map(|t| t.trim().to_lowercase())
+            .filter(|t| t.len() >= 2)
+            .collect();
+
+        if terms.is_empty() {
+            return None;
+        }
+
+        let chunks = self.split_into_chunks(content, 1_500);
+        let mut scored: Vec<(usize, usize)> = chunks
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, chunk)| {
+                let lower = chunk.to_lowercase();
+                let score = terms
+                    .iter()
+                    .map(|term| lower.matches(term).count())
+                    .sum::<usize>();
+                (score > 0).then_some((idx, score))
+            })
+            .collect();
+
+        if scored.is_empty() {
+            return None;
+        }
+
+        scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        let mut selected_indices: Vec<usize> = scored
+            .into_iter()
+            .take(max_chunks.max(1))
+            .map(|(idx, _)| idx)
+            .collect();
+        selected_indices.sort_unstable();
+
+        let selected = selected_indices
+            .into_iter()
+            .filter_map(|idx| chunks.get(idx))
+            .cloned()
+            .collect::<Vec<String>>()
+            .join("\n\n");
+
+        Some(self.truncate_chars(&selected, max_chars))
+    }
+
+    fn prepare_response_content(&self, content: &str, input: &WebFetchInput) -> (String, bool) {
+        let default_max_chars = if input.dynamic_filter || input.focus_query.is_some() {
+            DEFAULT_DYNAMIC_FILTER_MAX_CHARS
+        } else {
+            DEFAULT_WEB_FETCH_MAX_CHARS
+        };
+        let max_chars = input.max_chars.unwrap_or(default_max_chars);
+        let max_chars = max_chars.min(DEFAULT_WEB_FETCH_MAX_CHARS).max(500);
+
+        let query = input
+            .focus_query
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&input.prompt);
+
+        if input.dynamic_filter || input.focus_query.is_some() {
+            let max_chunks = input
+                .max_chunks
+                .unwrap_or(DEFAULT_DYNAMIC_FILTER_MAX_CHUNKS);
+            if let Some(filtered) =
+                self.dynamic_filter_content(content, query, max_chars, max_chunks)
+            {
+                return (filtered, true);
+            }
+        }
+
+        (self.truncate_chars(content, max_chars), false)
+    }
+
     /// 实际的 URL 抓取逻辑
     async fn fetch_url(&self, url: &str) -> Result<(String, String, u16), String> {
         let parsed_url = Url::parse(url).map_err(|e| format!("无效的 URL: {}", e))?;
@@ -381,6 +970,24 @@ impl Tool for WebFetchTool {
                 "prompt": {
                     "type": "string",
                     "description": "用于处理获取内容的提示词"
+                },
+                "focus_query": {
+                    "type": "string",
+                    "description": "可选。用于动态过滤页面内容的关键词/问题"
+                },
+                "dynamic_filter": {
+                    "type": "boolean",
+                    "description": "可选。启用后仅返回与 prompt/focus_query 相关的片段"
+                },
+                "max_chars": {
+                    "type": "integer",
+                    "minimum": 500,
+                    "description": "可选。输出最大字符数（默认普通模式 100000，动态过滤模式 20000）"
+                },
+                "max_chunks": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "可选。动态过滤保留的最大内容片段数，默认 8"
                 }
             },
             "required": ["url", "prompt"]
@@ -403,8 +1010,8 @@ impl Tool for WebFetchTool {
         let input: WebFetchInput = serde_json::from_value(params)
             .map_err(|e| ToolError::execution_failed(format!("输入参数解析失败: {}", e)))?;
 
-        let mut url = input.url;
-        let prompt = input.prompt;
+        let mut url = input.url.clone();
+        let prompt = input.prompt.clone();
 
         // URL 验证和规范化
         let parsed_url = Url::parse(&url)
@@ -421,17 +1028,12 @@ impl Tool for WebFetchTool {
 
         // 检查缓存
         if let Some(cached) = self.cache.get_cached_content(&url) {
-            let max_length = 100_000;
-            let mut content = cached.content.clone();
-            if content.len() > max_length {
-                // 安全地截断字符串，避免在 UTF-8 字符中间切割
-                let truncated = content.chars().take(max_length).collect::<String>();
-                content = format!("{}...\n\n[内容已截断]", truncated);
-            }
+            let (content, filtered) = self.prepare_response_content(&cached.content, &input);
+            let filtered_suffix = if filtered { " (动态过滤)" } else { "" };
 
             return Ok(ToolResult::success(format!(
-                "URL: {}\n提示词: {}\n\n--- 内容 (缓存) ---\n{}",
-                url, prompt, content
+                "URL: {}\n提示词: {}\n\n--- 内容{} (缓存) ---\n{}",
+                url, prompt, filtered_suffix, content
             )));
         }
 
@@ -451,15 +1053,8 @@ impl Tool for WebFetchTool {
                     )));
                 }
 
-                // 截断过长的内容
-                let max_length = 100_000;
-                let display_content = if content.len() > max_length {
-                    // 安全地截断字符串，避免在 UTF-8 字符中间切割
-                    let truncated = content.chars().take(max_length).collect::<String>();
-                    format!("{}...\n\n[内容已截断]", truncated)
-                } else {
-                    content.clone()
-                };
+                let (display_content, filtered) = self.prepare_response_content(&content, &input);
+                let filtered_suffix = if filtered { " (动态过滤)" } else { "" };
 
                 // 缓存结果
                 self.cache.cache_content(
@@ -473,8 +1068,8 @@ impl Tool for WebFetchTool {
                 );
 
                 Ok(ToolResult::success(format!(
-                    "URL: {}\n提示词: {}\n\n--- 内容 ---\n{}",
-                    url, prompt, display_content
+                    "URL: {}\n提示词: {}\n\n--- 内容{} ---\n{}",
+                    url, prompt, filtered_suffix, display_content
                 )))
             }
             Err(e) => Err(ToolError::execution_failed(format!("获取失败: {}", e))),
@@ -604,40 +1199,300 @@ impl WebSearchTool {
         output
     }
 
-    /// 执行搜索
-    async fn perform_search(&self, query: &str) -> Result<Vec<SearchResult>, String> {
-        // 优先使用 Tavily Search API（如果配置）
-        if let Ok(tavily_api_key) = std::env::var("TAVILY_API_KEY") {
-            match self.search_with_tavily(query, &tavily_api_key).await {
-                Ok(results) => return Ok(results),
-                Err(e) => {
-                    tracing::warn!("Tavily 搜索失败，尝试其他引擎: {}", e);
+    /// 执行搜索（策略编排）
+    async fn perform_search(&self, query: &str) -> Result<SearchExecution, String> {
+        let orchestrator = SearchOrchestrator::from_env();
+        orchestrator.search(self, query).await
+    }
+
+    fn load_multi_search_engine_config(&self) -> Result<MultiSearchEngineConfig, String> {
+        let mut config = if let Ok(raw) = std::env::var("MULTI_SEARCH_ENGINE_CONFIG_JSON") {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                MultiSearchEngineConfig {
+                    engines: default_multi_search_engines(),
+                    priority: vec![],
+                    max_results_per_engine: default_mse_max_results_per_engine(),
+                    max_total_results: default_mse_max_total_results(),
+                    timeout_ms: default_mse_timeout_ms(),
+                }
+            } else {
+                serde_json::from_str::<MultiSearchEngineConfig>(trimmed)
+                    .map_err(|e| format!("解析 MULTI_SEARCH_ENGINE_CONFIG_JSON 失败: {}", e))?
+            }
+        } else {
+            MultiSearchEngineConfig {
+                engines: default_multi_search_engines(),
+                priority: vec![],
+                max_results_per_engine: default_mse_max_results_per_engine(),
+                max_total_results: default_mse_max_total_results(),
+                timeout_ms: default_mse_timeout_ms(),
+            }
+        };
+
+        if config.engines.is_empty() {
+            config.engines = default_multi_search_engines();
+        }
+        config.max_results_per_engine = config.max_results_per_engine.clamp(1, 20);
+        config.max_total_results = config.max_total_results.clamp(1, 100);
+        config.timeout_ms = config.timeout_ms.clamp(500, 15000);
+
+        Ok(config)
+    }
+
+    fn build_multi_search_engine_order(
+        &self,
+        config: &MultiSearchEngineConfig,
+    ) -> Vec<MultiSearchEngineEntry> {
+        let mut engine_map: HashMap<String, MultiSearchEngineEntry> = HashMap::new();
+        for engine in default_multi_search_engines() {
+            engine_map.insert(engine.name.to_ascii_lowercase(), engine);
+        }
+        for engine in &config.engines {
+            engine_map.insert(engine.name.to_ascii_lowercase(), engine.clone());
+        }
+
+        let mut ordered_names: Vec<String> = Vec::new();
+        if !config.priority.is_empty() {
+            for name in &config.priority {
+                let normalized = name.trim().to_ascii_lowercase();
+                if !normalized.is_empty() && !ordered_names.contains(&normalized) {
+                    ordered_names.push(normalized);
                 }
             }
         }
-
-        // 优先使用 Bing Search API（如果配置）
-        if let Ok(bing_api_key) = std::env::var("BING_SEARCH_API_KEY") {
-            if let Ok(results) = self.search_with_bing(query, &bing_api_key).await {
-                return Ok(results);
+        for engine in &config.engines {
+            let normalized = engine.name.to_ascii_lowercase();
+            if !ordered_names.contains(&normalized) {
+                ordered_names.push(normalized);
             }
         }
 
-        // 优先使用 Google Custom Search API（如果配置）
-        if let (Ok(google_api_key), Ok(google_cx)) = (
-            std::env::var("GOOGLE_SEARCH_API_KEY"),
-            std::env::var("GOOGLE_SEARCH_ENGINE_ID"),
-        ) {
-            if let Ok(results) = self
-                .search_with_google(query, &google_api_key, &google_cx)
-                .await
-            {
-                return Ok(results);
+        ordered_names
+            .into_iter()
+            .filter_map(|name| engine_map.get(&name).cloned())
+            .filter(|engine| engine.enabled && engine.url_template.contains("{query}"))
+            .collect()
+    }
+
+    fn normalize_search_result_url(&self, href: &str, engine_host: Option<&str>) -> Option<String> {
+        let href = href.trim();
+        if href.is_empty()
+            || href.starts_with('#')
+            || href.starts_with("javascript:")
+            || href.starts_with("mailto:")
+        {
+            return None;
+        }
+
+        let mut parsed = if href.starts_with("http://") || href.starts_with("https://") {
+            Url::parse(href).ok()?
+        } else {
+            let host = engine_host?;
+            let normalized_path = if href.starts_with('/') {
+                href.to_string()
+            } else {
+                format!("/{}", href)
+            };
+            Url::parse(&format!("https://{}{}", host, normalized_path)).ok()?
+        };
+
+        if let Some(target) = parsed
+            .query_pairs()
+            .find(|(key, _)| key == "q" || key == "uddg")
+            .map(|(_, value)| value.to_string())
+            .filter(|value| value.starts_with("http://") || value.starts_with("https://"))
+        {
+            if let Ok(target_url) = Url::parse(&target) {
+                parsed = target_url;
             }
         }
 
-        // 回退到 DuckDuckGo（免费，无需 API 密钥）
-        self.search_with_duckduckgo(query).await
+        if !matches!(parsed.scheme(), "http" | "https") {
+            return None;
+        }
+
+        let host = parsed.host_str()?.to_ascii_lowercase();
+        let excluded_hosts = [
+            "google.",
+            "bing.com",
+            "duckduckgo.com",
+            "search.yahoo.com",
+            "baidu.com",
+            "yandex.com",
+            "ecosia.org",
+            "search.brave.com",
+            "startpage.com",
+            "qwant.com",
+            "sogou.com",
+            "so.com",
+            "aol.com",
+            "ask.com",
+            "naver.com",
+            "seznam.cz",
+            "dogpile.com",
+        ];
+        if excluded_hosts
+            .iter()
+            .any(|excluded| host.contains(excluded))
+        {
+            return None;
+        }
+
+        Some(parsed.to_string())
+    }
+
+    fn extract_results_from_search_html(
+        &self,
+        html: &str,
+        max_results: usize,
+        engine_host: Option<&str>,
+    ) -> Vec<SearchResult> {
+        let Ok(selector) = Selector::parse("a[href]") else {
+            return vec![];
+        };
+        let document = Html::parse_document(html);
+        let mut results = Vec::new();
+        let mut seen = HashSet::new();
+
+        for element in document.select(&selector) {
+            if results.len() >= max_results {
+                break;
+            }
+
+            let href = element.value().attr("href").unwrap_or_default();
+            let Some(url) = self.normalize_search_result_url(href, engine_host) else {
+                continue;
+            };
+            if !seen.insert(url.to_ascii_lowercase()) {
+                continue;
+            }
+
+            let title_raw = element.text().collect::<Vec<_>>().join(" ");
+            let title = title_raw.split_whitespace().collect::<Vec<_>>().join(" ");
+            if title.chars().count() < 4 {
+                continue;
+            }
+
+            results.push(SearchResult {
+                title,
+                url,
+                snippet: None,
+                publish_date: None,
+            });
+        }
+
+        results
+    }
+
+    fn deduplicate_results(
+        &self,
+        results: Vec<SearchResult>,
+        max_total: usize,
+    ) -> Vec<SearchResult> {
+        let mut dedup = Vec::new();
+        let mut seen = HashSet::new();
+        for result in results {
+            if dedup.len() >= max_total {
+                break;
+            }
+            let key = result.url.trim().to_ascii_lowercase();
+            if key.is_empty() || !seen.insert(key) {
+                continue;
+            }
+            dedup.push(result);
+        }
+        dedup
+    }
+
+    async fn search_with_multi_search_engine(
+        &self,
+        query: &str,
+    ) -> Result<SearchProviderOutput, String> {
+        let config = self.load_multi_search_engine_config()?;
+        let engines = self.build_multi_search_engine_order(&config);
+        if engines.is_empty() {
+            return Err("Multi Search Engine 未配置有效引擎".to_string());
+        }
+
+        let timeout = Duration::from_millis(config.timeout_ms);
+        let encoded_query = encode(query);
+        let mut aggregated_results = Vec::new();
+        let mut successful_engines = Vec::new();
+        let mut failed_engines = Vec::new();
+        let mut raw_result_count = 0usize;
+
+        for engine in engines {
+            if aggregated_results.len() >= config.max_total_results {
+                break;
+            }
+
+            let request_url = engine
+                .url_template
+                .replace("{query}", encoded_query.as_ref());
+            let request_host = Url::parse(&request_url)
+                .ok()
+                .and_then(|url| url.host_str().map(|host| host.to_string()));
+
+            let send_result =
+                tokio::time::timeout(timeout, self.client.get(&request_url).send()).await;
+            let response = match send_result {
+                Ok(Ok(response)) => response,
+                Ok(Err(error)) => {
+                    failed_engines.push(format!("{}: {}", engine.name, error));
+                    continue;
+                }
+                Err(_) => {
+                    failed_engines
+                        .push(format!("{}: timeout {}ms", engine.name, config.timeout_ms));
+                    continue;
+                }
+            };
+
+            if !response.status().is_success() {
+                failed_engines.push(format!("{}: HTTP {}", engine.name, response.status()));
+                continue;
+            }
+
+            let body = match response.text().await {
+                Ok(text) => text,
+                Err(error) => {
+                    failed_engines.push(format!("{}: {}", engine.name, error));
+                    continue;
+                }
+            };
+
+            let mut engine_results = self.extract_results_from_search_html(
+                &body,
+                config.max_results_per_engine,
+                request_host.as_deref(),
+            );
+            raw_result_count += engine_results.len();
+            if !engine_results.is_empty() {
+                successful_engines.push(engine.name.clone());
+                aggregated_results.append(&mut engine_results);
+            } else {
+                failed_engines.push(format!("{}: no_results", engine.name));
+            }
+        }
+
+        let deduped_results =
+            self.deduplicate_results(aggregated_results, config.max_total_results);
+        let metadata = serde_json::json!({
+            "provider": SearchProviderKind::MultiSearchEngine.as_env_value(),
+            "dedup_before": raw_result_count,
+            "dedup_after": deduped_results.len(),
+            "successful_engines": successful_engines,
+            "failed_engines": failed_engines,
+            "timeout_ms": config.timeout_ms,
+            "max_results_per_engine": config.max_results_per_engine,
+            "max_total_results": config.max_total_results,
+        });
+
+        Ok(SearchProviderOutput {
+            results: deduped_results,
+            metadata,
+        })
     }
 
     /// Tavily Search API 搜索
@@ -971,12 +1826,21 @@ impl Tool for WebSearchTool {
                 cache_age
             );
 
-            return Ok(ToolResult::success(output));
+            return Ok(ToolResult::success(output).with_metadata(
+                "web_search",
+                serde_json::json!({
+                    "cache_hit": true,
+                    "cache_query": cached.query,
+                    "allowed_domains": cached.allowed_domains,
+                    "blocked_domains": cached.blocked_domains,
+                }),
+            ));
         }
 
         // 执行搜索
         match self.perform_search(query).await {
-            Ok(raw_results) => {
+            Ok(search_execution) => {
+                let raw_results = search_execution.results.clone();
                 // 应用域名过滤
                 let filtered_results = self.apply_domain_filters(
                     raw_results.clone(),
@@ -996,11 +1860,28 @@ impl Tool for WebSearchTool {
                     },
                 );
 
+                let web_search_metadata = serde_json::json!({
+                    "cache_hit": false,
+                    "selected_provider": search_execution.selected_provider.as_env_value(),
+                    "configured_priority": search_execution
+                        .configured_priority
+                        .iter()
+                        .map(|provider| provider.as_env_value())
+                        .collect::<Vec<_>>(),
+                    "attempts": search_execution
+                        .attempts
+                        .iter()
+                        .map(SearchAttempt::as_json)
+                        .collect::<Vec<_>>(),
+                    "provider_metadata": search_execution.provider_metadata,
+                });
+
                 // 如果有真实结果，格式化并返回
                 if !filtered_results.is_empty() {
-                    Ok(ToolResult::success(
-                        self.format_search_results(&filtered_results, query),
-                    ))
+                    Ok(
+                        ToolResult::success(self.format_search_results(&filtered_results, query))
+                            .with_metadata("web_search", web_search_metadata),
+                    )
                 } else if !raw_results.is_empty() {
                     // 如果搜索返回了结果但被过滤器全部过滤掉了
                     let allowed_str = allowed_domains
@@ -1015,13 +1896,21 @@ impl Tool for WebSearchTool {
                     Ok(ToolResult::success(format!(
                         "网络搜索: \"{}\"\n\n应用域名过滤器后未找到结果。\n\n应用的过滤器:\n- 允许的域名: {}\n- 阻止的域名: {}\n\n尝试调整您的域名过滤器或搜索查询。",
                         query, allowed_str, blocked_str
-                    )))
+                    ))
+                    .with_metadata("web_search", web_search_metadata))
                 } else {
                     // 如果搜索 API 没有返回结果
+                    let configured_chain = search_execution
+                        .configured_priority
+                        .iter()
+                        .map(|provider| provider.as_env_value())
+                        .collect::<Vec<_>>()
+                        .join(" -> ");
                     Ok(ToolResult::success(format!(
-                        "网络搜索: \"{}\"\n\n未找到结果。这可能是由于:\n1. 搜索查询过于具体或不常见\n2. DuckDuckGo Instant Answer API 覆盖范围有限\n3. 网络或 API 问题\n\n建议:\n- 尝试不同的搜索查询\n- 配置 Bing 或 Google Search API 以获得更好的结果:\n  * Bing: 设置 BING_SEARCH_API_KEY 环境变量\n  * Google: 设置 GOOGLE_SEARCH_API_KEY 和 GOOGLE_SEARCH_ENGINE_ID\n\n当前搜索提供商: DuckDuckGo Instant Answer API (免费)",
-                        query
-                    )))
+                        "网络搜索: \"{}\"\n\n未找到结果。这可能是由于:\n1. 搜索查询过于具体或不常见\n2. 上游搜索引擎返回空结果\n3. 网络或 API 问题\n\n建议:\n- 尝试不同的搜索查询\n- 检查搜索提供商配置与 API Key\n- 如果需要提高覆盖率，可启用 tavily 或 multi_search_engine\n\n当前搜索提供商链路: {}",
+                        query, configured_chain
+                    ))
+                    .with_metadata("web_search", web_search_metadata))
                 }
             }
             Err(e) => Err(ToolError::execution_failed(format!("搜索失败: {}", e))),
@@ -1052,6 +1941,7 @@ pub fn clear_web_caches(cache: &WebCache) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_web_fetch_tool_creation() {
@@ -1141,5 +2031,135 @@ mod tests {
         let filtered = tool.apply_domain_filters(results, &None, &blocked);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].title, "Example 1");
+    }
+
+    #[test]
+    fn test_dynamic_filter_content_prefers_relevant_chunks() {
+        let tool = WebFetchTool::new();
+        let content = "Football match report and scores.\n\nRust ownership and borrow checker explanation.\n\nTravel tips and hotel recommendations.";
+        let input = WebFetchInput {
+            url: "https://example.com".to_string(),
+            prompt: "总结 Rust 所有权".to_string(),
+            focus_query: Some("Rust ownership borrow checker".to_string()),
+            dynamic_filter: true,
+            max_chars: Some(3000),
+            max_chunks: Some(2),
+        };
+
+        let (filtered, used_dynamic_filter) = tool.prepare_response_content(content, &input);
+        assert!(used_dynamic_filter);
+        assert!(filtered.contains("Rust ownership"));
+        assert!(!filtered.contains("Football match report"));
+    }
+
+    #[test]
+    fn test_dynamic_filter_disabled_keeps_original_mode() {
+        let tool = WebFetchTool::new();
+        let content = "Paragraph A.\n\nParagraph B with random text.";
+        let input = WebFetchInput {
+            url: "https://example.com".to_string(),
+            prompt: "简单总结".to_string(),
+            focus_query: None,
+            dynamic_filter: false,
+            max_chars: Some(3000),
+            max_chunks: None,
+        };
+
+        let (result, used_dynamic_filter) = tool.prepare_response_content(content, &input);
+        assert!(!used_dynamic_filter);
+        assert!(result.contains("Paragraph A."));
+        assert!(result.contains("Paragraph B with random text."));
+    }
+
+    #[test]
+    fn test_search_runtime_config_priority_resolution() {
+        let mut env = HashMap::new();
+        env.insert(
+            "WEB_SEARCH_PROVIDER_PRIORITY".to_string(),
+            "multi_search_engine, tavily,unknown,bing_search_api".to_string(),
+        );
+        let resolved = SearchRuntimeConfig::from_env_map(&env);
+
+        assert_eq!(
+            resolved.priority.first().copied(),
+            Some(SearchProviderKind::MultiSearchEngine)
+        );
+        assert!(resolved.priority.contains(&SearchProviderKind::Tavily));
+        assert!(resolved
+            .priority
+            .contains(&SearchProviderKind::BingSearchApi));
+        assert!(resolved
+            .priority
+            .contains(&SearchProviderKind::GoogleCustomSearch));
+        assert!(resolved
+            .priority
+            .contains(&SearchProviderKind::DuckduckgoInstant));
+    }
+
+    #[test]
+    fn test_deduplicate_results_should_keep_unique_urls() {
+        let tool = WebSearchTool::new();
+        let input = vec![
+            SearchResult {
+                title: "A".to_string(),
+                url: "https://example.com/a".to_string(),
+                snippet: None,
+                publish_date: None,
+            },
+            SearchResult {
+                title: "A duplicate".to_string(),
+                url: "https://example.com/a".to_string(),
+                snippet: None,
+                publish_date: None,
+            },
+            SearchResult {
+                title: "B".to_string(),
+                url: "https://example.com/b".to_string(),
+                snippet: None,
+                publish_date: None,
+            },
+        ];
+
+        let deduped = tool.deduplicate_results(input, 10);
+        assert_eq!(deduped.len(), 2);
+        assert_eq!(deduped[0].url, "https://example.com/a");
+        assert_eq!(deduped[1].url, "https://example.com/b");
+    }
+
+    #[test]
+    fn test_build_multi_search_engine_order_prefers_priority() {
+        let tool = WebSearchTool::new();
+        let config = MultiSearchEngineConfig {
+            engines: vec![
+                MultiSearchEngineEntry {
+                    name: "custom".to_string(),
+                    url_template: "https://custom.example/search?q={query}".to_string(),
+                    enabled: true,
+                },
+                MultiSearchEngineEntry {
+                    name: "bing".to_string(),
+                    url_template: "https://www.bing.com/search?q={query}".to_string(),
+                    enabled: true,
+                },
+            ],
+            priority: vec!["custom".to_string(), "duckduckgo".to_string()],
+            max_results_per_engine: 3,
+            max_total_results: 10,
+            timeout_ms: 3000,
+        };
+
+        let ordered = tool.build_multi_search_engine_order(&config);
+        assert!(!ordered.is_empty());
+        assert_eq!(ordered[0].name, "custom");
+    }
+
+    #[test]
+    fn test_normalize_search_result_url_handles_redirect_param() {
+        let tool = WebSearchTool::new();
+        let normalized = tool.normalize_search_result_url(
+            "https://www.google.com/url?q=https://example.com/news",
+            Some("www.google.com"),
+        );
+        assert_eq!(normalized.as_deref(), Some("https://example.com/news"));
     }
 }

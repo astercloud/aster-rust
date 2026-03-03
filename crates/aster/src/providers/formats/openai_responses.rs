@@ -1,6 +1,7 @@
 use crate::conversation::message::{Message, MessageContent};
 use crate::model::ModelConfig;
 use crate::providers::base::{ProviderUsage, Usage};
+use crate::providers::formats::tool_description_with_examples;
 use anyhow::{anyhow, Error};
 use async_stream::try_stream;
 use chrono;
@@ -389,7 +390,7 @@ pub fn create_responses_request(
                 json!({
                     "type": "function",
                     "name": tool.name,
-                    "description": tool.description,
+                    "description": tool_description_with_examples(tool),
                     "parameters": tool.input_schema,
                 })
             })
@@ -692,5 +693,42 @@ where
         } else if let Some(usage) = final_usage {
             yield (None, Some(usage));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmcp::object;
+
+    #[test]
+    fn test_create_responses_request_with_input_examples_in_description() {
+        let mut tool = Tool::new(
+            "create_ticket",
+            "Create ticket",
+            object!({
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string" }
+                },
+                "required": ["title"]
+            }),
+        );
+        tool.meta = Some(rmcp::model::Meta(object!({
+            "input_examples": [
+                {
+                    "description": "Critical",
+                    "input": {
+                        "title": "service down"
+                    }
+                }
+            ]
+        })));
+
+        let model_config = ModelConfig::new("gpt-4.1").unwrap();
+        let payload = create_responses_request(&model_config, "", &[], &[tool]).unwrap();
+        let description = payload["tools"][0]["description"].as_str().unwrap_or("");
+        assert!(description.contains("Input examples:"));
+        assert!(description.contains("Critical"));
     }
 }

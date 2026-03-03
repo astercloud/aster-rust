@@ -23,6 +23,12 @@ enum RecipeExtensionConfigInternal {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
     #[serde(rename = "builtin")]
     Builtin {
@@ -35,6 +41,12 @@ enum RecipeExtensionConfigInternal {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
     #[serde(rename = "platform")]
     Platform {
@@ -45,6 +57,12 @@ enum RecipeExtensionConfigInternal {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
     #[serde(rename = "streamable_http")]
     StreamableHttp {
@@ -63,6 +81,12 @@ enum RecipeExtensionConfigInternal {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
     #[serde(rename = "frontend")]
     Frontend {
@@ -75,6 +99,12 @@ enum RecipeExtensionConfigInternal {
         bundled: Option<bool>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
     #[serde(rename = "inline_python")]
     InlinePython {
@@ -87,6 +117,12 @@ enum RecipeExtensionConfigInternal {
         dependencies: Option<Vec<String>>,
         #[serde(default)]
         available_tools: Vec<String>,
+        #[serde(default)]
+        deferred_loading: bool,
+        #[serde(default)]
+        always_expose_tools: Vec<String>,
+        #[serde(default)]
+        allowed_caller: Option<String>,
     },
 }
 
@@ -119,17 +155,26 @@ impl From<RecipeExtensionConfigInternal> for ExtensionConfig {
                 env_keys,
                 timeout,
                 bundled,
-                available_tools
+                available_tools,
+                deferred_loading,
+                always_expose_tools,
+                allowed_caller
             },
             Builtin {
                 display_name,
                 timeout,
                 bundled,
-                available_tools
+                available_tools,
+                deferred_loading,
+                always_expose_tools,
+                allowed_caller
             },
             Platform {
                 bundled,
-                available_tools
+                available_tools,
+                deferred_loading,
+                always_expose_tools,
+                allowed_caller
             },
             StreamableHttp {
                 uri,
@@ -138,19 +183,28 @@ impl From<RecipeExtensionConfigInternal> for ExtensionConfig {
                 headers,
                 timeout,
                 bundled,
-                available_tools
+                available_tools,
+                deferred_loading,
+                always_expose_tools,
+                allowed_caller
             },
             Frontend {
                 tools,
                 instructions,
                 bundled,
-                available_tools
+                available_tools,
+                deferred_loading,
+                always_expose_tools,
+                allowed_caller
             },
             InlinePython {
                 code,
                 timeout,
                 dependencies,
-                available_tools
+                available_tools,
+                deferred_loading,
+                always_expose_tools,
+                allowed_caller
             }
         )
     }
@@ -203,6 +257,9 @@ mod tests {
                 timeout,
                 bundled,
                 available_tools,
+                deferred_loading,
+                always_expose_tools,
+                allowed_caller,
             } => {
                 assert_eq!(name, "test-builtin");
                 assert_eq!(description, "");
@@ -213,6 +270,9 @@ mod tests {
                     available_tools,
                     &vec!["tool_a".to_string(), "tool_b".to_string()]
                 );
+                assert!(!deferred_loading);
+                assert!(always_expose_tools.is_empty());
+                assert_eq!(allowed_caller, &None);
             }
             other => panic!("unexpected extension variant: {:?}", other),
         }
@@ -240,6 +300,7 @@ mod tests {
                 timeout,
                 bundled,
                 available_tools,
+                ..
             } => {
                 assert_eq!(name, "null-description-builtin");
                 assert_eq!(description, "");
