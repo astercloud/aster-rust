@@ -1834,14 +1834,12 @@ impl Tool for WebSearchTool {
             .map_err(|e| ToolError::execution_failed(format!("输入参数解析失败: {}", e)))?;
 
         let query = &input.query;
-        let (allowed_domains, blocked_domains) = self.sanitize_domain_filters(
-            query,
-            input.allowed_domains,
-            input.blocked_domains,
-        );
+        let (allowed_domains, blocked_domains) =
+            self.sanitize_domain_filters(query, input.allowed_domains, input.blocked_domains);
 
         // 生成缓存键
-        let cache_key = WebCache::generate_search_cache_key(query, &allowed_domains, &blocked_domains);
+        let cache_key =
+            WebCache::generate_search_cache_key(query, &allowed_domains, &blocked_domains);
 
         // 检查缓存
         if let Some(cached) = self.cache.get_cached_search(&cache_key) {
