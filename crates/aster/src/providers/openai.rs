@@ -188,8 +188,25 @@ impl OpenAiProvider {
         })
     }
 
+    fn force_responses_api() -> bool {
+        matches!(
+            std::env::var("OPENAI_FORCE_RESPONSES_API")
+                .ok()
+                .as_deref()
+                .map(str::trim)
+                .map(|value| value.to_ascii_lowercase())
+                .as_deref(),
+            Some("1" | "true" | "yes" | "on")
+        )
+    }
+
+    fn looks_like_codex_responses_model(model_name: &str) -> bool {
+        let normalized = model_name.trim().to_ascii_lowercase();
+        normalized.starts_with("gpt-5") && normalized.contains("codex")
+    }
+
     fn uses_responses_api(model_name: &str) -> bool {
-        model_name.starts_with("gpt-5-codex") || model_name.starts_with("gpt-5.1-codex")
+        Self::force_responses_api() || Self::looks_like_codex_responses_model(model_name)
     }
 
     async fn post(&self, payload: &Value) -> Result<Value, ProviderError> {
@@ -433,6 +450,29 @@ fn parse_custom_headers(s: String) -> HashMap<String, String> {
             Some((key, value))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OpenAiProvider;
+
+    #[test]
+    fn test_uses_responses_api_for_codex_models_without_force_flag() {
+        std::env::remove_var("OPENAI_FORCE_RESPONSES_API");
+
+        assert!(OpenAiProvider::uses_responses_api("gpt-5-codex"));
+        assert!(OpenAiProvider::uses_responses_api("gpt-5.1-codex"));
+        assert!(OpenAiProvider::uses_responses_api("gpt-5.2-codex"));
+        assert!(OpenAiProvider::uses_responses_api("gpt-5.3-codex"));
+        assert!(!OpenAiProvider::uses_responses_api("gpt-4o"));
+    }
+
+    #[test]
+    fn test_uses_responses_api_when_force_flag_enabled() {
+        std::env::set_var("OPENAI_FORCE_RESPONSES_API", "1");
+        assert!(OpenAiProvider::uses_responses_api("gpt-4o"));
+        std::env::remove_var("OPENAI_FORCE_RESPONSES_API");
+    }
 }
 
 #[async_trait]

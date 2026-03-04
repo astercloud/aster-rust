@@ -1164,6 +1164,43 @@ impl WebSearchTool {
         filtered
     }
 
+    fn normalize_domain_list(domains: Option<Vec<String>>) -> Option<Vec<String>> {
+        let normalized: Vec<String> = domains
+            .unwrap_or_default()
+            .into_iter()
+            .map(|domain| domain.trim().to_ascii_lowercase())
+            .filter(|domain| !domain.is_empty())
+            .collect();
+
+        if normalized.is_empty() {
+            None
+        } else {
+            Some(normalized)
+        }
+    }
+
+    fn sanitize_domain_filters(
+        &self,
+        query: &str,
+        allowed_domains: Option<Vec<String>>,
+        blocked_domains: Option<Vec<String>>,
+    ) -> (Option<Vec<String>>, Option<Vec<String>>) {
+        let allowed = Self::normalize_domain_list(allowed_domains);
+        let mut blocked = Self::normalize_domain_list(blocked_domains);
+
+        // LLM 在函数调用时可能同时输出两个过滤器字段。
+        // 为了避免整次 WebSearch 失败，这里采用“白名单优先”策略进行容错。
+        if allowed.is_some() && blocked.is_some() {
+            tracing::warn!(
+                query = %query,
+                "WebSearch 同时收到 allowed_domains 与 blocked_domains，按 allowed_domains 优先，忽略 blocked_domains"
+            );
+            blocked = None;
+        }
+
+        (allowed, blocked)
+    }
+
     /// 格式化搜索结果为 Markdown
     fn format_search_results(&self, results: &[SearchResult], query: &str) -> String {
         let mut output = format!("搜索查询: \"{}\"\n\n", query);
@@ -1797,19 +1834,14 @@ impl Tool for WebSearchTool {
             .map_err(|e| ToolError::execution_failed(format!("输入参数解析失败: {}", e)))?;
 
         let query = &input.query;
-        let allowed_domains = &input.allowed_domains;
-        let blocked_domains = &input.blocked_domains;
-
-        // 参数冲突验证
-        if allowed_domains.is_some() && blocked_domains.is_some() {
-            return Err(ToolError::execution_failed(
-                "不能同时指定 allowed_domains 和 blocked_domains".to_string(),
-            ));
-        }
+        let (allowed_domains, blocked_domains) = self.sanitize_domain_filters(
+            query,
+            input.allowed_domains,
+            input.blocked_domains,
+        );
 
         // 生成缓存键
-        let cache_key =
-            WebCache::generate_search_cache_key(query, allowed_domains, blocked_domains);
+        let cache_key = WebCache::generate_search_cache_key(query, &allowed_domains, &blocked_domains);
 
         // 检查缓存
         if let Some(cached) = self.cache.get_cached_search(&cache_key) {
@@ -1844,8 +1876,8 @@ impl Tool for WebSearchTool {
                 // 应用域名过滤
                 let filtered_results = self.apply_domain_filters(
                     raw_results.clone(),
-                    allowed_domains,
-                    blocked_domains,
+                    &allowed_domains,
+                    &blocked_domains,
                 );
 
                 // 缓存结果（即使为空也缓存，避免重复请求）
@@ -2031,6 +2063,34 @@ mod tests {
         let filtered = tool.apply_domain_filters(results, &None, &blocked);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].title, "Example 1");
+    }
+
+    #[test]
+    fn test_sanitize_domain_filters_prefers_allowed_when_both_present() {
+        let tool = WebSearchTool::new();
+
+        let (allowed, blocked) = tool.sanitize_domain_filters(
+            "latest ai news",
+            Some(vec!["Example.com".to_string()]),
+            Some(vec!["spam.com".to_string()]),
+        );
+
+        assert_eq!(allowed, Some(vec!["example.com".to_string()]));
+        assert!(blocked.is_none());
+    }
+
+    #[test]
+    fn test_sanitize_domain_filters_drop_empty_items() {
+        let tool = WebSearchTool::new();
+
+        let (allowed, blocked) = tool.sanitize_domain_filters(
+            "latest ai news",
+            Some(vec![" ".to_string(), "".to_string()]),
+            Some(vec!["  ".to_string()]),
+        );
+
+        assert!(allowed.is_none());
+        assert!(blocked.is_none());
     }
 
     #[test]
