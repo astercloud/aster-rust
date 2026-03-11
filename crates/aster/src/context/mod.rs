@@ -79,6 +79,7 @@ pub mod priority_sorter;
 pub mod pruner;
 pub mod summarizer;
 pub mod token_estimator;
+pub mod tool_io;
 pub mod types;
 pub mod window_manager;
 
@@ -97,6 +98,20 @@ mod summarizer_property_tests;
 
 /// Token estimation for different content types (Asian, code, English text)
 pub use token_estimator::TokenEstimator;
+
+/// Tool I/O payload analysis and model-aware eviction policy helpers
+pub use tool_io::{
+    analyze_tool_io_text_payload, analyze_tool_io_value_payload,
+    build_tool_io_history_eviction_plan, build_tool_io_notice_text, build_tool_io_payload_envelope,
+    build_tool_io_preview, estimate_tool_io_tokens, resolve_model_context_max_input_tokens,
+    resolve_tool_io_eviction_policy, resolve_tool_io_offload_decision, ToolIoEvictionConfig,
+    ToolIoEvictionPolicy, ToolIoHistoryEvictionCandidate, ToolIoHistoryEvictionPlan,
+    ToolIoHistoryEvictionSelection, ToolIoHistoryMessageAnalysis, ToolIoOffloadDecision,
+    ToolIoOffloadThresholds, ToolIoOffloadTrigger, ToolIoPayloadStats, ToolIoPreviewConfig,
+    DEFAULT_CONTEXT_WINDOW_KEEP_RECENT_MESSAGES, DEFAULT_CONTEXT_WINDOW_MAX_INPUT_TOKENS,
+    DEFAULT_CONTEXT_WINDOW_TRIGGER_RATIO, DEFAULT_TOOL_IO_PREVIEW_MAX_CHARS,
+    DEFAULT_TOOL_IO_PREVIEW_MAX_LINES, DEFAULT_TOOL_TOKEN_LIMIT_BEFORE_EVICT,
+};
 
 /// Dynamic context window management for different LLM models
 pub use window_manager::{ContextWindowManager, MODEL_CONTEXT_WINDOWS};
