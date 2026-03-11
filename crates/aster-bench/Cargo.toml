@@ -14,7 +14,7 @@ workspace = true
 anyhow = "1.0"
 paste = "1.0"
 ctor = "0.2.7"
-aster = { package = "aster-core", path = "../aster", version = "0.16.0" }
+aster = { package = "aster-core", path = "../aster", version = "0.17.0" }
 rmcp = { workspace = true }
 async-trait = "0.1.89"
 chrono = { version = "0.4", features = ["serde"] }
