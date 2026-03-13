@@ -28,6 +28,34 @@ fn next_request_id() -> u64 {
     REQUEST_ID.fetch_add(1, Ordering::SeqCst)
 }
 
+fn build_turn_start_params(
+    thread_id: &str,
+    input_text: &str,
+    model: Option<&str>,
+    effort: Option<&str>,
+) -> Value {
+    let mut params = json!({
+        "threadId": thread_id,
+        "input": [
+            { "type": "text", "text": input_text }
+        ],
+        // 恢复旧 thread 后仍要强制覆盖审批策略，避免沿用历史 on-request 配置。
+        "approvalPolicy": "never",
+        "sandboxPolicy": {
+            "type": "workspaceWrite"
+        }
+    });
+
+    if let Some(m) = model {
+        params["model"] = json!(m);
+    }
+    if let Some(e) = effort {
+        params["effort"] = json!(e);
+    }
+
+    params
+}
+
 /// Thread 信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThreadInfo {
@@ -373,19 +401,7 @@ impl CodexAppServerConnection {
             ProviderError::RequestFailed("没有活动的 thread，请先调用 thread_start".to_string())
         })?;
 
-        let mut params = json!({
-            "threadId": thread_id,
-            "input": [
-                { "type": "text", "text": input_text }
-            ]
-        });
-
-        if let Some(m) = model {
-            params["model"] = json!(m);
-        }
-        if let Some(e) = effort {
-            params["effort"] = json!(e);
-        }
+        let params = build_turn_start_params(&thread_id, input_text, model, effort);
 
         let id = self.send_request("turn/start", params)?;
 
@@ -785,5 +801,19 @@ mod tests {
         assert_eq!(turn.status, "inProgress");
         assert!(turn.items.is_empty());
         assert!(turn.error.is_none());
+    }
+
+    #[test]
+    fn test_build_turn_start_params_overrides_approval_policy() {
+        let params =
+            build_turn_start_params("thread-1", "hello", Some("gpt-5.3-codex"), Some("high"));
+
+        assert_eq!(params["threadId"], json!("thread-1"));
+        assert_eq!(params["approvalPolicy"], json!("never"));
+        assert_eq!(params["sandboxPolicy"]["type"], json!("workspaceWrite"));
+        assert_eq!(params["model"], json!("gpt-5.3-codex"));
+        assert_eq!(params["effort"], json!("high"));
+        assert_eq!(params["input"][0]["type"], json!("text"));
+        assert_eq!(params["input"][0]["text"], json!("hello"));
     }
 }

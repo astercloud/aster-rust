@@ -13,6 +13,8 @@ use crate::agents::context::ContextInheritanceConfig;
 pub struct SchedulerConfig {
     /// 最大并发数
     pub max_concurrency: usize,
+    /// 单次调度允许接收的最大任务数
+    pub max_queue_size: usize,
     /// 默认任务超时时间
     pub default_timeout: Duration,
     /// 是否在失败时重试
@@ -39,6 +41,7 @@ impl Default for SchedulerConfig {
     fn default() -> Self {
         Self {
             max_concurrency: 5,
+            max_queue_size: usize::MAX,
             default_timeout: Duration::from_secs(300), // 5 分钟
             retry_on_failure: true,
             stop_on_first_error: false,
@@ -87,6 +90,12 @@ impl SchedulerConfig {
         self
     }
 
+    /// 设置最大队列长度
+    pub fn with_max_queue_size(mut self, max: usize) -> Self {
+        self.max_queue_size = max;
+        self
+    }
+
     /// 设置默认超时
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.default_timeout = timeout;
@@ -127,6 +136,7 @@ mod tests {
     fn test_default_config() {
         let config = SchedulerConfig::default();
         assert_eq!(config.max_concurrency, 5);
+        assert_eq!(config.max_queue_size, usize::MAX);
         assert!(config.retry_on_failure);
         assert!(!config.stop_on_first_error);
     }
@@ -148,10 +158,12 @@ mod tests {
     fn test_config_builder() {
         let config = SchedulerConfig::default()
             .with_max_concurrency(8)
+            .with_max_queue_size(16)
             .with_stop_on_first_error(true)
             .with_default_model("sonnet");
 
         assert_eq!(config.max_concurrency, 8);
+        assert_eq!(config.max_queue_size, 16);
         assert!(config.stop_on_first_error);
         assert_eq!(config.default_model, Some("sonnet".to_string()));
     }

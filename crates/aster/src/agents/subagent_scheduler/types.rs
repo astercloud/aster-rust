@@ -51,6 +51,10 @@ pub enum SchedulerError {
     /// 资源限制超出
     #[error("资源限制超出: {0}")]
     ResourceLimitExceeded(String),
+
+    /// 超出队列容量限制
+    #[error("任务数超出队列上限: requested={requested}, limit={limit}")]
+    QueueFull { requested: usize, limit: usize },
 }
 
 /// 调度器结果类型别名
@@ -352,10 +356,14 @@ pub struct SchedulerExecutionResult {
 pub enum SchedulerEvent {
     /// 调度开始
     Started { total_tasks: usize },
+    /// 调度因队列容量被拒绝
+    QueueRejected { requested: usize, limit: usize },
     /// 任务开始
     TaskStarted { task_id: String, task_type: String },
     /// 任务完成
     TaskCompleted { task_id: String, duration_ms: u64 },
+    /// 任务超时
+    TaskTimedOut { task_id: String, timeout_ms: u64 },
     /// 任务失败
     TaskFailed { task_id: String, error: String },
     /// 任务重试

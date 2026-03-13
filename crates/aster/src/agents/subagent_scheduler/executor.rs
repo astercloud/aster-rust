@@ -8,6 +8,8 @@ use std::time::Duration;
 
 use chrono::Utc;
 use tokio::sync::{Mutex, RwLock};
+use tokio::task::JoinSet;
+use tokio::time::timeout;
 use tracing::{info, warn};
 
 use crate::agents::context::{AgentContext, AgentContextManager, ContextIsolation};
@@ -102,6 +104,18 @@ impl<E: SubAgentExecutor + 'static> SubAgentScheduler<E> {
         strategy: SchedulingStrategy,
     ) -> SchedulerResult<SchedulerExecutionResult> {
         info!("开始执行 {} 个任务，策略: {:?}", tasks.len(), strategy);
+
+        let queue_limit = self.config.max_queue_size.max(1);
+        if tasks.len() > queue_limit {
+            self.emit_event(SchedulerEvent::QueueRejected {
+                requested: tasks.len(),
+                limit: queue_limit,
+            });
+            return Err(SchedulerError::QueueFull {
+                requested: tasks.len(),
+                limit: queue_limit,
+            });
+        }
 
         // 验证依赖
         let validation = validate_task_dependencies(
@@ -314,75 +328,85 @@ impl<E: SubAgentExecutor + 'static> SubAgentScheduler<E> {
         let pending: Arc<Mutex<VecDeque<SubAgentTask>>> =
             Arc::new(Mutex::new(sorted_tasks.into_iter().collect()));
         let running: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+        let max_concurrency = self.config.max_concurrency.max(1);
+        let mut join_set = JoinSet::new();
 
         loop {
             // 检查取消
             if *self.cancelled.lock().await {
+                join_set.abort_all();
                 return Err(SchedulerError::Cancelled);
             }
 
-            // 获取可执行的任务
-            let ready_tasks = self
-                .get_ready_tasks(&pending, &completed, &running, &failed, &graph)
-                .await;
+            let running_count = running.lock().await.len();
+            let available_slots = max_concurrency.saturating_sub(running_count);
+
+            if available_slots > 0 {
+                let ready_tasks = self
+                    .get_ready_tasks(
+                        &pending,
+                        &completed,
+                        &running,
+                        &failed,
+                        &graph,
+                        available_slots,
+                    )
+                    .await;
+
+                for task in ready_tasks {
+                    // 标记为运行中
+                    running.lock().await.insert(task.id.clone());
+                    self.update_task_status(&task.id, SubAgentTaskStatus::Running)
+                        .await;
+
+                    let executor = self.clone_for_task();
+                    let parent_ctx = parent_context.cloned();
+                    let results = results.clone();
+                    let completed = completed.clone();
+                    let failed = failed.clone();
+                    let running = running.clone();
+
+                    join_set.spawn(async move {
+                        let task_id = task.id.clone();
+                        let result = executor
+                            .execute_task_with_context(&task, parent_ctx.as_ref())
+                            .await;
+
+                        match &result {
+                            Ok(r) => {
+                                completed.lock().await.insert(task_id.clone());
+                                results.lock().await.push(r.clone());
+                            }
+                            Err(_) => {
+                                failed.lock().await.insert(task_id.clone());
+                            }
+                        }
+
+                        running.lock().await.remove(&task_id);
+                        result
+                    });
+                }
+            }
 
             // 检查是否完成
             {
                 let pending_guard = pending.lock().await;
                 let running_guard = running.lock().await;
 
-                if pending_guard.is_empty() && running_guard.is_empty() && ready_tasks.is_empty() {
+                if pending_guard.is_empty() && running_guard.is_empty() && join_set.is_empty() {
                     break;
                 }
 
-                if ready_tasks.is_empty() && running_guard.is_empty() && !pending_guard.is_empty() {
+                if join_set.is_empty() && running_guard.is_empty() && !pending_guard.is_empty() {
+                    warn!("并行调度没有可运行任务，提前结束剩余任务");
                     break;
                 }
             }
 
-            // 启动任务（限制并发数）
-            let mut handles = Vec::new();
-            for task in ready_tasks.into_iter().take(self.config.max_concurrency) {
-                // 标记为运行中
-                running.lock().await.insert(task.id.clone());
-                self.update_task_status(&task.id, SubAgentTaskStatus::Running)
-                    .await;
-
-                let executor = self.clone_for_task();
-                let parent_ctx = parent_context.cloned();
-                let results = results.clone();
-                let completed = completed.clone();
-                let failed = failed.clone();
-                let running = running.clone();
-
-                let handle = tokio::spawn(async move {
-                    let task_id = task.id.clone();
-                    let result = executor
-                        .execute_task_with_context(&task, parent_ctx.as_ref())
-                        .await;
-
-                    // 更新状态
-                    match &result {
-                        Ok(r) => {
-                            completed.lock().await.insert(task_id.clone());
-                            results.lock().await.push(r.clone());
-                        }
-                        Err(_) => {
-                            failed.lock().await.insert(task_id.clone());
-                        }
-                    }
-
-                    running.lock().await.remove(&task_id);
-                    result
-                });
-
-                handles.push(handle);
-            }
-
-            // 等待至少一个任务完成
-            if !handles.is_empty() {
-                for handle in handles {
-                    let _ = handle.await;
+            // 等待至少一个任务完成，然后继续补位
+            if let Some(join_result) = join_set.join_next().await {
+                if let Err(err) = join_result {
+                    warn!("并行任务 Join 失败: {}", err);
                 }
             } else {
                 tokio::time::sleep(Duration::from_millis(10)).await;
@@ -413,7 +437,7 @@ impl<E: SubAgentExecutor + 'static> SubAgentScheduler<E> {
         // 创建子上下文
         let child_context = self.create_child_context(parent_context, task).await?;
 
-        // 更新任务状态
+        // 更新任务状态为 Running
         {
             let mut tasks = self.tasks.lock().await;
             if let Some(info) = tasks.get_mut(&task_id) {
@@ -424,75 +448,136 @@ impl<E: SubAgentExecutor + 'static> SubAgentScheduler<E> {
         }
 
         // 执行任务（带重试）
-        let mut retries = 0;
+        let effective_timeout = task.timeout.unwrap_or(self.config.default_timeout);
+        let (result, retries) = self
+            .execute_with_retry(task, &child_context, effective_timeout)
+            .await;
+
+        // 更新最终状态并发送事件
+        self.finalize_task(&task_id, &result, retries, effective_timeout)
+            .await;
+
+        result
+    }
+
+    /// 执行任务并在失败时重试
+    async fn execute_with_retry(
+        &self,
+        task: &SubAgentTask,
+        context: &AgentContext,
+        effective_timeout: Duration,
+    ) -> (SchedulerResult<SubAgentResult>, usize) {
+        let task_id = &task.id;
         let max_retries = if self.config.retry_on_failure {
             self.config.max_retries
         } else {
             0
         };
+        let mut retries = 0;
 
         let result = loop {
-            let exec_result = self.executor.execute_task(task, &child_context).await;
+            if *self.cancelled.lock().await {
+                break Err(SchedulerError::Cancelled);
+            }
+
+            let exec_result =
+                timeout(effective_timeout, self.executor.execute_task(task, context)).await;
 
             match exec_result {
-                Ok(r) => break Ok(r),
-                Err(e) => {
+                Ok(Ok(r)) => break Ok(r),
+                Ok(Err(e)) => {
                     if retries < max_retries {
                         retries += 1;
                         warn!(
                             "任务 {} 失败，重试 {}/{}: {:?}",
                             task_id, retries, max_retries, e
                         );
-
                         self.emit_event(SchedulerEvent::TaskRetry {
                             task_id: task_id.clone(),
                             retry_count: retries,
                         });
-
                         tokio::time::sleep(self.config.retry_delay).await;
                     } else {
                         break Err(e);
                     }
                 }
+                Err(_) => {
+                    let timeout_error = SchedulerError::TaskTimeout(task_id.clone());
+                    if retries < max_retries {
+                        retries += 1;
+                        warn!(
+                            "任务 {} 超时，重试 {}/{} (timeout={}ms)",
+                            task_id,
+                            retries,
+                            max_retries,
+                            effective_timeout.as_millis()
+                        );
+                        self.emit_event(SchedulerEvent::TaskRetry {
+                            task_id: task_id.clone(),
+                            retry_count: retries,
+                        });
+                        tokio::time::sleep(self.config.retry_delay).await;
+                    } else {
+                        break Err(timeout_error);
+                    }
+                }
             }
         };
 
-        // 更新任务状态
+        (result, retries)
+    }
+
+    /// 更新任务最终状态并发送完成事件
+    async fn finalize_task(
+        &self,
+        task_id: &str,
+        result: &SchedulerResult<SubAgentResult>,
+        retries: usize,
+        effective_timeout: Duration,
+    ) {
         {
             let mut tasks = self.tasks.lock().await;
-            if let Some(info) = tasks.get_mut(&task_id) {
+            if let Some(info) = tasks.get_mut(task_id) {
                 info.completed_at = Some(Utc::now());
                 info.retries = retries;
-                match &result {
+                match result {
                     Ok(r) => {
                         info.status = SubAgentTaskStatus::Completed;
                         info.result = Some(r.clone());
                     }
                     Err(e) => {
-                        info.status = SubAgentTaskStatus::Failed;
+                        info.status = if matches!(e, SchedulerError::Cancelled) {
+                            SubAgentTaskStatus::Cancelled
+                        } else {
+                            SubAgentTaskStatus::Failed
+                        };
                         info.last_error = Some(e.to_string());
                     }
                 }
             }
         }
 
-        // 发送事件
-        match &result {
+        match result {
             Ok(r) => {
                 self.emit_event(SchedulerEvent::TaskCompleted {
-                    task_id: task_id.clone(),
+                    task_id: task_id.to_string(),
                     duration_ms: r.duration.as_millis() as u64,
                 });
             }
+            Err(SchedulerError::TaskTimeout(_)) => {
+                self.emit_event(SchedulerEvent::TaskTimedOut {
+                    task_id: task_id.to_string(),
+                    timeout_ms: effective_timeout.as_millis() as u64,
+                });
+            }
+            Err(SchedulerError::Cancelled) => {}
             Err(e) => {
                 self.emit_event(SchedulerEvent::TaskFailed {
-                    task_id: task_id.clone(),
+                    task_id: task_id.to_string(),
                     error: e.to_string(),
                 });
             }
         }
-
-        result
     }
 
     /// 创建子上下文
@@ -545,6 +630,7 @@ impl<E: SubAgentExecutor + 'static> SubAgentScheduler<E> {
         running: &Arc<Mutex<HashSet<String>>>,
         failed: &Arc<Mutex<HashSet<String>>>,
         graph: &DependencyGraph,
+        max_tasks: usize,
     ) -> Vec<SubAgentTask> {
         let completed_guard = completed.lock().await;
         let running_guard = running.lock().await;
@@ -563,11 +649,20 @@ impl<E: SubAgentExecutor + 'static> SubAgentScheduler<E> {
                 let has_failed_dep = deps.iter().any(|d| failed_guard.contains(d));
 
                 if has_failed_dep && self.config.stop_on_first_error {
-                    // 跳过
+                    self.update_task_status(&task.id, SubAgentTaskStatus::Skipped)
+                        .await;
+                    self.emit_event(SchedulerEvent::TaskSkipped {
+                        task_id: task.id.clone(),
+                        reason: "依赖任务失败".to_string(),
+                    });
                     continue;
                 }
 
-                ready.push(task);
+                if ready.len() < max_tasks {
+                    ready.push(task);
+                } else {
+                    still_pending.push_back(task);
+                }
             } else {
                 still_pending.push_back(task);
             }
@@ -583,14 +678,22 @@ impl<E: SubAgentExecutor + 'static> SubAgentScheduler<E> {
         results: Vec<SubAgentResult>,
     ) -> SchedulerResult<SchedulerExecutionResult> {
         let successful_count = results.iter().filter(|r| r.success).count();
-        let failed_count = results.iter().filter(|r| !r.success).count();
-
-        let skipped_count = {
+        let (failed_count, skipped_count) = {
             let tasks = self.tasks.lock().await;
-            tasks
+            let failed = tasks
+                .values()
+                .filter(|t| {
+                    matches!(
+                        t.status,
+                        SubAgentTaskStatus::Failed | SubAgentTaskStatus::Cancelled
+                    )
+                })
+                .count();
+            let skipped = tasks
                 .values()
                 .filter(|t| t.status == SubAgentTaskStatus::Skipped)
-                .count()
+                .count();
+            (failed, skipped)
         };
 
         let total_duration: Duration = results.iter().map(|r| r.duration).sum();
@@ -706,6 +809,7 @@ impl<E: SubAgentExecutor + 'static> SubAgentScheduler<E> {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Instant;
 
     /// 测试用执行器
     struct MockExecutor {
@@ -717,6 +821,65 @@ mod tests {
             Self {
                 call_count: AtomicUsize::new(0),
             }
+        }
+    }
+
+    struct VariableDelayExecutor {
+        delays_ms: HashMap<String, u64>,
+    }
+
+    #[async_trait::async_trait]
+    impl SubAgentExecutor for VariableDelayExecutor {
+        async fn execute_task(
+            &self,
+            task: &SubAgentTask,
+            _context: &AgentContext,
+        ) -> SchedulerResult<SubAgentResult> {
+            let delay_ms = *self.delays_ms.get(&task.id).unwrap_or(&10);
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+
+            Ok(SubAgentResult {
+                task_id: task.id.clone(),
+                success: true,
+                output: Some(format!("任务 {} 完成", task.id)),
+                summary: Some(format!("摘要: {}", task.id)),
+                error: None,
+                duration: Duration::from_millis(delay_ms),
+                retries: 0,
+                started_at: Utc::now(),
+                completed_at: Utc::now(),
+                token_usage: None,
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    struct SleepExecutor {
+        delay_ms: u64,
+    }
+
+    #[async_trait::async_trait]
+    impl SubAgentExecutor for SleepExecutor {
+        async fn execute_task(
+            &self,
+            task: &SubAgentTask,
+            _context: &AgentContext,
+        ) -> SchedulerResult<SubAgentResult> {
+            tokio::time::sleep(Duration::from_millis(self.delay_ms)).await;
+
+            Ok(SubAgentResult {
+                task_id: task.id.clone(),
+                success: true,
+                output: Some(format!("任务 {} 完成", task.id)),
+                summary: Some(format!("摘要: {}", task.id)),
+                error: None,
+                duration: Duration::from_millis(self.delay_ms),
+                retries: 0,
+                started_at: Utc::now(),
+                completed_at: Utc::now(),
+                token_usage: None,
+                metadata: HashMap::new(),
+            })
         }
     }
 
@@ -806,5 +969,88 @@ mod tests {
         let result = scheduler.execute(tasks, None).await;
 
         assert!(matches!(result, Err(SchedulerError::CircularDependency(_))));
+    }
+
+    #[tokio::test]
+    async fn test_max_queue_size_rejection() {
+        let executor = MockExecutor::new();
+        let config = SchedulerConfig::default().with_max_queue_size(1);
+        let scheduler = SubAgentScheduler::new(config, executor);
+
+        let tasks = vec![
+            SubAgentTask::new("task-1", "test", "任务1"),
+            SubAgentTask::new("task-2", "test", "任务2"),
+        ];
+
+        let result = scheduler.execute(tasks, None).await;
+
+        assert!(matches!(
+            result,
+            Err(SchedulerError::QueueFull {
+                requested: 2,
+                limit: 1
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_parallel_execution_refills_available_slots() {
+        let executor = VariableDelayExecutor {
+            delays_ms: HashMap::from([
+                ("task-1".to_string(), 220),
+                ("task-2".to_string(), 40),
+                ("task-3".to_string(), 40),
+            ]),
+        };
+        let config = SchedulerConfig::default().with_max_concurrency(2);
+        let scheduler = SubAgentScheduler::new(config, executor);
+
+        let tasks = vec![
+            SubAgentTask::new("task-1", "test", "任务1"),
+            SubAgentTask::new("task-2", "test", "任务2"),
+            SubAgentTask::new("task-3", "test", "任务3"),
+        ];
+
+        let started = Instant::now();
+        let result = scheduler
+            .execute_with_strategy(tasks, None, SchedulingStrategy::Parallel)
+            .await
+            .unwrap();
+
+        assert!(result.success);
+        assert!(started.elapsed().as_millis() < 250);
+    }
+
+    #[tokio::test]
+    async fn test_task_timeout_uses_default_timeout() {
+        let executor = SleepExecutor { delay_ms: 80 };
+        let config = SchedulerConfig::default()
+            .with_timeout(Duration::from_millis(30))
+            .with_retry(false, 0);
+        let scheduler = SubAgentScheduler::new(config, executor);
+
+        let tasks = vec![SubAgentTask::new("task-1", "test", "会超时")];
+        let result = scheduler.execute(tasks, None).await;
+
+        assert!(matches!(
+            result,
+            Err(SchedulerError::TaskTimeout(task_id)) if task_id == "task-1"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_task_timeout_can_be_overridden_per_task() {
+        let executor = SleepExecutor { delay_ms: 60 };
+        let config = SchedulerConfig::default()
+            .with_timeout(Duration::from_millis(20))
+            .with_retry(false, 0);
+        let scheduler = SubAgentScheduler::new(config, executor);
+
+        let tasks = vec![SubAgentTask::new("task-1", "test", "不会超时")
+            .with_timeout(Duration::from_millis(120))];
+        let result = scheduler.execute(tasks, None).await.unwrap();
+
+        assert!(result.success);
+        assert_eq!(result.successful_count, 1);
     }
 }
