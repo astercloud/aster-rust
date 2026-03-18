@@ -4,6 +4,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
+use chrono::{DateTime, Utc};
 use futures::stream::BoxStream;
 use futures::{stream, FutureExt, Stream, StreamExt, TryStreamExt};
 use uuid::Uuid;
@@ -46,7 +47,11 @@ use crate::recipe::{Author, Recipe, Response, Settings, SubRecipe};
 use crate::scheduler_trait::SchedulerTrait;
 use crate::security::security_inspector::SecurityInspector;
 use crate::session::extension_data::{EnabledExtensionsState, ExtensionState};
-use crate::session::{Session, SessionManager, SessionStore, SessionType};
+use crate::session::{
+    InMemoryThreadRuntimeStore, ItemRuntime, ItemRuntimePayload, ItemStatus, Session,
+    SessionManager, SessionRuntimeSnapshot, SessionStore, SessionType, ThreadRuntime,
+    ThreadRuntimeSnapshot, ThreadRuntimeStore, TurnRuntime, TurnStatus,
+};
 use crate::tool_inspection::ToolInspectionManager;
 use crate::tool_monitor::RepetitionInspector;
 use crate::tools::{
@@ -112,10 +117,15 @@ pub struct Agent {
     /// 如果设置，Agent 会使用此存储保存消息。
     /// 如果未设置，会回退到全局 SessionManager（向后兼容）。
     pub(super) session_store: Option<Arc<dyn SessionStore>>,
+    pub(super) thread_runtime_store: Arc<dyn ThreadRuntimeStore>,
 }
 
 #[derive(Clone, Debug)]
 pub enum AgentEvent {
+    TurnStarted { turn: TurnRuntime },
+    ItemStarted { item: ItemRuntime },
+    ItemUpdated { item: ItemRuntime },
+    ItemCompleted { item: ItemRuntime },
     Message(Message),
     McpNotification((String, ServerNotification)),
     ModelChange { model: String, mode: String },
@@ -136,6 +146,312 @@ pub enum ToolStreamItem<T> {
 
 pub type ToolStream =
     Pin<Box<dyn Stream<Item = ToolStreamItem<ToolResult<CallToolResult>>> + Send>>;
+
+#[derive(Debug)]
+struct TurnItemRuntimeProjector {
+    thread_id: String,
+    turn_id: String,
+    next_sequence: i64,
+    items: HashMap<String, ItemRuntime>,
+}
+
+impl TurnItemRuntimeProjector {
+    fn new(turn: &TurnRuntime) -> Self {
+        Self {
+            thread_id: turn.thread_id.clone(),
+            turn_id: turn.id.clone(),
+            next_sequence: 0,
+            items: HashMap::new(),
+        }
+    }
+
+    fn project_user_input(&mut self, turn: &TurnRuntime) -> Option<AgentEvent> {
+        let content = turn.input_text.as_ref()?.trim();
+        if content.is_empty() {
+            return None;
+        }
+
+        Some(self.complete_item(
+            format!("user:{}", turn.id),
+            ItemRuntimePayload::UserMessage {
+                content: content.to_string(),
+            },
+            ItemStatus::Completed,
+            turn.started_at.unwrap_or(turn.created_at),
+        ))
+    }
+
+    fn project_agent_event(&mut self, event: &AgentEvent) -> Vec<AgentEvent> {
+        match event {
+            AgentEvent::Message(message) => self.project_message(message),
+            _ => Vec::new(),
+        }
+    }
+
+    fn project_message(&mut self, message: &Message) -> Vec<AgentEvent> {
+        let mut events = Vec::new();
+
+        for content in &message.content {
+            match content {
+                MessageContent::Text(text_content) => {
+                    let trimmed = text_content.text.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+
+                    let item_id = message
+                        .id
+                        .as_ref()
+                        .map(|id| format!("assistant:{id}"))
+                        .unwrap_or_else(|| format!("assistant:{}", self.turn_id));
+                    let next_text = self
+                        .items
+                        .get(&item_id)
+                        .and_then(|item| match &item.payload {
+                            ItemRuntimePayload::AgentMessage { text } => {
+                                Some(format!("{text}{}", text_content.text))
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or_else(|| text_content.text.clone());
+
+                    events.push(self.upsert_in_progress(
+                        item_id,
+                        ItemRuntimePayload::AgentMessage { text: next_text },
+                    ));
+                }
+                MessageContent::Thinking(thinking_content) => {
+                    let trimmed = thinking_content.thinking.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+
+                    let item_id = message
+                        .id
+                        .as_ref()
+                        .map(|id| format!("reasoning:{id}"))
+                        .unwrap_or_else(|| format!("reasoning:{}", self.turn_id));
+                    let next_text = self
+                        .items
+                        .get(&item_id)
+                        .and_then(|item| match &item.payload {
+                            ItemRuntimePayload::Reasoning { text } => {
+                                Some(format!("{text}{}", thinking_content.thinking))
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or_else(|| thinking_content.thinking.clone());
+
+                    events.push(self.upsert_in_progress(
+                        item_id,
+                        ItemRuntimePayload::Reasoning { text: next_text },
+                    ));
+                }
+                MessageContent::ToolRequest(tool_request) => {
+                    let Ok(tool_call) = &tool_request.tool_call else {
+                        continue;
+                    };
+
+                    events.push(
+                        self.upsert_in_progress(
+                            tool_request.id.clone(),
+                            ItemRuntimePayload::ToolCall {
+                                tool_name: tool_call.name.to_string(),
+                                arguments: tool_call
+                                    .arguments
+                                    .as_ref()
+                                    .and_then(|arguments| serde_json::to_value(arguments).ok())
+                                    .filter(|value| !value.is_null()),
+                                output: None,
+                                success: None,
+                                error: None,
+                                metadata: tool_request
+                                    .metadata
+                                    .as_ref()
+                                    .map(|metadata| Value::Object(metadata.clone())),
+                            },
+                        ),
+                    );
+                }
+                MessageContent::ToolResponse(tool_response) => {
+                    let existing = self.items.get(&tool_response.id).cloned();
+                    let (tool_name, arguments) = match existing.as_ref().map(|item| &item.payload) {
+                        Some(ItemRuntimePayload::ToolCall {
+                            tool_name,
+                            arguments,
+                            ..
+                        }) => (tool_name.clone(), arguments.clone()),
+                        _ => (tool_response.id.clone(), None),
+                    };
+                    let (output, success, error, status) = match &tool_response.tool_result {
+                        Ok(result) => (
+                            serde_json::to_value(result).ok(),
+                            Some(true),
+                            None,
+                            ItemStatus::Completed,
+                        ),
+                        Err(err) => (None, Some(false), Some(err.to_string()), ItemStatus::Failed),
+                    };
+
+                    events.push(
+                        self.complete_item(
+                            tool_response.id.clone(),
+                            ItemRuntimePayload::ToolCall {
+                                tool_name,
+                                arguments,
+                                output,
+                                success,
+                                error,
+                                metadata: tool_response
+                                    .metadata
+                                    .as_ref()
+                                    .map(|metadata| Value::Object(metadata.clone())),
+                            },
+                            status,
+                            existing
+                                .as_ref()
+                                .map(|item| item.started_at)
+                                .unwrap_or_else(Utc::now),
+                        ),
+                    );
+                }
+                MessageContent::ActionRequired(action_required) => {
+                    let (item_id, payload) = match &action_required.data {
+                        ActionRequiredData::ToolConfirmation {
+                            id,
+                            tool_name,
+                            arguments,
+                            prompt,
+                        } => (
+                            id.clone(),
+                            ItemRuntimePayload::ApprovalRequest {
+                                request_id: id.clone(),
+                                action_type: "tool_confirmation".to_string(),
+                                prompt: prompt.clone(),
+                                tool_name: Some(tool_name.clone()),
+                                arguments: serde_json::to_value(arguments)
+                                    .ok()
+                                    .filter(|value| !value.is_null()),
+                                response: None,
+                            },
+                        ),
+                        ActionRequiredData::Elicitation {
+                            id,
+                            message,
+                            requested_schema,
+                        } => (
+                            id.clone(),
+                            ItemRuntimePayload::RequestUserInput {
+                                request_id: id.clone(),
+                                action_type: "elicitation".to_string(),
+                                prompt: Some(message.clone()),
+                                requested_schema: Some(requested_schema.clone()),
+                                response: None,
+                            },
+                        ),
+                        ActionRequiredData::ElicitationResponse { .. } => continue,
+                    };
+
+                    events.push(self.upsert_in_progress(item_id, payload));
+                }
+                _ => {}
+            }
+        }
+
+        events
+    }
+
+    fn finalize_open_items(&mut self, turn_status: TurnStatus) -> Vec<AgentEvent> {
+        let final_status = match turn_status {
+            TurnStatus::Completed | TurnStatus::Queued | TurnStatus::Running => {
+                ItemStatus::Completed
+            }
+            TurnStatus::Failed | TurnStatus::Aborted => ItemStatus::Failed,
+        };
+
+        let mut pending_ids = self
+            .items
+            .iter()
+            .filter_map(|(id, item)| {
+                (item.status == ItemStatus::InProgress).then_some((item.sequence, id.clone()))
+            })
+            .collect::<Vec<_>>();
+        pending_ids.sort_by_key(|(sequence, _)| *sequence);
+
+        pending_ids
+            .into_iter()
+            .filter_map(|(_, id)| {
+                let item = self.items.get_mut(&id)?;
+                let now = Utc::now();
+                item.status = final_status;
+                item.completed_at = Some(now);
+                item.updated_at = now;
+                Some(AgentEvent::ItemCompleted { item: item.clone() })
+            })
+            .collect()
+    }
+
+    fn upsert_in_progress(&mut self, id: String, payload: ItemRuntimePayload) -> AgentEvent {
+        let now = Utc::now();
+        if let Some(item) = self.items.get_mut(&id) {
+            item.status = ItemStatus::InProgress;
+            item.completed_at = None;
+            item.updated_at = now;
+            item.payload = payload;
+            return AgentEvent::ItemUpdated { item: item.clone() };
+        }
+
+        let item = ItemRuntime {
+            id: id.clone(),
+            thread_id: self.thread_id.clone(),
+            turn_id: self.turn_id.clone(),
+            sequence: self.allocate_sequence(),
+            status: ItemStatus::InProgress,
+            started_at: now,
+            completed_at: None,
+            updated_at: now,
+            payload,
+        };
+        self.items.insert(id, item.clone());
+        AgentEvent::ItemStarted { item }
+    }
+
+    fn complete_item(
+        &mut self,
+        id: String,
+        payload: ItemRuntimePayload,
+        status: ItemStatus,
+        started_at: DateTime<Utc>,
+    ) -> AgentEvent {
+        let now = Utc::now();
+        if let Some(item) = self.items.get_mut(&id) {
+            item.status = status;
+            item.completed_at = Some(now);
+            item.updated_at = now;
+            item.payload = payload;
+            return AgentEvent::ItemCompleted { item: item.clone() };
+        }
+
+        let item = ItemRuntime {
+            id: id.clone(),
+            thread_id: self.thread_id.clone(),
+            turn_id: self.turn_id.clone(),
+            sequence: self.allocate_sequence(),
+            status,
+            started_at,
+            completed_at: Some(now),
+            updated_at: now,
+            payload,
+        };
+        self.items.insert(id, item.clone());
+        AgentEvent::ItemCompleted { item }
+    }
+
+    fn allocate_sequence(&mut self) -> i64 {
+        self.next_sequence += 1;
+        self.next_sequence
+    }
+}
 
 // tool_stream combines a stream of ServerNotifications with a future representing the
 // final result of the tool call. MCP notifications are not request-scoped, but
@@ -193,6 +509,7 @@ impl Agent {
             tool_registry: Arc::new(RwLock::new(tool_registry)),
             file_read_history,
             session_store: None, // 默认使用全局 SessionManager
+            thread_runtime_store: Arc::new(InMemoryThreadRuntimeStore::default()),
         }
     }
 
@@ -214,6 +531,11 @@ impl Agent {
     /// 获取当前的 session 存储引用
     pub fn session_store(&self) -> Option<&Arc<dyn SessionStore>> {
         self.session_store.as_ref()
+    }
+
+    pub fn with_thread_runtime_store(mut self, store: Arc<dyn ThreadRuntimeStore>) -> Self {
+        self.thread_runtime_store = store;
+        self
     }
 
     /// 设置 Agent 身份配置（Builder 模式）
@@ -290,6 +612,7 @@ impl Agent {
             tool_registry: Arc::new(RwLock::new(tool_registry)),
             file_read_history,
             session_store: None,
+            thread_runtime_store: Arc::new(InMemoryThreadRuntimeStore::default()),
         }
     }
 
@@ -434,6 +757,157 @@ impl Agent {
         }
     }
 
+    fn scope_reply_stream<'a>(
+        session_config: &SessionConfig,
+        stream: BoxStream<'a, Result<AgentEvent>>,
+    ) -> BoxStream<'a, Result<AgentEvent>> {
+        let scope = session_config.runtime_scope();
+        Box::pin(crate::session_context::scope_stream(scope, stream))
+    }
+
+    async fn ensure_thread_runtime(
+        &self,
+        session: &Session,
+        session_config: &SessionConfig,
+    ) -> Result<()> {
+        let thread_id = session_config.resolved_thread_id().to_string();
+
+        let existing = self.thread_runtime_store.get_thread(&thread_id).await?;
+        let thread = existing.unwrap_or_else(|| {
+            ThreadRuntime::new(thread_id, session.id.clone(), session.working_dir.clone())
+        });
+        self.thread_runtime_store.upsert_thread(thread).await?;
+        Ok(())
+    }
+
+    async fn create_turn_runtime(
+        &self,
+        session: &Session,
+        session_config: &SessionConfig,
+        input_text: Option<String>,
+    ) -> Result<TurnRuntime> {
+        let turn_id = session_config
+            .turn_id
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| anyhow!("Missing turn id after session normalization"))?;
+        let thread_id = session_config.resolved_thread_id().to_string();
+        let turn = TurnRuntime::new(
+            turn_id,
+            session.id.clone(),
+            thread_id,
+            input_text,
+            session_config.turn_context.clone(),
+        );
+        let turn = self.thread_runtime_store.create_turn(turn).await?;
+        Ok(turn)
+    }
+
+    async fn finalize_turn_runtime(
+        &self,
+        session_config: &SessionConfig,
+        status: TurnStatus,
+        error_message: Option<String>,
+    ) -> Result<()> {
+        let Some(turn_id) = session_config.turn_id.as_ref() else {
+            return Ok(());
+        };
+        let Some(mut turn) = self.thread_runtime_store.get_turn(turn_id).await? else {
+            return Ok(());
+        };
+
+        turn.status = status;
+        turn.error_message = error_message;
+        turn.completed_at = Some(chrono::Utc::now());
+        self.thread_runtime_store.update_turn(turn).await?;
+        Ok(())
+    }
+
+    async fn persist_item_runtime(&self, event: &AgentEvent) -> Result<()> {
+        let Some(item) = (match event {
+            AgentEvent::ItemStarted { item }
+            | AgentEvent::ItemUpdated { item }
+            | AgentEvent::ItemCompleted { item } => Some(item.clone()),
+            _ => None,
+        }) else {
+            return Ok(());
+        };
+
+        let existing = self.thread_runtime_store.get_item(&item.id).await?;
+        if existing.is_some() {
+            self.thread_runtime_store.update_item(item).await?;
+        } else {
+            self.thread_runtime_store.create_item(item).await?;
+        }
+        Ok(())
+    }
+
+    async fn complete_runtime_request_item(
+        &self,
+        request_id: &str,
+        response: Option<Value>,
+    ) -> Result<()> {
+        let Some(mut item) = self.thread_runtime_store.get_item(request_id).await? else {
+            return Ok(());
+        };
+
+        item.status = ItemStatus::Completed;
+        item.completed_at = Some(Utc::now());
+        item.payload = match item.payload {
+            ItemRuntimePayload::ApprovalRequest {
+                request_id,
+                action_type,
+                prompt,
+                tool_name,
+                arguments,
+                ..
+            } => ItemRuntimePayload::ApprovalRequest {
+                request_id,
+                action_type,
+                prompt,
+                tool_name,
+                arguments,
+                response,
+            },
+            ItemRuntimePayload::RequestUserInput {
+                request_id,
+                action_type,
+                prompt,
+                requested_schema,
+                ..
+            } => ItemRuntimePayload::RequestUserInput {
+                request_id,
+                action_type,
+                prompt,
+                requested_schema,
+                response,
+            },
+            payload => payload,
+        };
+        self.thread_runtime_store.update_item(item).await?;
+        Ok(())
+    }
+
+    pub async fn runtime_snapshot(&self, session_id: &str) -> Result<SessionRuntimeSnapshot> {
+        let threads = self.thread_runtime_store.list_threads(session_id).await?;
+        let mut snapshots = Vec::with_capacity(threads.len());
+
+        for thread in threads {
+            let turns = self.thread_runtime_store.list_turns(&thread.id).await?;
+            let items = self.thread_runtime_store.list_items(&thread.id).await?;
+            snapshots.push(ThreadRuntimeSnapshot {
+                thread,
+                turns,
+                items,
+            });
+        }
+
+        Ok(SessionRuntimeSnapshot {
+            session_id: session_id.to_string(),
+            threads: snapshots,
+        })
+    }
+
     // ========== End Session 存储辅助方法 ==========
 
     /// Reset the retry attempts counter to 0
@@ -476,12 +950,15 @@ impl Agent {
     }
 
     /// 排空 elicitation 消息队列并保存到 session
-    async fn drain_elicitation_messages(&self, session_id: &str) -> Vec<Message> {
+    async fn drain_elicitation_messages(&self, session_config: &SessionConfig) -> Vec<Message> {
         let mut messages = Vec::new();
-        let mut elicitation_rx = ActionRequiredManager::global().request_rx.lock().await;
-        while let Ok(elicitation_message) = elicitation_rx.try_recv() {
+        let scope = session_config.runtime_scope();
+        for elicitation_message in ActionRequiredManager::global()
+            .drain_messages_for_scope(&scope)
+            .await
+        {
             if let Err(e) = self
-                .store_add_message(session_id, &elicitation_message)
+                .store_add_message(&session_config.id, &elicitation_message)
                 .await
             {
                 warn!("Failed to save elicitation message to session: {}", e);
@@ -1088,6 +1565,22 @@ impl Agent {
         request_id: String,
         confirmation: PermissionConfirmation,
     ) {
+        let response = serde_json::json!({
+            "confirmed": !matches!(
+                confirmation.permission,
+                crate::permission::Permission::Cancel | crate::permission::Permission::DenyOnce
+            )
+        });
+        if let Err(error) = self
+            .complete_runtime_request_item(&request_id, Some(response))
+            .await
+        {
+            warn!(
+                request_id = %request_id,
+                ?error,
+                "Failed to complete runtime approval item"
+            );
+        }
         if let Err(e) = self.confirmation_tx.send((request_id, confirmation)).await {
             error!("Failed to send confirmation: {}", e);
         }
@@ -1100,26 +1593,45 @@ impl Agent {
         session_config: SessionConfig,
         cancel_token: Option<CancellationToken>,
     ) -> Result<BoxStream<'_, Result<AgentEvent>>> {
+        let session_config = session_config.with_runtime_defaults();
+
         for content in &user_message.content {
             if let MessageContent::ActionRequired(action_required) = content {
                 if let ActionRequiredData::ElicitationResponse { id, user_data } =
                     &action_required.data
                 {
+                    let action_scope = action_required.scope.as_ref();
                     if let Err(e) = ActionRequiredManager::global()
-                        .submit_response(id.clone(), user_data.clone())
+                        .submit_response_scoped(id.clone(), action_scope, user_data.clone())
                         .await
                     {
                         let error_text = format!("Failed to submit elicitation response: {}", e);
                         error!(error_text);
-                        return Ok(Box::pin(stream::once(async {
-                            Ok(AgentEvent::Message(
-                                Message::assistant().with_text(error_text),
-                            ))
-                        })));
+                        return Ok(Self::scope_reply_stream(
+                            &session_config,
+                            Box::pin(stream::once(async {
+                                Ok(AgentEvent::Message(
+                                    Message::assistant().with_text(error_text),
+                                ))
+                            })),
+                        ));
+                    }
+                    if let Err(error) = self
+                        .complete_runtime_request_item(id, Some(user_data.clone()))
+                        .await
+                    {
+                        warn!(
+                            request_id = %id,
+                            ?error,
+                            "Failed to complete runtime elicitation item"
+                        );
                     }
                     self.store_add_message(&session_config.id, &user_message)
                         .await?;
-                    return Ok(Box::pin(futures::stream::empty()));
+                    return Ok(Self::scope_reply_stream(
+                        &session_config,
+                        Box::pin(futures::stream::empty()),
+                    ));
                 }
             }
         }
@@ -1145,9 +1657,12 @@ impl Agent {
                 let error_message = Message::assistant()
                     .with_text(e.to_string())
                     .with_visibility(true, false);
-                return Ok(Box::pin(stream::once(async move {
-                    Ok(AgentEvent::Message(error_message))
-                })));
+                return Ok(Self::scope_reply_stream(
+                    &session_config,
+                    Box::pin(stream::once(async move {
+                        Ok(AgentEvent::Message(error_message))
+                    })),
+                ));
             }
             Ok(Some(response)) if response.role == rmcp::model::Role::Assistant => {
                 self.store_add_message(
@@ -1170,24 +1685,27 @@ impl Agent {
                 let session_store_clone = self.session_store.clone();
                 let session_id_clone = session_config.id.clone();
 
-                return Ok(Box::pin(async_stream::try_stream! {
-                    yield AgentEvent::Message(user_message);
-                    yield AgentEvent::Message(response);
+                return Ok(Self::scope_reply_stream(
+                    &session_config,
+                    Box::pin(async_stream::try_stream! {
+                        yield AgentEvent::Message(user_message);
+                        yield AgentEvent::Message(response);
 
-                    // After commands that modify history, notify UI that history was replaced
-                    if modifies_history {
-                        let updated_session = if let Some(store) = &session_store_clone {
-                            store.get_session(&session_id_clone, true).await
-                        } else {
-                            SessionManager::get_session(&session_id_clone, true).await
+                        // After commands that modify history, notify UI that history was replaced
+                        if modifies_history {
+                            let updated_session = if let Some(store) = &session_store_clone {
+                                store.get_session(&session_id_clone, true).await
+                            } else {
+                                SessionManager::get_session(&session_id_clone, true).await
+                            }
+                                .map_err(|e| anyhow!("Failed to fetch updated session: {}", e))?;
+                            let updated_conversation = updated_session
+                                .conversation
+                                .ok_or_else(|| anyhow!("Session has no conversation after history modification"))?;
+                            yield AgentEvent::HistoryReplaced(updated_conversation);
                         }
-                            .map_err(|e| anyhow!("Failed to fetch updated session: {}", e))?;
-                        let updated_conversation = updated_session
-                            .conversation
-                            .ok_or_else(|| anyhow!("Session has no conversation after history modification"))?;
-                        yield AgentEvent::HistoryReplaced(updated_conversation);
-                    }
-                }));
+                    }),
+                ));
             }
             Ok(Some(resolved_message)) => {
                 self.store_add_message(
@@ -1221,68 +1739,139 @@ impl Agent {
         .await?;
 
         let conversation_to_compact = conversation.clone();
+        let scope_session_config = session_config.clone();
+        let stream_session_config = session_config.clone();
+        let scoped_session_config = session_config.clone();
+        let input_text_for_turn = (!message_text.trim().is_empty()).then_some(message_text.clone());
 
-        Ok(Box::pin(async_stream::try_stream! {
-            let final_conversation = if !needs_auto_compact {
-                conversation
-            } else {
-                let config = Config::global();
-                let threshold = config
-                    .get_param::<f64>("ASTER_AUTO_COMPACT_THRESHOLD")
-                    .unwrap_or(DEFAULT_COMPACTION_THRESHOLD);
-                let threshold_percentage = (threshold * 100.0) as u32;
+        Ok(Self::scope_reply_stream(
+            &scope_session_config,
+            Box::pin(async_stream::try_stream! {
+                let final_conversation = if !needs_auto_compact {
+                    conversation
+                } else {
+                    let config = Config::global();
+                    let threshold = config
+                        .get_param::<f64>("ASTER_AUTO_COMPACT_THRESHOLD")
+                        .unwrap_or(DEFAULT_COMPACTION_THRESHOLD);
+                    let threshold_percentage = (threshold * 100.0) as u32;
 
-                let inline_msg = format!(
-                    "Exceeded auto-compact threshold of {}%. Performing auto-compaction...",
-                    threshold_percentage
-                );
+                    let inline_msg = format!(
+                        "Exceeded auto-compact threshold of {}%. Performing auto-compaction...",
+                        threshold_percentage
+                    );
 
-                yield AgentEvent::Message(
-                    Message::assistant().with_system_notification(
-                        SystemNotificationType::InlineMessage,
-                        inline_msg,
-                    )
-                );
+                    yield AgentEvent::Message(
+                        Message::assistant().with_system_notification(
+                            SystemNotificationType::InlineMessage,
+                            inline_msg,
+                        )
+                    );
 
-                yield AgentEvent::Message(
-                    Message::assistant().with_system_notification(
-                        SystemNotificationType::ThinkingMessage,
-                        COMPACTION_THINKING_TEXT,
-                    )
-                );
+                    yield AgentEvent::Message(
+                        Message::assistant().with_system_notification(
+                            SystemNotificationType::ThinkingMessage,
+                            COMPACTION_THINKING_TEXT,
+                        )
+                    );
 
-                match compact_messages(self.provider().await?.as_ref(), &conversation_to_compact, false).await {
-                    Ok((compacted_conversation, summarization_usage)) => {
-                        self.store_replace_conversation(&session_config.id, &compacted_conversation).await?;
-                        Self::update_session_metrics(&session_config, &summarization_usage, true, self.session_store.as_ref()).await?;
+                    match compact_messages(self.provider().await?.as_ref(), &conversation_to_compact, false).await {
+                        Ok((compacted_conversation, summarization_usage)) => {
+                            self.store_replace_conversation(&stream_session_config.id, &compacted_conversation).await?;
+                            Self::update_session_metrics(&stream_session_config, &summarization_usage, true, self.session_store.as_ref()).await?;
 
-                        yield AgentEvent::HistoryReplaced(compacted_conversation.clone());
+                            yield AgentEvent::HistoryReplaced(compacted_conversation.clone());
 
-                        yield AgentEvent::Message(
-                            Message::assistant().with_system_notification(
-                                SystemNotificationType::InlineMessage,
-                                "Compaction complete",
-                            )
-                        );
+                            yield AgentEvent::Message(
+                                Message::assistant().with_system_notification(
+                                    SystemNotificationType::InlineMessage,
+                                    "Compaction complete",
+                                )
+                            );
 
-                        compacted_conversation
+                            compacted_conversation
+                        }
+                        Err(e) => {
+                            yield AgentEvent::Message(
+                                Message::assistant().with_text(
+                                    format!("Ran into this error trying to compact: {e}.\n\nPlease try again or create a new session")
+                                )
+                            );
+                            return;
+                        }
                     }
-                    Err(e) => {
-                        yield AgentEvent::Message(
-                            Message::assistant().with_text(
-                                format!("Ran into this error trying to compact: {e}.\n\nPlease try again or create a new session")
-                            )
-                        );
-                        return;
+                };
+
+                self.ensure_thread_runtime(&session, &scoped_session_config).await?;
+                let turn_runtime = self
+                    .create_turn_runtime(&session, &scoped_session_config, input_text_for_turn.clone())
+                    .await?;
+                let mut item_runtime_projector = TurnItemRuntimeProjector::new(&turn_runtime);
+                yield AgentEvent::TurnStarted {
+                    turn: turn_runtime.clone(),
+                };
+                if let Some(user_item_event) = item_runtime_projector.project_user_input(&turn_runtime)
+                {
+                    self.persist_item_runtime(&user_item_event).await?;
+                    yield user_item_event;
+                }
+
+                let mut turn_status = TurnStatus::Completed;
+                let mut turn_error = None;
+
+                let mut reply_stream = match self
+                    .reply_internal(final_conversation, scoped_session_config.clone(), session, cancel_token.clone())
+                    .await
+                {
+                    Ok(stream) => stream,
+                    Err(err) => {
+                        turn_status = TurnStatus::Failed;
+                        turn_error = Some(err.to_string());
+                        self.finalize_turn_runtime(&scoped_session_config, turn_status, turn_error.clone()).await?;
+                        Err(err)?;
+                        unreachable!();
+                    }
+                };
+
+                while let Some(event) = reply_stream.next().await {
+                    match event {
+                        Ok(event) => {
+                            for runtime_event in item_runtime_projector.project_agent_event(&event) {
+                                self.persist_item_runtime(&runtime_event).await?;
+                                yield runtime_event;
+                            }
+                            yield event;
+                        }
+                        Err(err) => {
+                            turn_status = if is_token_cancelled(&cancel_token) {
+                                TurnStatus::Aborted
+                            } else {
+                                TurnStatus::Failed
+                            };
+                            turn_error = Some(err.to_string());
+                            for runtime_event in
+                                item_runtime_projector.finalize_open_items(turn_status)
+                            {
+                                self.persist_item_runtime(&runtime_event).await?;
+                                yield runtime_event;
+                            }
+                            self.finalize_turn_runtime(&scoped_session_config, turn_status, turn_error.clone()).await?;
+                            Err(err)?;
+                            unreachable!();
+                        }
                     }
                 }
-            };
 
-            let mut reply_stream = self.reply_internal(final_conversation, session_config, session, cancel_token).await?;
-            while let Some(event) = reply_stream.next().await {
-                yield event?;
-            }
-        }))
+                if is_token_cancelled(&cancel_token) {
+                    turn_status = TurnStatus::Aborted;
+                }
+                for runtime_event in item_runtime_projector.finalize_open_items(turn_status) {
+                    self.persist_item_runtime(&runtime_event).await?;
+                    yield runtime_event;
+                }
+                self.finalize_turn_runtime(&scoped_session_config, turn_status, turn_error).await?;
+            }),
+        ))
     }
 
     async fn reply_internal(
@@ -1541,7 +2130,7 @@ impl Agent {
                                             break;
                                         }
 
-                                        for msg in self.drain_elicitation_messages(&session_config.id).await {
+                                        for msg in self.drain_elicitation_messages(&session_config).await {
                                             yield AgentEvent::Message(msg);
                                         }
 
@@ -1565,7 +2154,7 @@ impl Agent {
                                     }
 
                                     // check for remaining elicitation messages after all tools complete
-                                    for msg in self.drain_elicitation_messages(&session_config.id).await {
+                                    for msg in self.drain_elicitation_messages(&session_config).await {
                                         yield AgentEvent::Message(msg);
                                     }
 

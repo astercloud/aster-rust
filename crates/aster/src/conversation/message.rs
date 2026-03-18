@@ -133,10 +133,23 @@ pub enum ActionRequiredData {
     },
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionRequiredScope {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionRequired {
     pub data: ActionRequiredData,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<ActionRequiredScope>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -312,6 +325,7 @@ impl MessageContent {
                 arguments,
                 prompt,
             },
+            scope: None,
         })
     }
 
@@ -326,6 +340,7 @@ impl MessageContent {
                 message,
                 requested_schema,
             },
+            scope: None,
         })
     }
 
@@ -338,6 +353,7 @@ impl MessageContent {
                 id: id.into(),
                 user_data,
             },
+            scope: None,
         })
     }
 

@@ -1,10 +1,13 @@
+use crate::conversation::message::ActionRequiredScope;
 use crate::mcp_utils::ToolResult;
 use crate::providers::base::Provider;
+use crate::session::TurnContextOverride;
 use rmcp::model::{CallToolResult, Tool};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// Type alias for the tool result channel receiver
 pub type ToolResultReceiver = Arc<Mutex<mpsc::Receiver<(String, ToolResult<CallToolResult>)>>>;
@@ -85,6 +88,12 @@ pub struct FrontendTool {
 pub struct SessionConfig {
     /// Identifier of the underlying Session
     pub id: String,
+    /// Optional logical thread identifier. Defaults to the session id when omitted.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub thread_id: Option<String>,
+    /// Optional logical turn identifier. Runtime will allocate one when omitted.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub turn_id: Option<String>,
     /// ID of the schedule that triggered this session, if any
     pub schedule_id: Option<String>,
     /// Maximum number of turns (iterations) allowed without user input
@@ -100,4 +109,31 @@ pub struct SessionConfig {
     /// 是否在回复流中输出上下文准备轨迹事件
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub include_context_trace: Option<bool>,
+    /// Turn-level runtime overrides for future thread/turn orchestration.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub turn_context: Option<TurnContextOverride>,
+}
+
+impl SessionConfig {
+    pub fn with_runtime_defaults(mut self) -> Self {
+        if self.thread_id.is_none() {
+            self.thread_id = Some(self.id.clone());
+        }
+        if self.turn_id.is_none() {
+            self.turn_id = Some(Uuid::new_v4().to_string());
+        }
+        self
+    }
+
+    pub fn resolved_thread_id(&self) -> &str {
+        self.thread_id.as_deref().unwrap_or(&self.id)
+    }
+
+    pub fn runtime_scope(&self) -> ActionRequiredScope {
+        ActionRequiredScope {
+            session_id: Some(self.id.clone()),
+            thread_id: Some(self.resolved_thread_id().to_string()),
+            turn_id: self.turn_id.clone(),
+        }
+    }
 }

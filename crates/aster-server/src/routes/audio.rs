@@ -397,7 +397,7 @@ mod tests {
     async fn test_transcribe_endpoint_requires_auth() {
         let _guard = env_lock::lock_env([("OPENAI_API_KEY", Some("fake-openai-no-keyring"))]);
 
-        let state = AppState::new().await.unwrap();
+        let state = AppState::new_for_test().await.unwrap();
         let app = routes(state);
         // Test without auth header
         let request = Request::builder()
@@ -423,7 +423,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_transcribe_endpoint_validates_size() {
-        let state = AppState::new().await.unwrap();
+        let state = AppState::new_for_test().await.unwrap();
         let app = routes(state);
 
         let request = Request::builder()
@@ -449,7 +449,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_transcribe_endpoint_validates_mime_type() {
-        let state = AppState::new().await.unwrap();
+        let state = AppState::new_for_test().await.unwrap();
         let app = routes(state);
 
         let request = Request::builder()

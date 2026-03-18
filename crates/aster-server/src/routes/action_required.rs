@@ -76,7 +76,7 @@ mod tests {
 
         #[tokio::test(flavor = "multi_thread")]
         async fn test_tool_confirmation_endpoint() {
-            let state = AppState::new().await.unwrap();
+            let state = AppState::new_for_test().await.unwrap();
 
             let app = routes(state);
 

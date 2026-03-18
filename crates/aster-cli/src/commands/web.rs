@@ -160,7 +160,8 @@ pub async fn handle_web(
     )
     .await?;
 
-    let agent = Agent::new();
+    let agent =
+        Agent::new().with_thread_runtime_store(aster::session::shared_thread_runtime_store());
     let provider = aster::providers::create(&provider_name, model_config).await?;
     agent.update_provider(provider, &init_session.id).await?;
 
@@ -511,11 +512,14 @@ async fn process_message_streaming(
 
     let session_config = SessionConfig {
         id: session.id.clone(),
+        thread_id: None,
+        turn_id: None,
         schedule_id: None,
         max_turns: None,
         retry_config: None,
         system_prompt: None,
         include_context_trace: None,
+        turn_context: None,
     };
 
     match agent.reply(user_message, session_config, None).await {
@@ -609,6 +613,16 @@ async fn process_message_streaming(
                     Ok(AgentEvent::HistoryReplaced(_new_messages)) => {
                         tracing::info!("History replaced, compacting happened in reply");
                     }
+                    Ok(AgentEvent::TurnStarted { turn }) => {
+                        tracing::debug!(
+                            "Turn started in web interface: thread_id={}, turn_id={}",
+                            turn.thread_id,
+                            turn.id
+                        );
+                    }
+                    Ok(AgentEvent::ItemStarted { .. })
+                    | Ok(AgentEvent::ItemUpdated { .. })
+                    | Ok(AgentEvent::ItemCompleted { .. }) => {}
                     Ok(AgentEvent::McpNotification(_notification)) => {
                         tracing::info!("Received MCP notification in web interface");
                     }

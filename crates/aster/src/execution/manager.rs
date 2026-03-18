@@ -4,6 +4,7 @@ use crate::config::paths::Paths;
 use crate::config::Config;
 use crate::scheduler::Scheduler;
 use crate::scheduler_trait::SchedulerTrait;
+use crate::session::{shared_thread_runtime_store, ThreadRuntimeStore};
 use anyhow::Result;
 use lru::LruCache;
 use std::num::NonZeroUsize;
@@ -19,21 +20,14 @@ pub struct AgentManager {
     sessions: Arc<RwLock<LruCache<String, Arc<Agent>>>>,
     scheduler: Arc<dyn SchedulerTrait>,
     default_provider: Arc<RwLock<Option<Arc<dyn crate::providers::base::Provider>>>>,
+    thread_runtime_store: Arc<dyn ThreadRuntimeStore>,
 }
 
 impl AgentManager {
-    #[cfg(test)]
-    pub fn reset_for_test() {
-        unsafe {
-            // Cast away the const to get mutable access
-            // This is safe in test context where we control execution with #[serial]
-            let cell_ptr = &AGENT_MANAGER as *const OnceCell<Arc<AgentManager>>
-                as *mut OnceCell<Arc<AgentManager>>;
-            let _ = (*cell_ptr).take();
-        }
-    }
-
-    async fn new(max_sessions: Option<usize>) -> Result<Self> {
+    pub async fn new_with_thread_runtime_store(
+        max_sessions: Option<usize>,
+        thread_runtime_store: Arc<dyn ThreadRuntimeStore>,
+    ) -> Result<Self> {
         let schedule_file_path = Paths::data_dir().join("schedule.json");
 
         let scheduler = Scheduler::new(schedule_file_path).await?;
@@ -45,6 +39,7 @@ impl AgentManager {
             sessions: Arc::new(RwLock::new(LruCache::new(capacity))),
             scheduler,
             default_provider: Arc::new(RwLock::new(None)),
+            thread_runtime_store,
         };
 
         Ok(manager)
@@ -56,7 +51,11 @@ impl AgentManager {
                 let max_sessions = Config::global()
                     .get_aster_max_active_agents()
                     .unwrap_or(DEFAULT_MAX_SESSION);
-                let manager = Self::new(Some(max_sessions)).await?;
+                let manager = Self::new_with_thread_runtime_store(
+                    Some(max_sessions),
+                    shared_thread_runtime_store(),
+                )
+                .await?;
                 Ok(Arc::new(manager))
             })
             .await
@@ -80,7 +79,9 @@ impl AgentManager {
             }
         }
 
-        let agent = Arc::new(Agent::new());
+        let agent = Arc::new(
+            Agent::new().with_thread_runtime_store(Arc::clone(&self.thread_runtime_store)),
+        );
         agent.set_scheduler(Arc::clone(&self.scheduler)).await;
         agent
             .extension_manager
@@ -129,6 +130,17 @@ mod tests {
 
     use crate::execution::{manager::AgentManager, SessionExecutionMode};
 
+    async fn test_manager() -> Arc<AgentManager> {
+        Arc::new(
+            AgentManager::new_with_thread_runtime_store(
+                None,
+                Arc::new(crate::session::InMemoryThreadRuntimeStore::default()),
+            )
+            .await
+            .unwrap(),
+        )
+    }
+
     #[test]
     fn test_execution_mode_constructors() {
         assert_eq!(
@@ -152,8 +164,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_session_isolation() {
-        AgentManager::reset_for_test();
-        let manager = AgentManager::instance().await.unwrap();
+        let manager = test_manager().await;
 
         let session1 = uuid::Uuid::new_v4().to_string();
         let session2 = uuid::Uuid::new_v4().to_string();
@@ -169,15 +180,12 @@ mod tests {
         let agent1_again = manager.get_or_create_agent(session1).await.unwrap();
 
         assert!(Arc::ptr_eq(&agent1, &agent1_again));
-
-        AgentManager::reset_for_test();
     }
 
     #[tokio::test]
     #[serial]
     async fn test_session_limit() {
-        AgentManager::reset_for_test();
-        let manager = AgentManager::instance().await.unwrap();
+        let manager = test_manager().await;
 
         let sessions: Vec<_> = (0..100).map(|i| format!("session-{}", i)).collect();
 
@@ -195,8 +203,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_remove_session() {
-        AgentManager::reset_for_test();
-        let manager = AgentManager::instance().await.unwrap();
+        let manager = test_manager().await;
         let session = String::from("remove-test");
 
         manager.get_or_create_agent(session.clone()).await.unwrap();
@@ -211,8 +218,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_concurrent_access() {
-        AgentManager::reset_for_test();
-        let manager = AgentManager::instance().await.unwrap();
+        let manager = test_manager().await;
         let session = String::from("concurrent-test");
 
         let mut handles = vec![];
@@ -242,8 +248,7 @@ mod tests {
     async fn test_concurrent_session_creation_race_condition() {
         // Test that concurrent attempts to create the same new session ID
         // result in only one agent being created (tests double-check pattern)
-        AgentManager::reset_for_test();
-        let manager = AgentManager::instance().await.unwrap();
+        let manager = test_manager().await;
         let session_id = String::from("race-condition-test");
 
         // Spawn multiple tasks trying to create the same NEW session simultaneously
@@ -278,8 +283,7 @@ mod tests {
         use crate::providers::testprovider::TestProvider;
         use std::sync::Arc;
 
-        AgentManager::reset_for_test();
-        let manager = AgentManager::instance().await.unwrap();
+        let manager = test_manager().await;
 
         // Create a test provider for replaying (doesn't need inner provider)
         let temp_file = format!(
@@ -303,10 +307,9 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_eviction_updates_last_used() {
-        AgentManager::reset_for_test();
         // Test that accessing a session updates its last_used timestamp
         // and affects eviction order
-        let manager = AgentManager::instance().await.unwrap();
+        let manager = test_manager().await;
 
         let sessions: Vec<_> = (0..100).map(|i| format!("session-{}", i)).collect();
 
@@ -339,8 +342,7 @@ mod tests {
     #[serial]
     async fn test_remove_nonexistent_session_error() {
         // Test that removing a non-existent session returns an error
-        AgentManager::reset_for_test();
-        let manager = AgentManager::instance().await.unwrap();
+        let manager = test_manager().await;
         let session = String::from("never-created");
 
         let result = manager.remove_session(&session).await;

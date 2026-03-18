@@ -395,11 +395,14 @@ mod tests {
 
             let session_config = SessionConfig {
                 id: session.id,
+                thread_id: None,
+                turn_id: None,
                 schedule_id: None,
                 max_turns: Some(1),
                 retry_config: None,
                 system_prompt: None,
                 include_context_trace: None,
+                turn_context: None,
             };
 
             let reply_stream = agent.reply(user_message, session_config, None).await?;
@@ -408,6 +411,10 @@ mod tests {
             let mut responses = Vec::new();
             while let Some(response_result) = reply_stream.next().await {
                 match response_result {
+                    Ok(AgentEvent::TurnStarted { .. })
+                    | Ok(AgentEvent::ItemStarted { .. })
+                    | Ok(AgentEvent::ItemUpdated { .. })
+                    | Ok(AgentEvent::ItemCompleted { .. }) => {}
                     Ok(AgentEvent::Message(response)) => {
                         if let Some(MessageContent::ActionRequired(action)) =
                             response.content.first()

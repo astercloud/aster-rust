@@ -6,7 +6,7 @@ use crate::state::AppState;
 use aster::config::PermissionManager;
 use axum::response::IntoResponse;
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
@@ -20,7 +20,7 @@ use aster::providers::create;
 use aster::recipe::Recipe;
 use aster::recipe_deeplink;
 use aster::session::session_manager::SessionType;
-use aster::session::{Session, SessionManager};
+use aster::session::{Session, SessionManager, SessionRuntimeSnapshot};
 use aster::{
     agents::{extension::ToolInfo, extension_manager::get_parameter_names},
     config::permission::PermissionLevel,
@@ -698,10 +698,35 @@ async fn call_tool(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/agent/runtime/{session_id}",
+    params(
+        ("session_id" = String, Path, description = "Unique identifier for the session")
+    ),
+    responses(
+        (status = 200, description = "Runtime snapshot retrieved successfully", body = SessionRuntimeSnapshot),
+        (status = 401, description = "Unauthorized - invalid secret key"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+async fn get_runtime_snapshot(
+    State(state): State<Arc<AppState>>,
+    Path(session_id): Path<String>,
+) -> Result<Json<SessionRuntimeSnapshot>, StatusCode> {
+    let agent = state.get_agent_for_route(session_id.clone()).await?;
+    let snapshot = agent
+        .runtime_snapshot(&session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(snapshot))
+}
+
 pub fn routes(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/agent/start", post(start_agent))
         .route("/agent/resume", post(resume_agent))
+        .route("/agent/runtime/{session_id}", get(get_runtime_snapshot))
         .route("/agent/tools", get(get_tools))
         .route("/agent/read_resource", post(read_resource))
         .route("/agent/call_tool", post(call_tool))
@@ -711,4 +736,27 @@ pub fn routes(state: Arc<AppState>) -> Router {
         .route("/agent/remove_extension", post(agent_remove_extension))
         .route("/agent/stop", post(stop_agent))
         .with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{body::Body, http::Request};
+    use tower::ServiceExt;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn runtime_snapshot_route_returns_empty_snapshot_for_new_session() {
+        let state = AppState::new_for_test().await.unwrap();
+        let app = routes(state);
+
+        let request = Request::builder()
+            .uri("/agent/runtime/test-session")
+            .method("GET")
+            .header("x-secret-key", "test-secret")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
 }

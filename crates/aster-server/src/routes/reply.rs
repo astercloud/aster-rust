@@ -3,7 +3,7 @@ use aster::agents::{AgentEvent, SessionConfig};
 use aster::context::ContextTraceStep;
 use aster::conversation::message::{Message, MessageContent, TokenState};
 use aster::conversation::Conversation;
-use aster::session::{CommitOptions, SessionManager};
+use aster::session::{CommitOptions, ItemRuntime, SessionManager, TurnContextOverride};
 use axum::{
     extract::{DefaultBodyLimit, State},
     http::{self, StatusCode},
@@ -80,8 +80,14 @@ pub struct ChatRequest {
     #[serde(default)]
     conversation_so_far: Option<Vec<Message>>,
     session_id: String,
+    #[serde(default)]
+    thread_id: Option<String>,
+    #[serde(default)]
+    turn_id: Option<String>,
     recipe_name: Option<String>,
     recipe_version: Option<String>,
+    #[serde(default)]
+    turn_context: Option<TurnContextOverride>,
     #[serde(default)]
     include_context_trace: Option<bool>,
     #[serde(default)]
@@ -137,6 +143,20 @@ pub enum MessageEvent {
     Finish {
         reason: String,
         token_state: TokenState,
+    },
+    TurnContext {
+        session_id: String,
+        thread_id: String,
+        turn_id: String,
+    },
+    ItemStarted {
+        item: ItemRuntime,
+    },
+    ItemUpdated {
+        item: ItemRuntime,
+    },
+    ItemCompleted {
+        item: ItemRuntime,
     },
     ModelChange {
         model: String,
@@ -444,12 +464,16 @@ pub async fn reply(
 
         let session_config = SessionConfig {
             id: session_id.clone(),
+            thread_id: request.thread_id.clone(),
+            turn_id: request.turn_id.clone(),
             schedule_id: session.schedule_id.clone(),
             max_turns: None,
             retry_config: None,
             system_prompt: None,
             include_context_trace: Some(include_context_trace),
-        };
+            turn_context: request.turn_context.clone(),
+        }
+        .with_runtime_defaults();
 
         let mut all_messages = match conversation_so_far {
             Some(history) => {
@@ -502,6 +526,27 @@ pub async fn reply(
                 }
                 response = timeout(Duration::from_millis(500), stream.next()) => {
                     match response {
+                        Ok(Some(Ok(AgentEvent::TurnStarted { turn }))) => {
+                            stream_event(
+                                MessageEvent::TurnContext {
+                                    session_id: turn.session_id,
+                                    thread_id: turn.thread_id,
+                                    turn_id: turn.id,
+                                },
+                                &tx,
+                                &cancel_token,
+                            )
+                            .await;
+                        }
+                        Ok(Some(Ok(AgentEvent::ItemStarted { item }))) => {
+                            stream_event(MessageEvent::ItemStarted { item }, &tx, &cancel_token).await;
+                        }
+                        Ok(Some(Ok(AgentEvent::ItemUpdated { item }))) => {
+                            stream_event(MessageEvent::ItemUpdated { item }, &tx, &cancel_token).await;
+                        }
+                        Ok(Some(Ok(AgentEvent::ItemCompleted { item }))) => {
+                            stream_event(MessageEvent::ItemCompleted { item }, &tx, &cancel_token).await;
+                        }
                         Ok(Some(Ok(AgentEvent::Message(message)))) => {
                             for content in &message.content {
                                 track_tool_telemetry(content, all_messages.messages());
@@ -695,7 +740,7 @@ mod tests {
 
         #[tokio::test(flavor = "multi_thread")]
         async fn test_reply_endpoint() {
-            let state = AppState::new().await.unwrap();
+            let state = AppState::new_for_test().await.unwrap();
 
             let app = routes(state);
 
@@ -709,8 +754,11 @@ mod tests {
                         user_message: Message::user().with_text("test message"),
                         conversation_so_far: None,
                         session_id: "test-session".to_string(),
+                        thread_id: None,
+                        turn_id: None,
                         recipe_name: None,
                         recipe_version: None,
+                        turn_context: None,
                         include_context_trace: None,
                         context_trace_level: None,
                         context_trace_redact: None,

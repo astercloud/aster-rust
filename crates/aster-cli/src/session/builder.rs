@@ -145,7 +145,8 @@ async fn offer_extension_debugging_help(
     );
 
     // Create a minimal agent for debugging
-    let debug_agent = Agent::new();
+    let debug_agent =
+        Agent::new().with_thread_runtime_store(aster::session::shared_thread_runtime_store());
 
     let session = SessionManager::create_session(
         std::env::current_dir()?,
@@ -299,7 +300,8 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
             .with_temperature(temperature)
     };
 
-    let agent: Agent = Agent::new();
+    let agent: Agent =
+        Agent::new().with_thread_runtime_store(aster::session::shared_thread_runtime_store());
 
     agent
         .apply_recipe_components(
@@ -607,11 +609,14 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
 
     let session_config_for_save = SessionConfig {
         id: session_id.clone(),
+        thread_id: None,
+        turn_id: None,
         schedule_id: None,
         max_turns: None,
         retry_config: None,
         system_prompt: None,
         include_context_trace: None,
+        turn_context: None,
     };
 
     if let Err(e) = session

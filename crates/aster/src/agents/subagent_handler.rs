@@ -192,11 +192,14 @@ fn get_agent_messages(
         }
         let session_config = SessionConfig {
             id: session_id.clone(),
+            thread_id: None,
+            turn_id: None,
             schedule_id: None,
             max_turns: task_config.max_turns.map(|v| v as u32),
             retry_config: recipe.retry,
             system_prompt: None,
             include_context_trace: None,
+            turn_context: None,
         };
 
         let mut stream = crate::session_context::with_session_id(Some(session_id.clone()), async {
@@ -208,6 +211,10 @@ fn get_agent_messages(
         .map_err(|e| anyhow!("Failed to get reply from agent: {}", e))?;
         while let Some(message_result) = stream.next().await {
             match message_result {
+                Ok(AgentEvent::TurnStarted { .. })
+                | Ok(AgentEvent::ItemStarted { .. })
+                | Ok(AgentEvent::ItemUpdated { .. })
+                | Ok(AgentEvent::ItemCompleted { .. }) => {}
                 Ok(AgentEvent::Message(msg)) => conversation.push(msg),
                 Ok(AgentEvent::McpNotification(_)) | Ok(AgentEvent::ModelChange { .. }) => {}
                 Ok(AgentEvent::HistoryReplaced(updated_conversation)) => {

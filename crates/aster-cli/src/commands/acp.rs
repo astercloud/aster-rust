@@ -308,7 +308,8 @@ impl AsterAcpAgent {
         )
         .await?;
 
-        let agent = Agent::new();
+        let agent =
+            Agent::new().with_thread_runtime_store(aster::session::shared_thread_runtime_store());
         agent.update_provider(provider.clone(), &session.id).await?;
 
         let extensions_to_run: Vec<_> = get_all_extensions()
@@ -895,11 +896,14 @@ impl AsterAcpAgent {
 
         let session_config = SessionConfig {
             id: session_id.clone(),
+            thread_id: None,
+            turn_id: None,
             schedule_id: None,
             max_turns: None,
             retry_config: None,
             system_prompt: None,
             include_context_trace: None,
+            turn_context: None,
         };
 
         let mut stream = self

@@ -1,5 +1,6 @@
 use crate::action_required_manager::ActionRequiredManager;
 use crate::agents::types::SharedProvider;
+use crate::conversation::message::ActionRequiredScope;
 use crate::session_context::SESSION_ID_HEADER;
 use rmcp::model::{
     Content, CreateElicitationRequestParam, CreateElicitationResult, ElicitationAction, ErrorCode,
@@ -265,8 +266,18 @@ impl ClientHandler for AsterClient {
             )
         })?;
 
+        let scope = crate::session_context::current_action_scope().unwrap_or_else(|| {
+            let session_id = crate::session_context::current_session_id();
+            ActionRequiredScope {
+                session_id: session_id.clone(),
+                thread_id: session_id,
+                turn_id: None,
+            }
+        });
+
         ActionRequiredManager::global()
-            .request_and_wait(
+            .request_and_wait_scoped(
+                scope,
                 request.message.clone(),
                 schema_value,
                 Duration::from_secs(300),

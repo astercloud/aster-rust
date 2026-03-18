@@ -268,7 +268,10 @@ async fn update_session_user_recipe_values(
     ),
     tag = "Session Management"
 )]
-async fn delete_session(Path(session_id): Path<String>) -> Result<StatusCode, StatusCode> {
+async fn delete_session(
+    State(state): State<Arc<AppState>>,
+    Path(session_id): Path<String>,
+) -> Result<StatusCode, StatusCode> {
     SessionManager::delete_session(&session_id)
         .await
         .map_err(|e| {
@@ -278,6 +281,8 @@ async fn delete_session(Path(session_id): Path<String>) -> Result<StatusCode, St
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         })?;
+
+    let _ = state.agent_manager.remove_session(&session_id).await;
 
     Ok(StatusCode::OK)
 }

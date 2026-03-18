@@ -22,6 +22,22 @@ pub struct AppState {
 impl AppState {
     pub async fn new() -> anyhow::Result<Arc<AppState>> {
         let agent_manager = AgentManager::instance().await?;
+        Self::from_agent_manager(agent_manager).await
+    }
+
+    #[cfg(test)]
+    pub async fn new_for_test() -> anyhow::Result<Arc<AppState>> {
+        let agent_manager = Arc::new(
+            AgentManager::new_with_thread_runtime_store(
+                None,
+                Arc::new(aster::session::InMemoryThreadRuntimeStore::default()),
+            )
+            .await?,
+        );
+        Self::from_agent_manager(agent_manager).await
+    }
+
+    async fn from_agent_manager(agent_manager: Arc<AgentManager>) -> anyhow::Result<Arc<AppState>> {
         let tunnel_manager = Arc::new(TunnelManager::new());
 
         Ok(Arc::new(Self {

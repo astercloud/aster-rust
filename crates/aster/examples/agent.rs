@@ -42,11 +42,14 @@ async fn main() -> anyhow::Result<()> {
 
     let session_config = SessionConfig {
         id: session.id,
+        thread_id: None,
+        turn_id: None,
         schedule_id: None,
         max_turns: None,
         retry_config: None,
         system_prompt: None,
         include_context_trace: None,
+        turn_context: None,
     };
 
     let user_message = Message::user()
@@ -54,9 +57,32 @@ async fn main() -> anyhow::Result<()> {
 
     let mut stream = agent.reply(user_message, session_config, None).await?;
 
-    while let Some(Ok(AgentEvent::Message(message))) = stream.next().await {
-        println!("{}", serde_json::to_string_pretty(&message)?);
-        println!("\n");
+    while let Some(event) = stream.next().await {
+        match event? {
+            AgentEvent::TurnStarted { turn } => {
+                println!(
+                    "turn started: thread_id={}, turn_id={}",
+                    turn.thread_id, turn.id
+                );
+            }
+            AgentEvent::ItemStarted { item } => {
+                println!("item started: id={}, sequence={}", item.id, item.sequence);
+            }
+            AgentEvent::ItemUpdated { item } => {
+                println!("item updated: id={}, sequence={}", item.id, item.sequence);
+            }
+            AgentEvent::ItemCompleted { item } => {
+                println!("item completed: id={}, status={:?}", item.id, item.status);
+            }
+            AgentEvent::Message(message) => {
+                println!("{}", serde_json::to_string_pretty(&message)?);
+                println!("\n");
+            }
+            AgentEvent::McpNotification(_)
+            | AgentEvent::ModelChange { .. }
+            | AgentEvent::HistoryReplaced(_)
+            | AgentEvent::ContextTrace { .. } => {}
+        }
     }
 
     Ok(())

@@ -37,6 +37,7 @@ mod memory_pipeline;
 mod memory_repository;
 mod memory_retriever;
 pub mod resume;
+mod runtime_store;
 pub mod session_manager;
 mod statistics;
 mod store;
@@ -72,6 +73,12 @@ pub use memory::{
 pub use resume::{
     build_resume_message, delete_summary, has_summary, list_summaries, load_summary,
     load_summary_data, save_summary, SummaryCacheData,
+};
+pub use runtime_store::{
+    delete_shared_thread_runtime_session, shared_thread_runtime_store, InMemoryThreadRuntimeStore,
+    ItemRuntime, ItemRuntimePayload, ItemStatus, NoopThreadRuntimeStore, SessionRuntimeSnapshot,
+    SqliteThreadRuntimeStore, ThreadRuntime, ThreadRuntimeSnapshot, ThreadRuntimeStore,
+    ThreadStatus, TurnContextOverride, TurnRuntime, TurnStatus,
 };
 pub use session_manager::{Session, SessionInsights, SessionManager, SessionType};
 pub use statistics::{

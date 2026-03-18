@@ -6,6 +6,15 @@
 
 **核心路径**: `crates/aster/src/session/`
 
+## 当前事实源
+
+- `SessionManager` 负责会话与对话消息的持久化。
+- `Thread / Turn / Item runtime` 统一收口到 `ThreadRuntimeStore`。
+- 生产入口默认使用 `shared_thread_runtime_store()`，不再以 `InMemoryThreadRuntimeStore` 作为主链事实源。
+- `SessionManager::delete_session()` 会同步清理 runtime 残留；调用方不应再自行拼装第二套删除语义。
+
+如果某个入口需要测试隔离，应显式注入 `InMemoryThreadRuntimeStore`，而不是让生产入口继续回退到内存态。
+
 ## 模块结构
 
 | 模块 | 说明 |
@@ -68,6 +77,12 @@ impl SessionManager {
     pub async fn delete_session(id: &str) -> Result<()>;
 }
 ```
+
+删除语义说明：
+
+- 删除 `Session` / `messages`
+- best-effort 删除关联 `thread / turn / item runtime`
+- 调用方只负责业务层清理，例如取消任务、移除 UI 投影；不要重复实现 runtime 删除
 
 ## 会话归档
 

@@ -860,11 +860,14 @@ impl CliSession {
 
         let session_config = SessionConfig {
             id: self.session_id.clone(),
+            thread_id: None,
+            turn_id: None,
             schedule_id: self.scheduled_job_id.clone(),
             max_turns: self.max_turns,
             retry_config: self.retry_config.clone(),
             system_prompt: None,
             include_context_trace: None,
+            turn_context: None,
         };
         let user_message = self
             .messages
@@ -1221,6 +1224,10 @@ impl CliSession {
                         Some(Ok(AgentEvent::HistoryReplaced(updated_conversation))) => {
                             self.messages = updated_conversation;
                         }
+                        Some(Ok(AgentEvent::TurnStarted { .. }))
+                        | Some(Ok(AgentEvent::ItemStarted { .. }))
+                        | Some(Ok(AgentEvent::ItemUpdated { .. }))
+                        | Some(Ok(AgentEvent::ItemCompleted { .. })) => {}
                         Some(Ok(AgentEvent::ModelChange { model, mode })) => {
                             if is_stream_json_mode {
                                 emit_stream_event(&StreamEvent::ModelChange {

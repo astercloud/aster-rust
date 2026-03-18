@@ -36,7 +36,7 @@ use crate::providers::create;
 use crate::recipe::Recipe;
 use crate::scheduler_trait::SchedulerTrait;
 use crate::session::session_manager::SessionType;
-use crate::session::{Session, SessionManager};
+use crate::session::{shared_thread_runtime_store, Session, SessionManager};
 
 type RunningTasksMap = HashMap<String, CancellationToken>;
 type JobsMap = HashMap<String, (JobId, ScheduledJob)>;
@@ -738,7 +738,7 @@ async fn execute_job(
         }
     };
 
-    let agent = Agent::new();
+    let agent = Agent::new().with_thread_runtime_store(shared_thread_runtime_store());
 
     let config = Config::global();
     let provider_name = config.get_aster_provider()?;
@@ -791,11 +791,14 @@ async fn execute_job(
 
     let session_config = SessionConfig {
         id: session.id.clone(),
+        thread_id: None,
+        turn_id: None,
         schedule_id: Some(job.id.clone()),
         max_turns: None,
         retry_config: None,
         system_prompt: None,
         include_context_trace: None,
+        turn_context: None,
     };
 
     let session_id = session_config.id.clone();

@@ -1493,6 +1493,14 @@ impl SessionStorage {
             .await?;
 
         tx.commit().await?;
+
+        if let Err(error) = super::delete_shared_thread_runtime_session(session_id).await {
+            warn!(
+                "Failed to delete runtime session residue after deleting session {}: {}",
+                session_id, error
+            );
+        }
+
         Ok(())
     }
 
