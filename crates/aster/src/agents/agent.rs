@@ -33,8 +33,8 @@ use crate::context_mgmt::{
     check_if_compaction_needed, compact_messages, DEFAULT_COMPACTION_THRESHOLD,
 };
 use crate::conversation::message::{
-    ActionRequiredData, Message, MessageContent, ProviderMetadata, SystemNotificationType,
-    ToolRequest,
+    ActionRequired, ActionRequiredData, Message, MessageContent, ProviderMetadata,
+    SystemNotificationType, ThinkingContent, ToolRequest, ToolResponse,
 };
 use crate::conversation::{debug_conversation_fix, fix_conversation, Conversation};
 use crate::mcp_utils::ToolResult;
@@ -61,7 +61,7 @@ use crate::utils::is_token_cancelled;
 use regex::Regex;
 use rmcp::model::{
     CallToolRequestParam, CallToolResult, Content, ErrorCode, ErrorData, GetPromptResult, Prompt,
-    Role, ServerNotification, Tool,
+    Role, ServerNotification, TextContent, Tool,
 };
 use serde_json::Value;
 use tokio::sync::{mpsc, Mutex, RwLock};
@@ -189,176 +189,197 @@ impl TurnItemRuntimeProjector {
     }
 
     fn project_message(&mut self, message: &Message) -> Vec<AgentEvent> {
-        let mut events = Vec::new();
+        message
+            .content
+            .iter()
+            .filter_map(|content| self.project_message_content(message, content))
+            .collect()
+    }
 
-        for content in &message.content {
-            match content {
-                MessageContent::Text(text_content) => {
-                    let trimmed = text_content.text.trim();
-                    if trimmed.is_empty() {
-                        continue;
-                    }
-
-                    let item_id = message
-                        .id
-                        .as_ref()
-                        .map(|id| format!("assistant:{id}"))
-                        .unwrap_or_else(|| format!("assistant:{}", self.turn_id));
-                    let next_text = self
-                        .items
-                        .get(&item_id)
-                        .and_then(|item| match &item.payload {
-                            ItemRuntimePayload::AgentMessage { text } => {
-                                Some(format!("{text}{}", text_content.text))
-                            }
-                            _ => None,
-                        })
-                        .unwrap_or_else(|| text_content.text.clone());
-
-                    events.push(self.upsert_in_progress(
-                        item_id,
-                        ItemRuntimePayload::AgentMessage { text: next_text },
-                    ));
-                }
-                MessageContent::Thinking(thinking_content) => {
-                    let trimmed = thinking_content.thinking.trim();
-                    if trimmed.is_empty() {
-                        continue;
-                    }
-
-                    let item_id = message
-                        .id
-                        .as_ref()
-                        .map(|id| format!("reasoning:{id}"))
-                        .unwrap_or_else(|| format!("reasoning:{}", self.turn_id));
-                    let next_text = self
-                        .items
-                        .get(&item_id)
-                        .and_then(|item| match &item.payload {
-                            ItemRuntimePayload::Reasoning { text } => {
-                                Some(format!("{text}{}", thinking_content.thinking))
-                            }
-                            _ => None,
-                        })
-                        .unwrap_or_else(|| thinking_content.thinking.clone());
-
-                    events.push(self.upsert_in_progress(
-                        item_id,
-                        ItemRuntimePayload::Reasoning { text: next_text },
-                    ));
-                }
-                MessageContent::ToolRequest(tool_request) => {
-                    let Ok(tool_call) = &tool_request.tool_call else {
-                        continue;
-                    };
-
-                    events.push(
-                        self.upsert_in_progress(
-                            tool_request.id.clone(),
-                            ItemRuntimePayload::ToolCall {
-                                tool_name: tool_call.name.to_string(),
-                                arguments: tool_call
-                                    .arguments
-                                    .as_ref()
-                                    .and_then(|arguments| serde_json::to_value(arguments).ok())
-                                    .filter(|value| !value.is_null()),
-                                output: None,
-                                success: None,
-                                error: None,
-                                metadata: tool_request
-                                    .metadata
-                                    .as_ref()
-                                    .map(|metadata| Value::Object(metadata.clone())),
-                            },
-                        ),
-                    );
-                }
-                MessageContent::ToolResponse(tool_response) => {
-                    let existing = self.items.get(&tool_response.id).cloned();
-                    let (tool_name, arguments) = match existing.as_ref().map(|item| &item.payload) {
-                        Some(ItemRuntimePayload::ToolCall {
-                            tool_name,
-                            arguments,
-                            ..
-                        }) => (tool_name.clone(), arguments.clone()),
-                        _ => (tool_response.id.clone(), None),
-                    };
-                    let (output, success, error, status) = match &tool_response.tool_result {
-                        Ok(result) => (
-                            serde_json::to_value(result).ok(),
-                            Some(true),
-                            None,
-                            ItemStatus::Completed,
-                        ),
-                        Err(err) => (None, Some(false), Some(err.to_string()), ItemStatus::Failed),
-                    };
-
-                    events.push(
-                        self.complete_item(
-                            tool_response.id.clone(),
-                            ItemRuntimePayload::ToolCall {
-                                tool_name,
-                                arguments,
-                                output,
-                                success,
-                                error,
-                                metadata: tool_response
-                                    .metadata
-                                    .as_ref()
-                                    .map(|metadata| Value::Object(metadata.clone())),
-                            },
-                            status,
-                            existing
-                                .as_ref()
-                                .map(|item| item.started_at)
-                                .unwrap_or_else(Utc::now),
-                        ),
-                    );
-                }
-                MessageContent::ActionRequired(action_required) => {
-                    let (item_id, payload) = match &action_required.data {
-                        ActionRequiredData::ToolConfirmation {
-                            id,
-                            tool_name,
-                            arguments,
-                            prompt,
-                        } => (
-                            id.clone(),
-                            ItemRuntimePayload::ApprovalRequest {
-                                request_id: id.clone(),
-                                action_type: "tool_confirmation".to_string(),
-                                prompt: prompt.clone(),
-                                tool_name: Some(tool_name.clone()),
-                                arguments: serde_json::to_value(arguments)
-                                    .ok()
-                                    .filter(|value| !value.is_null()),
-                                response: None,
-                            },
-                        ),
-                        ActionRequiredData::Elicitation {
-                            id,
-                            message,
-                            requested_schema,
-                        } => (
-                            id.clone(),
-                            ItemRuntimePayload::RequestUserInput {
-                                request_id: id.clone(),
-                                action_type: "elicitation".to_string(),
-                                prompt: Some(message.clone()),
-                                requested_schema: Some(requested_schema.clone()),
-                                response: None,
-                            },
-                        ),
-                        ActionRequiredData::ElicitationResponse { .. } => continue,
-                    };
-
-                    events.push(self.upsert_in_progress(item_id, payload));
-                }
-                _ => {}
+    fn project_message_content(
+        &mut self,
+        message: &Message,
+        content: &MessageContent,
+    ) -> Option<AgentEvent> {
+        match content {
+            MessageContent::Text(text_content) => self.project_text_content(message, text_content),
+            MessageContent::Thinking(thinking_content) => {
+                self.project_thinking_content(message, thinking_content)
             }
+            MessageContent::ToolRequest(tool_request) => self.project_tool_request(tool_request),
+            MessageContent::ToolResponse(tool_response) => {
+                Some(self.project_tool_response(tool_response))
+            }
+            MessageContent::ActionRequired(action_required) => {
+                self.project_action_required(action_required)
+            }
+            _ => None,
+        }
+    }
+
+    fn project_text_content(
+        &mut self,
+        message: &Message,
+        text_content: &TextContent,
+    ) -> Option<AgentEvent> {
+        if text_content.text.trim().is_empty() {
+            return None;
         }
 
-        events
+        let item_id = self.message_item_id(message, "assistant");
+        let next_text = self.append_agent_message_text(&item_id, &text_content.text);
+
+        Some(self.upsert_in_progress(
+            item_id,
+            ItemRuntimePayload::AgentMessage { text: next_text },
+        ))
+    }
+
+    fn project_thinking_content(
+        &mut self,
+        message: &Message,
+        thinking_content: &ThinkingContent,
+    ) -> Option<AgentEvent> {
+        if thinking_content.thinking.trim().is_empty() {
+            return None;
+        }
+
+        let item_id = self.message_item_id(message, "reasoning");
+        let next_text = self.append_reasoning_text(&item_id, &thinking_content.thinking);
+
+        Some(self.upsert_in_progress(item_id, ItemRuntimePayload::Reasoning { text: next_text }))
+    }
+
+    fn project_tool_request(&mut self, tool_request: &ToolRequest) -> Option<AgentEvent> {
+        let Ok(tool_call) = &tool_request.tool_call else {
+            return None;
+        };
+
+        Some(self.upsert_in_progress(
+            tool_request.id.clone(),
+            ItemRuntimePayload::ToolCall {
+                tool_name: tool_call.name.to_string(),
+                arguments: Self::serialize_non_null(&tool_call.arguments),
+                output: None,
+                success: None,
+                error: None,
+                metadata: Self::metadata_value(tool_request.metadata.as_ref()),
+            },
+        ))
+    }
+
+    fn project_tool_response(&mut self, tool_response: &ToolResponse) -> AgentEvent {
+        let existing = self.items.get(&tool_response.id).cloned();
+        let (tool_name, arguments) = match existing.as_ref().map(|item| &item.payload) {
+            Some(ItemRuntimePayload::ToolCall {
+                tool_name,
+                arguments,
+                ..
+            }) => (tool_name.clone(), arguments.clone()),
+            _ => (tool_response.id.clone(), None),
+        };
+        let (output, success, error, status) = match &tool_response.tool_result {
+            Ok(result) => (
+                serde_json::to_value(result).ok(),
+                Some(true),
+                None,
+                ItemStatus::Completed,
+            ),
+            Err(err) => (None, Some(false), Some(err.to_string()), ItemStatus::Failed),
+        };
+
+        self.complete_item(
+            tool_response.id.clone(),
+            ItemRuntimePayload::ToolCall {
+                tool_name,
+                arguments,
+                output,
+                success,
+                error,
+                metadata: Self::metadata_value(tool_response.metadata.as_ref()),
+            },
+            status,
+            existing
+                .as_ref()
+                .map(|item| item.started_at)
+                .unwrap_or_else(Utc::now),
+        )
+    }
+
+    fn project_action_required(&mut self, action_required: &ActionRequired) -> Option<AgentEvent> {
+        let (item_id, payload) = match &action_required.data {
+            ActionRequiredData::ToolConfirmation {
+                id,
+                tool_name,
+                arguments,
+                prompt,
+            } => (
+                id.clone(),
+                ItemRuntimePayload::ApprovalRequest {
+                    request_id: id.clone(),
+                    action_type: "tool_confirmation".to_string(),
+                    prompt: prompt.clone(),
+                    tool_name: Some(tool_name.clone()),
+                    arguments: Self::serialize_non_null(arguments),
+                    response: None,
+                },
+            ),
+            ActionRequiredData::Elicitation {
+                id,
+                message,
+                requested_schema,
+            } => (
+                id.clone(),
+                ItemRuntimePayload::RequestUserInput {
+                    request_id: id.clone(),
+                    action_type: "elicitation".to_string(),
+                    prompt: Some(message.clone()),
+                    requested_schema: Some(requested_schema.clone()),
+                    response: None,
+                },
+            ),
+            ActionRequiredData::ElicitationResponse { .. } => return None,
+        };
+
+        Some(self.upsert_in_progress(item_id, payload))
+    }
+
+    fn message_item_id(&self, message: &Message, prefix: &str) -> String {
+        message
+            .id
+            .as_ref()
+            .map(|id| format!("{prefix}:{id}"))
+            .unwrap_or_else(|| format!("{prefix}:{}", self.turn_id))
+    }
+
+    fn append_agent_message_text(&self, item_id: &str, text_chunk: &str) -> String {
+        self.items
+            .get(item_id)
+            .and_then(|item| match &item.payload {
+                ItemRuntimePayload::AgentMessage { text } => Some(format!("{text}{text_chunk}")),
+                _ => None,
+            })
+            .unwrap_or_else(|| text_chunk.to_string())
+    }
+
+    fn append_reasoning_text(&self, item_id: &str, text_chunk: &str) -> String {
+        self.items
+            .get(item_id)
+            .and_then(|item| match &item.payload {
+                ItemRuntimePayload::Reasoning { text } => Some(format!("{text}{text_chunk}")),
+                _ => None,
+            })
+            .unwrap_or_else(|| text_chunk.to_string())
+    }
+
+    fn serialize_non_null<T: serde::Serialize>(value: &T) -> Option<Value> {
+        serde_json::to_value(value)
+            .ok()
+            .filter(|value| !value.is_null())
+    }
+
+    fn metadata_value(metadata: Option<&ProviderMetadata>) -> Option<Value> {
+        metadata.map(|metadata| Value::Object(metadata.clone()))
     }
 
     fn finalize_open_items(&mut self, turn_status: TurnStatus) -> Vec<AgentEvent> {
