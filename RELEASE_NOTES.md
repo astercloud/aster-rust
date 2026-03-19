@@ -1,75 +1,64 @@
-# Release v0.18.0
+# Release v0.19.0
 
 ## 🎉 主要功能
 
-### 会话运行时状态追踪系统
+### 共享运行时队列与启动引导
 
-新增完整的运行时状态追踪机制，支持细粒度的会话执行监控：
+新增共享 `SessionRuntimeQueueService` 与启动辅助能力，让多入口场景可以在同一套 runtime store 之上协调执行：
 
-- **ThreadRuntimeStore**: 持久化会话线程运行时状态
-- **TurnRuntime**: 追踪每个对话轮次的执行状态
-- **ItemRuntime**: 记录消息、工具调用等细粒度执行项
-- **状态快照**: 支持导出完整的会话运行时快照
+- **共享初始化**：新增 `initialize_shared_thread_runtime_store`、`require_shared_thread_runtime_store` 与 session bootstrap 辅助逻辑
+- **排队执行**：支持 `QueuedTurnRuntime` 持久化、按 session 排队、取出下一轮以及清理队列
+- **跨进程一致性**：SQLite 与内存存储都支持 queued turn 生命周期管理
 
-### 增强的 Agent 事件系统
+### 运行时项目投影增强
 
-扩展 `AgentEvent` 枚举，新增以下事件类型：
+`Agent` 的运行时事件投影能力继续扩展，支持把更多结构化信息落到 runtime items：
 
-- `TurnStarted`: 对话轮次开始
-- `ItemStarted`: 执行项开始
-- `ItemUpdated`: 执行项更新
-- `ItemCompleted`: 执行项完成
+- **计划块提取**：自动识别 `<proposed_plan>`，生成显式 plan runtime item
+- **文件产物追踪**：从工具返回元数据中提取 artifact path / id，写入 file artifact runtime item
+- **状态项更新**：补齐 runtime status item 的初始化、更新与完成链路
 
-支持更精细的事件驱动架构和实时状态监控。
+### TODO 状态结构化演进
 
-### ActionRequired 作用域管理
+TODO 扩展从单纯 markdown 兼容态继续演进到结构化清单：
 
-改进 `ActionRequiredManager`，支持：
-
-- **作用域隔离**: 通过 `ActionRequiredScope` 区分不同上下文的请求
-- **消息队列**: 使用 `VecDeque` 管理待处理的 action required 消息
-- **异步等待**: `request_and_wait_scoped` 方法支持作用域级别的请求处理
+- **优先使用 `todo.v1`**：运行时优先读取结构化 `TodoListState`
+- **保留兼容回退**：仍支持 legacy `todo.v0` markdown 状态
+- **工具链收口**：`todo_write_tool` 与 workflow 集成统一走结构化 TODO 解析/持久化
 
 ## 🔧 改进
 
-### CLI 命令优化
+### CLI / Server / Scheduler 对齐
 
-- 更新 `acp`、`configure`、`web` 命令以支持新的运行时状态
-- 改进会话构建器 (`session/builder.rs`) 集成运行时存储
+- CLI 会话构建器与命令入口改为显式接入共享 runtime store
+- Server 状态管理补齐 runtime queue 与共享 store 初始化
+- Scheduler、ExecutionManager 与 SessionManager 的 runtime 协作链路进一步收口
 
-### Server 路由增强
+### 工具系统精简
 
-- `routes/agent.rs`: 集成运行时状态追踪
-- `routes/reply.rs`: 支持细粒度的回复状态管理
-- `routes/session.rs`: 增强会话生命周期管理
-- `routes/action_required.rs`: 支持作用域化的 action required 处理
+- 移除 `three_files_tool`
+- 保留并加强 TODO / workflow 现役路径，减少平行实现
 
-### 核心库改进
+### Provider 与格式细节修正
 
-- **Scheduler**: 优化子 agent 调度逻辑
-- **ExecutionManager**: 改进执行管理器与运行时状态的集成
-- **SessionContext**: 扩展会话上下文以支持运行时元数据
-- **Message**: 增强消息结构以支持 ActionRequired 数据
+- 调整 Google / OpenAI Responses 格式处理，改善与新的 runtime item 投影协作
 
 ## 📝 文档
 
-- 更新 `docs/aiprompts/session-management.md`，补充运行时状态管理说明
+- 更新 `docs/aiprompts/session-management.md`，补充共享 runtime store、队列与状态投影说明
 
 ## 🔄 Breaking Changes
 
-- `AgentEvent` 枚举新增多个变体，可能影响模式匹配代码
-- `ActionRequiredManager` API 变更，新增 `request_and_wait_scoped` 方法
-- 会话管理相关接口扩展，需要适配新的运行时存储机制
-
-## 📦 依赖更新
-
-- 保持与 v0.17.1 相同的依赖版本
+- 依赖共享 runtime store 的入口现在要求先完成 bootstrap / initialize，再创建带必需 store 的 `Agent`
+- `three_files_tool` 已移除，依赖该工具名的外部调用需要切换到现役工具路径
+- TODO 扩展优先读取结构化状态，依赖 legacy markdown 直读的逻辑需要适配
 
 ## 🐛 Bug 修复
 
-- 修复会话状态追踪中的竞态条件
-- 改进 action required 消息的并发处理
+- 修复 `todo_extension` 测试作用域缺失 trait 导入导致的编译问题
+- 修复 CLI session builder 中 fallible runtime store 初始化的错误处理
+- 修复严格 clippy 下字符串切片、large enum variant 与 `manual_map` 报警
 
 ---
 
-**完整变更**: v0.17.1...v0.18.0
+**完整变更**: v0.18.0...v0.19.0
