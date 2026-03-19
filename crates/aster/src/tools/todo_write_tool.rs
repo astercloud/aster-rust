@@ -13,10 +13,15 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use tracing::warn;
 
 use super::base::{PermissionCheckResult, Tool};
 use super::context::{ToolContext, ToolOptions, ToolResult};
 use super::error::ToolError;
+use crate::session::extension_data::{
+    persist_todo_list_state, TodoListItem as SessionTodoListItem, TodoListItemStatus, TodoListState,
+};
+use crate::session::SessionManager;
 
 /// Todo 项目状态
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -226,6 +231,49 @@ impl TodoWriteTool {
                 }
             })
     }
+
+    fn to_session_todo_item(todo: &TodoItem) -> SessionTodoListItem {
+        SessionTodoListItem {
+            content: todo.content.clone(),
+            active_form: todo.active_form.clone(),
+            status: match todo.status {
+                TodoStatus::Pending => TodoListItemStatus::Pending,
+                TodoStatus::InProgress => TodoListItemStatus::InProgress,
+                TodoStatus::Completed => TodoListItemStatus::Completed,
+            },
+        }
+    }
+
+    async fn persist_session_todos(&self, context: &ToolContext, todos: &[TodoItem]) {
+        if context.session_id.trim().is_empty() {
+            return;
+        }
+
+        let Ok(mut session) = SessionManager::get_session(&context.session_id, false).await else {
+            return;
+        };
+
+        let todo_list_state =
+            TodoListState::new(todos.iter().map(Self::to_session_todo_item).collect());
+        if let Err(error) = persist_todo_list_state(&mut session.extension_data, todo_list_state) {
+            warn!(
+                session_id = %context.session_id,
+                "failed to persist todo state: {error}"
+            );
+            return;
+        }
+
+        if let Err(error) = SessionManager::update_session(&context.session_id)
+            .extension_data(session.extension_data)
+            .apply()
+            .await
+        {
+            warn!(
+                session_id = %context.session_id,
+                "failed to update todo session metadata: {error}"
+            );
+        }
+    }
 }
 
 #[async_trait]
@@ -327,6 +375,7 @@ impl Tool for TodoWriteTool {
 
         // Save the new todos
         self.storage.set_todos(&agent_id, new_todos.clone());
+        self.persist_session_todos(context, &new_todos).await;
 
         // Create success message
         let message = if new_todos.is_empty() && !input.todos.is_empty() {
@@ -737,6 +786,21 @@ mod tests {
         assert_eq!(
             tool_result.metadata.get("auto_cleared"),
             Some(&serde_json::json!(true))
+        );
+        assert_eq!(
+            tool_result.metadata.get("new_todos"),
+            Some(&serde_json::json!([
+                {
+                    "content": "Task 1",
+                    "status": "completed",
+                    "active_form": "Doing task 1"
+                },
+                {
+                    "content": "Task 2",
+                    "status": "completed",
+                    "active_form": "Doing task 2"
+                }
+            ]))
         );
     }
 

@@ -1,6 +1,5 @@
 use crate::agents::extension::PlatformExtensionContext;
 use crate::agents::mcp_client::{Error, McpClientTrait};
-use crate::session::extension_data::ExtensionState;
 use crate::session::{extension_data, SessionManager};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -21,6 +20,14 @@ pub static EXTENSION_NAME: &str = "todo";
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 struct TodoWriteParams {
     content: String,
+}
+
+fn build_todo_prompt(content: &str) -> Option<String> {
+    if content.trim().is_empty() {
+        return None;
+    }
+
+    Some(format!("Current tasks and notes:\n{}\n", content))
 }
 
 pub struct TodoClient {
@@ -105,24 +112,22 @@ impl TodoClient {
         if let Some(session_id) = &self.context.session_id {
             match SessionManager::get_session(session_id, false).await {
                 Ok(mut session) => {
-                    let todo_state = extension_data::TodoState::new(content);
-                    if todo_state
-                        .to_extension_data(&mut session.extension_data)
-                        .is_ok()
+                    if let Err(error) =
+                        extension_data::persist_todo_markdown(&mut session.extension_data, content)
                     {
-                        match SessionManager::update_session(session_id)
-                            .extension_data(session.extension_data)
-                            .apply()
-                            .await
-                        {
-                            Ok(_) => Ok(vec![Content::text(format!(
-                                "Updated ({} chars)",
-                                char_count
-                            ))]),
-                            Err(_) => Err("Failed to update session metadata".to_string()),
-                        }
-                    } else {
-                        Err("Failed to serialize TODO state".to_string())
+                        return Err(format!("Failed to serialize TODO state: {error}"));
+                    }
+
+                    match SessionManager::update_session(session_id)
+                        .extension_data(session.extension_data)
+                        .apply()
+                        .await
+                    {
+                        Ok(_) => Ok(vec![Content::text(format!(
+                            "Updated ({} chars)",
+                            char_count
+                        ))]),
+                        Err(_) => Err("Failed to update session metadata".to_string()),
                     }
                 }
                 Err(_) => Err("Failed to read session metadata".to_string()),
@@ -243,17 +248,72 @@ impl McpClientTrait for TodoClient {
     }
 
     async fn get_moim(&self) -> Option<String> {
-        let session_id = self.context.session_id.as_ref()?;
-        let metadata = SessionManager::get_session(session_id, false).await.ok()?;
-
-        match extension_data::TodoState::from_extension_data(&metadata.extension_data) {
-            Some(state) if !state.content.trim().is_empty() => {
-                Some(format!("Current tasks and notes:\n{}\n", state.content))
+        if let Some(session_id) = self.context.session_id.as_ref() {
+            if let Ok(metadata) = SessionManager::get_session(session_id, false).await {
+                if let Some(content) =
+                    extension_data::resolve_todo_markdown(&metadata.extension_data)
+                {
+                    return build_todo_prompt(&content);
+                }
             }
-            _ => Some(
-                "Current tasks and notes:\nOnce given a task, immediately update your todo with all explicit and implicit requirements\n"
-                    .to_string(),
-            ),
+        } else {
+            let fallback = self.fallback_content.read().await;
+            if let Some(prompt) = build_todo_prompt(&fallback) {
+                return Some(prompt);
+            }
         }
+
+        Some(
+            "Current tasks and notes:\nOnce given a task, immediately update your todo with all explicit and implicit requirements\n"
+                .to_string(),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::extension_data::ExtensionState;
+
+    #[test]
+    fn resolve_todo_content_prefers_structured_state() {
+        let mut extension_data = extension_data::ExtensionData::new();
+        extension_data::TodoState::new("- [ ] Legacy".to_string())
+            .to_extension_data(&mut extension_data)
+            .unwrap();
+        extension_data::TodoListState::new(vec![extension_data::TodoListItem {
+            content: "Structured".to_string(),
+            status: extension_data::TodoListItemStatus::Pending,
+            active_form: "Structuring".to_string(),
+        }])
+        .to_extension_data(&mut extension_data)
+        .unwrap();
+
+        assert_eq!(
+            extension_data::resolve_todo_markdown(&extension_data),
+            Some("- [ ] Structured".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_todo_content_falls_back_to_legacy_state() {
+        let mut extension_data = extension_data::ExtensionData::new();
+        extension_data::TodoState::new("- [ ] Legacy".to_string())
+            .to_extension_data(&mut extension_data)
+            .unwrap();
+
+        assert_eq!(
+            extension_data::resolve_todo_markdown(&extension_data),
+            Some("- [ ] Legacy".to_string())
+        );
+    }
+
+    #[test]
+    fn build_todo_prompt_ignores_blank_content() {
+        assert_eq!(build_todo_prompt("   "), None);
+        assert_eq!(
+            build_todo_prompt("- [ ] Run tests"),
+            Some("Current tasks and notes:\n- [ ] Run tests\n".to_string())
+        );
     }
 }

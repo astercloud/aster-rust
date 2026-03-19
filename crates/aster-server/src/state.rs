@@ -1,5 +1,6 @@
 use aster::execution::manager::AgentManager;
 use aster::scheduler_trait::SchedulerTrait;
+use aster::session::initialize_default_shared_sqlite_thread_runtime_store;
 use axum::http::StatusCode;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -21,6 +22,7 @@ pub struct AppState {
 
 impl AppState {
     pub async fn new() -> anyhow::Result<Arc<AppState>> {
+        initialize_default_shared_sqlite_thread_runtime_store();
         let agent_manager = AgentManager::instance().await?;
         Self::from_agent_manager(agent_manager).await
     }

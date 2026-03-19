@@ -57,6 +57,16 @@ pub fn format_messages(messages: &[Message]) -> Vec<Value> {
                             parts.push(json!({"text": text.text}));
                         }
                     }
+                    MessageContent::Image(image) => {
+                        if !image.mime_type.is_empty() && !image.data.is_empty() {
+                            parts.push(json!({
+                                "inline_data": {
+                                    "mime_type": image.mime_type,
+                                    "data": image.data,
+                                }
+                            }));
+                        }
+                    }
                     MessageContent::ToolRequest(request) => match &request.tool_call {
                         Ok(tool_call) => {
                             let mut function_call_part = Map::new();
@@ -730,6 +740,23 @@ mod tests {
         assert_eq!(payload[0]["parts"][0]["text"], "Hello");
         assert_eq!(payload[1]["role"], "model");
         assert_eq!(payload[1]["parts"][0]["text"], "World");
+    }
+
+    #[test]
+    fn test_message_to_google_spec_user_image_message() {
+        let messages = vec![Message::user()
+            .with_text("帮我看图")
+            .with_image("aGVsbG8=", "image/png")];
+        let payload = format_messages(&messages);
+
+        assert_eq!(payload.len(), 1);
+        assert_eq!(payload[0]["role"], "user");
+        assert_eq!(payload[0]["parts"][0]["text"], "帮我看图");
+        assert_eq!(
+            payload[0]["parts"][1]["inline_data"]["mime_type"],
+            "image/png"
+        );
+        assert_eq!(payload[0]["parts"][1]["inline_data"]["data"], "aGVsbG8=");
     }
 
     #[test]

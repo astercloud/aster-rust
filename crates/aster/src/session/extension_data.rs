@@ -35,6 +35,12 @@ impl ExtensionData {
         let key = format!("{}.{}", extension_name, version);
         self.extension_states.insert(key, state);
     }
+
+    /// Remove extension state for a specific extension and version
+    pub fn remove_extension_state(&mut self, extension_name: &str, version: &str) -> Option<Value> {
+        let key = format!("{}.{}", extension_name, version);
+        self.extension_states.remove(&key)
+    }
 }
 
 /// Helper trait for extension-specific state management
@@ -78,9 +84,9 @@ pub trait ExtensionState: Sized + Serialize + for<'de> Deserialize<'de> {
     }
 }
 
-/// TODO extension state implementation
+/// Legacy markdown TODO compat state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TodoState {
+pub(crate) struct TodoState {
     pub content: String,
 }
 
@@ -90,10 +96,161 @@ impl ExtensionState for TodoState {
 }
 
 impl TodoState {
-    /// Create a new TODO state
-    pub fn new(content: String) -> Self {
+    /// Create a new legacy TODO state.
+    pub(crate) fn new(content: String) -> Self {
         Self { content }
     }
+}
+
+/// 结构化 TODO 条目状态
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TodoListItemStatus {
+    #[default]
+    Pending,
+    InProgress,
+    Completed,
+}
+
+impl TodoListItemStatus {
+    fn marker(&self) -> &'static str {
+        match self {
+            Self::Pending => "[ ]",
+            Self::InProgress => "[-]",
+            Self::Completed => "[x]",
+        }
+    }
+}
+
+/// 结构化 TODO 条目
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TodoListItem {
+    pub content: String,
+    pub status: TodoListItemStatus,
+    pub active_form: String,
+}
+
+/// 结构化 TODO 清单状态
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct TodoListState {
+    #[serde(default)]
+    pub items: Vec<TodoListItem>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rendered_markdown: Option<String>,
+}
+
+impl ExtensionState for TodoListState {
+    const EXTENSION_NAME: &'static str = "todo";
+    const VERSION: &'static str = "v1";
+}
+
+impl TodoListState {
+    pub fn new(items: Vec<TodoListItem>) -> Self {
+        let rendered_markdown = Some(Self::render_items(&items));
+        Self {
+            items,
+            rendered_markdown,
+        }
+    }
+
+    pub fn from_markdown(content: impl Into<String>) -> Self {
+        let rendered_markdown = content.into();
+        let items = Self::parse_items(&rendered_markdown);
+        Self {
+            items,
+            rendered_markdown: Some(rendered_markdown),
+        }
+    }
+
+    pub fn markdown(&self) -> String {
+        self.rendered_markdown
+            .clone()
+            .unwrap_or_else(|| Self::render_items(&self.items))
+    }
+
+    fn render_items(items: &[TodoListItem]) -> String {
+        items
+            .iter()
+            .map(|item| format!("- {} {}", item.status.marker(), item.content))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn parse_items(content: &str) -> Vec<TodoListItem> {
+        content
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim_start();
+                let rest = trimmed
+                    .strip_prefix("- ")
+                    .or_else(|| trimmed.strip_prefix("* "))
+                    .or_else(|| trimmed.strip_prefix("+ "))?;
+
+                let (status, content) = if let Some(content) = rest.strip_prefix("[ ] ") {
+                    (TodoListItemStatus::Pending, content)
+                } else if let Some(content) = rest.strip_prefix("[-] ") {
+                    (TodoListItemStatus::InProgress, content)
+                } else if let Some(content) = rest.strip_prefix("[~] ") {
+                    (TodoListItemStatus::InProgress, content)
+                } else if let Some(content) = rest.strip_prefix("[x] ") {
+                    (TodoListItemStatus::Completed, content)
+                } else if let Some(content) = rest.strip_prefix("[X] ") {
+                    (TodoListItemStatus::Completed, content)
+                } else {
+                    return None;
+                };
+
+                let content = content.trim().to_string();
+                if content.is_empty() {
+                    return None;
+                }
+
+                Some(TodoListItem {
+                    active_form: content.clone(),
+                    content,
+                    status,
+                })
+            })
+            .collect()
+    }
+}
+
+/// Resolve the current structured todo state, preferring `todo.v1`
+/// and falling back to legacy `todo.v0` when needed.
+pub fn resolve_todo_list_state(extension_data: &ExtensionData) -> Option<TodoListState> {
+    TodoListState::from_extension_data(extension_data).or_else(|| {
+        TodoState::from_extension_data(extension_data)
+            .map(|state| TodoListState::from_markdown(state.content))
+    })
+}
+
+/// Resolve the current todo markdown, preferring the structured state render.
+pub fn resolve_todo_markdown(extension_data: &ExtensionData) -> Option<String> {
+    resolve_todo_list_state(extension_data)
+        .map(|state| state.markdown())
+        .filter(|content| !content.trim().is_empty())
+}
+
+fn clear_legacy_todo_state(extension_data: &mut ExtensionData) {
+    extension_data.remove_extension_state(TodoState::EXTENSION_NAME, TodoState::VERSION);
+}
+
+/// Persist structured todo state and clear the legacy markdown compat shadow on write.
+pub fn persist_todo_list_state(
+    extension_data: &mut ExtensionData,
+    todo_list_state: TodoListState,
+) -> Result<()> {
+    todo_list_state.to_extension_data(extension_data)?;
+    clear_legacy_todo_state(extension_data);
+    Ok(())
+}
+
+/// Persist markdown todo content through the unified todo state boundary.
+pub fn persist_todo_markdown(
+    extension_data: &mut ExtensionData,
+    content: impl Into<String>,
+) -> Result<()> {
+    persist_todo_list_state(extension_data, TodoListState::from_markdown(content))
 }
 
 /// Enabled extensions state implementation for storing which extensions are active
@@ -161,6 +318,93 @@ mod tests {
         let retrieved = TodoState::from_extension_data(&extension_data);
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().content, "- Task 1\n- Task 2");
+    }
+
+    #[test]
+    fn test_todo_list_state_roundtrip() {
+        let mut extension_data = ExtensionData::new();
+        let todo_list = TodoListState::new(vec![
+            TodoListItem {
+                content: "Run tests".to_string(),
+                status: TodoListItemStatus::Pending,
+                active_form: "Running tests".to_string(),
+            },
+            TodoListItem {
+                content: "Ship patch".to_string(),
+                status: TodoListItemStatus::InProgress,
+                active_form: "Shipping patch".to_string(),
+            },
+        ]);
+
+        todo_list.to_extension_data(&mut extension_data).unwrap();
+
+        let retrieved = TodoListState::from_extension_data(&extension_data).unwrap();
+        assert_eq!(retrieved.items.len(), 2);
+        assert_eq!(retrieved.markdown(), "- [ ] Run tests\n- [-] Ship patch");
+    }
+
+    #[test]
+    fn test_todo_list_state_from_markdown_preserves_content() {
+        let state = TodoListState::from_markdown(
+            "- [ ] Requirement 1\nSome free-form note\n- [x] Requirement 2",
+        );
+
+        assert_eq!(state.items.len(), 2);
+        assert_eq!(state.items[0].status, TodoListItemStatus::Pending);
+        assert_eq!(state.items[1].status, TodoListItemStatus::Completed);
+        assert_eq!(
+            state.markdown(),
+            "- [ ] Requirement 1\nSome free-form note\n- [x] Requirement 2"
+        );
+    }
+
+    #[test]
+    fn test_resolve_todo_list_state_falls_back_to_legacy_state() {
+        let mut extension_data = ExtensionData::new();
+        TodoState::new("- [ ] Legacy".to_string())
+            .to_extension_data(&mut extension_data)
+            .unwrap();
+
+        let resolved = resolve_todo_list_state(&extension_data).unwrap();
+        assert_eq!(resolved.items.len(), 1);
+        assert_eq!(resolved.markdown(), "- [ ] Legacy");
+    }
+
+    #[test]
+    fn test_persist_todo_markdown_writes_structured_state_only() {
+        let mut extension_data = ExtensionData::new();
+        persist_todo_markdown(&mut extension_data, "- [ ] Run tests").unwrap();
+
+        let resolved = resolve_todo_list_state(&extension_data).unwrap();
+        assert_eq!(resolved.markdown(), "- [ ] Run tests");
+        assert_eq!(
+            TodoState::from_extension_data(&extension_data).map(|state| state.content),
+            None
+        );
+    }
+
+    #[test]
+    fn test_persist_todo_markdown_clears_legacy_compat_state() {
+        let mut extension_data = ExtensionData::new();
+        TodoState::new("- [ ] Legacy".to_string())
+            .to_extension_data(&mut extension_data)
+            .unwrap();
+
+        persist_todo_markdown(&mut extension_data, "- [ ] Run tests").unwrap();
+
+        assert!(extension_data.get_extension_state("todo", "v1").is_some());
+        assert!(extension_data.get_extension_state("todo", "v0").is_none());
+    }
+
+    #[test]
+    fn test_remove_extension_state() {
+        let mut extension_data = ExtensionData::new();
+        extension_data.set_extension_state("todo", "v1", json!({"items": []}));
+
+        assert!(extension_data
+            .remove_extension_state("todo", "v1")
+            .is_some());
+        assert!(extension_data.get_extension_state("todo", "v1").is_none());
     }
 
     #[test]

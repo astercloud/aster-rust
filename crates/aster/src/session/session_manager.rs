@@ -12,6 +12,7 @@ use crate::session::memory::{
 use crate::session::memory_pipeline;
 use crate::session::memory_repository::MemoryRepository;
 use crate::session::memory_retriever;
+use crate::session::{get_global_session_store, SessionStore, TokenStatsUpdate};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use rmcp::model::Role;
@@ -248,6 +249,10 @@ impl SessionUpdateBuilder {
 pub struct SessionManager;
 
 impl SessionManager {
+    fn global_store() -> Option<Arc<dyn SessionStore>> {
+        get_global_session_store().ok()
+    }
+
     pub async fn instance() -> Result<Arc<SessionStorage>> {
         SESSION_STORAGE
             .get_or_try_init(|| async { SessionStorage::new().await.map(Arc::new) })
@@ -260,6 +265,9 @@ impl SessionManager {
         name: String,
         session_type: SessionType,
     ) -> Result<Session> {
+        if let Some(store) = Self::global_store() {
+            return store.create_session(working_dir, name, session_type).await;
+        }
         Self::instance()
             .await?
             .create_session(working_dir, name, session_type)
@@ -267,6 +275,9 @@ impl SessionManager {
     }
 
     pub async fn get_session(id: &str, include_messages: bool) -> Result<Session> {
+        if let Some(store) = Self::global_store() {
+            return store.get_session(id, include_messages).await;
+        }
         Self::instance()
             .await?
             .get_session(id, include_messages)
@@ -278,14 +289,25 @@ impl SessionManager {
     }
 
     async fn apply_update(builder: SessionUpdateBuilder) -> Result<()> {
+        if let Some(store) = Self::global_store() {
+            if Self::can_apply_update_via_store(&builder) {
+                return Self::apply_update_via_store(store, builder).await;
+            }
+        }
         Self::instance().await?.apply_update(builder).await
     }
 
     pub async fn add_message(id: &str, message: &Message) -> Result<()> {
+        if let Some(store) = Self::global_store() {
+            return store.add_message(id, message).await;
+        }
         Self::instance().await?.add_message(id, message).await
     }
 
     pub async fn replace_conversation(id: &str, conversation: &Conversation) -> Result<()> {
+        if let Some(store) = Self::global_store() {
+            return store.replace_conversation(id, conversation).await;
+        }
         Self::instance()
             .await?
             .replace_conversation(id, conversation)
@@ -293,30 +315,51 @@ impl SessionManager {
     }
 
     pub async fn list_sessions() -> Result<Vec<Session>> {
+        if let Some(store) = Self::global_store() {
+            return store.list_sessions().await;
+        }
         Self::instance().await?.list_sessions().await
     }
 
     pub async fn list_sessions_by_types(types: &[SessionType]) -> Result<Vec<Session>> {
+        if let Some(store) = Self::global_store() {
+            return store.list_sessions_by_types(types).await;
+        }
         Self::instance().await?.list_sessions_by_types(types).await
     }
 
     pub async fn delete_session(id: &str) -> Result<()> {
+        if let Some(store) = Self::global_store() {
+            return store.delete_session(id).await;
+        }
         Self::instance().await?.delete_session(id).await
     }
 
     pub async fn get_insights() -> Result<SessionInsights> {
+        if let Some(store) = Self::global_store() {
+            return store.get_insights().await;
+        }
         Self::instance().await?.get_insights().await
     }
 
     pub async fn export_session(id: &str) -> Result<String> {
+        if let Some(store) = Self::global_store() {
+            return store.export_session(id).await;
+        }
         Self::instance().await?.export_session(id).await
     }
 
     pub async fn import_session(json: &str) -> Result<Session> {
+        if let Some(store) = Self::global_store() {
+            return store.import_session(json).await;
+        }
         Self::instance().await?.import_session(json).await
     }
 
     pub async fn copy_session(session_id: &str, new_name: String) -> Result<Session> {
+        if let Some(store) = Self::global_store() {
+            return store.copy_session(session_id, new_name).await;
+        }
         Self::instance()
             .await?
             .copy_session(session_id, new_name)
@@ -324,6 +367,9 @@ impl SessionManager {
     }
 
     pub async fn truncate_conversation(session_id: &str, timestamp: i64) -> Result<()> {
+        if let Some(store) = Self::global_store() {
+            return store.truncate_conversation(session_id, timestamp).await;
+        }
         Self::instance()
             .await?
             .truncate_conversation(session_id, timestamp)
@@ -404,6 +450,95 @@ impl SessionManager {
 
     pub async fn memory_health() -> Result<MemoryHealth> {
         Self::instance().await?.memory_health().await
+    }
+
+    fn can_apply_update_via_store(builder: &SessionUpdateBuilder) -> bool {
+        builder.session_type.is_none()
+            && builder.working_dir.is_none()
+            && !(builder.user_set_name.is_some() && builder.name.is_none())
+    }
+
+    async fn apply_update_via_store(
+        store: Arc<dyn SessionStore>,
+        builder: SessionUpdateBuilder,
+    ) -> Result<()> {
+        let SessionUpdateBuilder {
+            session_id,
+            name,
+            user_set_name,
+            session_type: _,
+            working_dir: _,
+            extension_data,
+            total_tokens,
+            input_tokens,
+            output_tokens,
+            accumulated_total_tokens,
+            accumulated_input_tokens,
+            accumulated_output_tokens,
+            schedule_id,
+            recipe,
+            user_recipe_values,
+            provider_name,
+            model_config,
+        } = builder;
+
+        if let Some(name) = name {
+            store
+                .update_session_name(&session_id, name, user_set_name.unwrap_or(false))
+                .await?;
+        }
+
+        if let Some(extension_data) = extension_data {
+            store
+                .update_extension_data(&session_id, extension_data)
+                .await?;
+        }
+
+        if total_tokens.is_some()
+            || input_tokens.is_some()
+            || output_tokens.is_some()
+            || accumulated_total_tokens.is_some()
+            || accumulated_input_tokens.is_some()
+            || accumulated_output_tokens.is_some()
+            || schedule_id.is_some()
+        {
+            store
+                .update_token_stats(
+                    &session_id,
+                    TokenStatsUpdate {
+                        schedule_id: schedule_id.flatten(),
+                        total_tokens: total_tokens.flatten(),
+                        input_tokens: input_tokens.flatten(),
+                        output_tokens: output_tokens.flatten(),
+                        accumulated_total: accumulated_total_tokens.flatten(),
+                        accumulated_input: accumulated_input_tokens.flatten(),
+                        accumulated_output: accumulated_output_tokens.flatten(),
+                    },
+                )
+                .await?;
+        }
+
+        if recipe.is_some() || user_recipe_values.is_some() {
+            store
+                .update_recipe(
+                    &session_id,
+                    recipe.unwrap_or(None),
+                    user_recipe_values.unwrap_or(None),
+                )
+                .await?;
+        }
+
+        if provider_name.is_some() || model_config.is_some() {
+            store
+                .update_provider_config(
+                    &session_id,
+                    provider_name.unwrap_or(None),
+                    model_config.unwrap_or(None),
+                )
+                .await?;
+        }
+
+        Ok(())
     }
 }
 

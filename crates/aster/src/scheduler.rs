@@ -17,7 +17,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
@@ -36,7 +36,7 @@ use crate::providers::create;
 use crate::recipe::Recipe;
 use crate::scheduler_trait::SchedulerTrait;
 use crate::session::session_manager::SessionType;
-use crate::session::{shared_thread_runtime_store, Session, SessionManager};
+use crate::session::{Session, SessionManager};
 
 type RunningTasksMap = HashMap<String, CancellationToken>;
 type JobsMap = HashMap<String, (JobId, ScheduledJob)>;
@@ -738,7 +738,8 @@ async fn execute_job(
         }
     };
 
-    let agent = Agent::new().with_thread_runtime_store(shared_thread_runtime_store());
+    let agent = Agent::new_with_required_shared_thread_runtime_store()
+        .context("Scheduler 执行任务前必须先初始化 shared thread runtime store")?;
 
     let config = Config::global();
     let provider_name = config.get_aster_provider()?;

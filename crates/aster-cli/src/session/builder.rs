@@ -145,8 +145,7 @@ async fn offer_extension_debugging_help(
     );
 
     // Create a minimal agent for debugging
-    let debug_agent =
-        Agent::new().with_thread_runtime_store(aster::session::shared_thread_runtime_store());
+    let debug_agent = Agent::new_with_required_shared_thread_runtime_store()?;
 
     let session = SessionManager::create_session(
         std::env::current_dir()?,
@@ -300,8 +299,10 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
             .with_temperature(temperature)
     };
 
-    let agent: Agent =
-        Agent::new().with_thread_runtime_store(aster::session::shared_thread_runtime_store());
+    let agent: Agent = Agent::new_with_required_shared_thread_runtime_store().unwrap_or_else(|e| {
+        output::render_error(&format!("Failed to initialize thread runtime store: {}", e));
+        process::exit(1);
+    });
 
     agent
         .apply_recipe_components(

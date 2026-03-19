@@ -4,8 +4,8 @@ use crate::config::paths::Paths;
 use crate::config::Config;
 use crate::scheduler::Scheduler;
 use crate::scheduler_trait::SchedulerTrait;
-use crate::session::{shared_thread_runtime_store, ThreadRuntimeStore};
-use anyhow::Result;
+use crate::session::{require_shared_thread_runtime_store, ThreadRuntimeStore};
+use anyhow::{Context, Result};
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -53,7 +53,8 @@ impl AgentManager {
                     .unwrap_or(DEFAULT_MAX_SESSION);
                 let manager = Self::new_with_thread_runtime_store(
                     Some(max_sessions),
-                    shared_thread_runtime_store(),
+                    require_shared_thread_runtime_store()
+                        .context("AgentManager 启动前必须先初始化 shared thread runtime store")?,
                 )
                 .await?;
                 Ok(Arc::new(manager))

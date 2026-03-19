@@ -29,7 +29,6 @@ pub mod plan_mode_tool;
 pub mod search;
 pub mod task_output_tool;
 pub mod task_tool;
-pub mod three_files_tool;
 pub mod todo_write_tool;
 pub mod web;
 pub mod workflow_integration;
@@ -96,9 +95,6 @@ pub use notebook_edit_tool::{NotebookCell, NotebookContent, NotebookEditInput, N
 pub use plan_mode_tool::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState, SavedPlan};
 pub use task_output_tool::TaskOutputTool;
 pub use task_tool::TaskTool;
-pub use three_files_tool::{
-    DecisionInfo, ErrorInfo, PhaseUpdate, ThreeStageWorkflowTool, WorkflowParams,
-};
 pub use todo_write_tool::{TodoItem, TodoStatus, TodoStorage, TodoWriteTool};
 
 // Web tools
@@ -280,9 +276,6 @@ pub fn register_all_tools(
     // Register Image Analysis tools
     registry.register(Box::new(AnalyzeImageTool::new()));
 
-    // Register Three-Stage Workflow tool
-    registry.register(Box::new(ThreeStageWorkflowTool::default()));
-
     (shared_history, hook_manager)
 }
 
@@ -332,8 +325,6 @@ mod tests {
         assert!(registry.contains("WebFetch"));
         assert!(registry.contains("WebSearch"));
         assert!(registry.contains("analyze_image"));
-        assert!(registry.contains("three_stage_workflow"));
-
         // AskTool and LSPTool should not be registered without callbacks
         assert!(!registry.contains("ask"));
         assert!(!registry.contains("lsp"));
@@ -385,7 +376,6 @@ mod tests {
         assert!(registry.contains("WebFetch"));
         assert!(registry.contains("WebSearch"));
         assert!(registry.contains("analyze_image"));
-        assert!(registry.contains("three_stage_workflow"));
     }
 
     #[test]

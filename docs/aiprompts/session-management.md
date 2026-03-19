@@ -10,8 +10,14 @@
 
 - `SessionManager` 负责会话与对话消息的持久化。
 - `Thread / Turn / Item runtime` 统一收口到 `ThreadRuntimeStore`。
-- 生产入口默认使用 `shared_thread_runtime_store()`，不再以 `InMemoryThreadRuntimeStore` 作为主链事实源。
-- `SessionManager::delete_session()` 会同步清理 runtime 残留；调用方不应再自行拼装第二套删除语义。
+- `aster::session` 只保留 `initialize_*` / `require_*` 这组 current API；旧的 `shared_thread_runtime_store()` / `shared_session_runtime_queue_service()` 隐式 fallback 已从框架面删除。
+- 初始化 shared thread runtime store 时会同步固定 shared runtime queue service，避免 `require_shared_session_runtime_queue_service()` 在热路径隐式补初始化。
+- `aster-cli` 会在 `main()` 启动阶段先初始化 shared SQLite runtime store，CLI 构造 Agent 时优先消费 `Agent::new_with_required_shared_thread_runtime_store()`。
+- `aster-server` 现在会在 `AppState::new()` 中先初始化 shared SQLite runtime store，再创建 `AgentManager`。
+- `AgentManager::instance()` 与 scheduler 执行路径现在都依赖已初始化的 shared runtime store；它们不再承担隐式 fallback 初始化职责。
+- 宿主默认 Agent 构造应优先使用 `Agent::new_with_required_shared_thread_runtime_store()`，不要在 CLI / scheduler / server 里重复手搓 `Agent::new() + with_thread_runtime_store(...)`。
+- 运行时热路径优先使用 `require_shared_thread_runtime_store()` / `require_shared_session_runtime_queue_service()`，避免隐式 fallback。
+- `SessionManager::delete_session()` 会同步清理 runtime 残留；若宿主未初始化 shared runtime store，则只记录告警，不再隐式回退到默认路径。
 
 如果某个入口需要测试隔离，应显式注入 `InMemoryThreadRuntimeStore`，而不是让生产入口继续回退到内存态。
 
@@ -220,18 +226,12 @@ pub fn schedule_cleanup(interval: Duration);
 
 ```rust
 pub struct ExtensionData {
-    pub enabled_extensions: EnabledExtensionsState,
-    pub todo_state: Option<TodoState>,
-    pub custom: HashMap<String, Value>,
+    pub extension_states: HashMap<String, Value>,
 }
 
 pub struct EnabledExtensionsState {
-    pub extensions: Vec<ExtensionState>,
+    pub extensions: Vec<ExtensionConfig>,
 }
 
-pub struct ExtensionState {
-    pub name: String,
-    pub config: ExtensionConfig,
-    pub enabled: bool,
-}
+// TODO 使用结构化 `todo.v1`，legacy `todo.v0` 仅保留在兼容读取边界
 ```

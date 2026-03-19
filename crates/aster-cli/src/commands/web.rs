@@ -160,8 +160,7 @@ pub async fn handle_web(
     )
     .await?;
 
-    let agent =
-        Agent::new().with_thread_runtime_store(aster::session::shared_thread_runtime_store());
+    let agent = Agent::new_with_required_shared_thread_runtime_store()?;
     let provider = aster::providers::create(&provider_name, model_config).await?;
     agent.update_provider(provider, &init_session.id).await?;
 

@@ -308,8 +308,7 @@ impl AsterAcpAgent {
         )
         .await?;
 
-        let agent =
-            Agent::new().with_thread_runtime_store(aster::session::shared_thread_runtime_store());
+        let agent = Agent::new_with_required_shared_thread_runtime_store()?;
         agent.update_provider(provider.clone(), &session.id).await?;
 
         let extensions_to_run: Vec<_> = get_all_extensions()

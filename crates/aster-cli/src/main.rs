@@ -1,4 +1,5 @@
 use anyhow::Result;
+use aster::session::initialize_default_shared_sqlite_thread_runtime_store;
 use aster_cli::cli::cli;
 
 #[tokio::main]
@@ -6,6 +7,8 @@ async fn main() -> Result<()> {
     if let Err(e) = aster_cli::logging::setup_logging(None, None) {
         eprintln!("Warning: Failed to initialize logging: {}", e);
     }
+
+    initialize_default_shared_sqlite_thread_runtime_store();
 
     let result = cli().await;
 

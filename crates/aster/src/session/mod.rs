@@ -23,6 +23,7 @@
 //! ```
 
 mod archive;
+mod bootstrap;
 mod chat_history_search;
 mod cleanup;
 mod diagnostics;
@@ -37,12 +38,17 @@ mod memory_pipeline;
 mod memory_repository;
 mod memory_retriever;
 pub mod resume;
+mod runtime_queue;
 mod runtime_store;
 pub mod session_manager;
 mod statistics;
 mod store;
 
 // 导出存储抽象
+pub use bootstrap::{
+    initialize_shared_session_runtime_with_root, load_shared_session_runtime_snapshot,
+    require_shared_session_runtime_store,
+};
 pub use store::{
     get_global_session_store, is_global_session_store_set, set_global_session_store,
     ChatHistoryMatch, NoopSessionStore, SessionStore, TokenStatsUpdate,
@@ -61,7 +67,10 @@ pub use diagnostics::generate_diagnostics;
 pub use export::{
     bulk_export_sessions, export_session, export_session_to_file, ExportFormat, ExportOptions,
 };
-pub use extension_data::{EnabledExtensionsState, ExtensionData, ExtensionState, TodoState};
+pub use extension_data::{
+    EnabledExtensionsState, ExtensionData, ExtensionState, TodoListItem, TodoListItemStatus,
+    TodoListState,
+};
 pub use fork::{
     fork_session, get_session_branch_tree, merge_sessions, ForkMetadata, ForkOptions, MergeOptions,
     MergeStrategy, MetadataStrategy, SessionBranchTree,
@@ -74,11 +83,18 @@ pub use resume::{
     build_resume_message, delete_summary, has_summary, list_summaries, load_summary,
     load_summary_data, save_summary, SummaryCacheData,
 };
+pub use runtime_queue::{
+    require_shared_session_runtime_queue_service, RuntimeQueueSubmitResult,
+    SessionRuntimeQueueService,
+};
 pub use runtime_store::{
-    delete_shared_thread_runtime_session, shared_thread_runtime_store, InMemoryThreadRuntimeStore,
-    ItemRuntime, ItemRuntimePayload, ItemStatus, NoopThreadRuntimeStore, SessionRuntimeSnapshot,
-    SqliteThreadRuntimeStore, ThreadRuntime, ThreadRuntimeSnapshot, ThreadRuntimeStore,
-    ThreadStatus, TurnContextOverride, TurnRuntime, TurnStatus,
+    delete_shared_thread_runtime_session, initialize_default_shared_sqlite_thread_runtime_store,
+    initialize_shared_sqlite_thread_runtime_store, initialize_shared_thread_runtime_store,
+    load_session_runtime_snapshot, require_shared_thread_runtime_store, InMemoryThreadRuntimeStore,
+    ItemRuntime, ItemRuntimePayload, ItemStatus, NoopThreadRuntimeStore, QueuedTurnRuntime,
+    SessionExecutionGate, SessionRuntimeSnapshot, SqliteThreadRuntimeStore, ThreadRuntime,
+    ThreadRuntimeSnapshot, ThreadRuntimeStore, ThreadStatus, TurnContextOverride, TurnRuntime,
+    TurnStatus, RUNTIME_DB_NAME,
 };
 pub use session_manager::{Session, SessionInsights, SessionManager, SessionType};
 pub use statistics::{

@@ -1,6 +1,6 @@
 //! 工具钩子系统集成示例
 //!
-//! 展示如何在 aster-rust 工具执行流程中集成三阶段工作流和钩子系统
+//! 展示如何在 aster-rust 工具执行流程中集成通用 workflow 与钩子系统
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -21,8 +21,7 @@ impl Default for WorkflowIntegratedTool {
     fn default() -> Self {
         Self {
             name: "workflow_integrated_tool".to_string(),
-            description: "Demonstrates three-stage workflow integration with hook system"
-                .to_string(),
+            description: "Demonstrates workflow integration with hook system".to_string(),
             hook_manager: None,
         }
     }

@@ -48,9 +48,9 @@ use crate::scheduler_trait::SchedulerTrait;
 use crate::security::security_inspector::SecurityInspector;
 use crate::session::extension_data::{EnabledExtensionsState, ExtensionState};
 use crate::session::{
-    InMemoryThreadRuntimeStore, ItemRuntime, ItemRuntimePayload, ItemStatus, Session,
-    SessionManager, SessionRuntimeSnapshot, SessionStore, SessionType, ThreadRuntime,
-    ThreadRuntimeSnapshot, ThreadRuntimeStore, TurnRuntime, TurnStatus,
+    load_session_runtime_snapshot, require_shared_thread_runtime_store, InMemoryThreadRuntimeStore,
+    ItemRuntime, ItemRuntimePayload, ItemStatus, Session, SessionManager, SessionRuntimeSnapshot,
+    SessionStore, SessionType, ThreadRuntime, ThreadRuntimeStore, TurnRuntime, TurnStatus,
 };
 use crate::tool_inspection::ToolInspectionManager;
 use crate::tool_monitor::RepetitionInspector;
@@ -70,6 +70,178 @@ use tracing::{debug, error, info, instrument, warn};
 
 const DEFAULT_MAX_TURNS: u32 = 1000;
 const COMPACTION_THINKING_TEXT: &str = "aster is compacting the conversation...";
+const PROPOSED_PLAN_OPEN: &str = "<proposed_plan>";
+const PROPOSED_PLAN_CLOSE: &str = "</proposed_plan>";
+const FILE_ARTIFACT_METADATA_KEYS: [&str; 9] = [
+    "path",
+    "file_path",
+    "filePath",
+    "output_file",
+    "output_path",
+    "outputPath",
+    "artifact_path",
+    "artifact_paths",
+    "absolute_path",
+];
+
+fn extract_proposed_plan_block(text: &str) -> Option<String> {
+    let start = text.find(PROPOSED_PLAN_OPEN)?;
+    let remainder = text.get(start + PROPOSED_PLAN_OPEN.len()..)?;
+    let end = remainder.find(PROPOSED_PLAN_CLOSE)?;
+    let content = remainder.get(..end)?.trim();
+    if content.is_empty() {
+        None
+    } else {
+        Some(content.to_string())
+    }
+}
+
+fn collect_string_values(value: &Value) -> Vec<String> {
+    match value {
+        Value::String(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                Vec::new()
+            } else {
+                vec![trimmed.to_string()]
+            }
+        }
+        Value::Array(items) => items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn push_unique_file_path(target: &mut Vec<String>, raw: &str) {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || target.iter().any(|item| item == trimmed) {
+        return;
+    }
+    target.push(trimmed.to_string());
+}
+
+fn extract_file_artifacts(metadata: Option<&Value>) -> Vec<(String, Option<String>)> {
+    let Some(object) = metadata.and_then(Value::as_object) else {
+        return Vec::new();
+    };
+
+    let mut paths = Vec::new();
+    for key in FILE_ARTIFACT_METADATA_KEYS {
+        let Some(value) = object.get(key) else {
+            continue;
+        };
+        for path in collect_string_values(value) {
+            push_unique_file_path(&mut paths, path.as_str());
+        }
+    }
+
+    let artifact_ids = object
+        .get("artifact_ids")
+        .map(collect_string_values)
+        .unwrap_or_default();
+    let single_artifact_id = object
+        .get("artifact_id")
+        .or_else(|| object.get("artifactId"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    paths
+        .into_iter()
+        .enumerate()
+        .map(|(index, path)| {
+            (
+                path,
+                artifact_ids.get(index).cloned().or_else(|| {
+                    if index == 0 {
+                        single_artifact_id.clone()
+                    } else {
+                        None
+                    }
+                }),
+            )
+        })
+        .collect()
+}
+
+fn resolve_file_artifact_status(metadata: Option<&Value>) -> ItemStatus {
+    let write_phase = metadata
+        .and_then(|value| value.get("writePhase"))
+        .and_then(Value::as_str);
+    if matches!(write_phase, Some("failed")) {
+        return ItemStatus::Failed;
+    }
+
+    match metadata
+        .and_then(|value| value.get("complete"))
+        .and_then(Value::as_bool)
+    {
+        Some(false) => ItemStatus::InProgress,
+        _ => ItemStatus::Completed,
+    }
+}
+
+fn resolve_file_artifact_source(metadata: Option<&Value>) -> String {
+    metadata
+        .and_then(|value| value.get("lastUpdateSource"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "tool_result".to_string())
+}
+
+fn extract_tool_result_metadata<T: serde::Serialize>(result: &T) -> Option<Value> {
+    fn find_metadata(value: &Value, depth: usize) -> Option<Value> {
+        const JSON_RECURSION_LIMIT: usize = 16;
+
+        if depth >= JSON_RECURSION_LIMIT {
+            return None;
+        }
+
+        let object = value.as_object()?;
+
+        for key in [
+            "metadata",
+            "meta",
+            "_meta",
+            "structured_content",
+            "structuredContent",
+        ] {
+            let Some(nested) = object.get(key) else {
+                continue;
+            };
+
+            if let Some(record) = nested.as_object() {
+                if !record.is_empty() {
+                    return Some(Value::Object(record.clone()));
+                }
+            }
+
+            if let Some(found) = find_metadata(nested, depth + 1) {
+                return Some(found);
+            }
+        }
+
+        for nested in object.values() {
+            if let Some(found) = find_metadata(nested, depth + 1) {
+                return Some(found);
+            }
+        }
+
+        None
+    }
+
+    serde_json::to_value(result)
+        .ok()
+        .and_then(|value| find_metadata(&value, 0))
+}
 
 /// Context needed for the reply function
 pub struct ReplyContext {
@@ -192,7 +364,7 @@ impl TurnItemRuntimeProjector {
         message
             .content
             .iter()
-            .filter_map(|content| self.project_message_content(message, content))
+            .flat_map(|content| self.project_message_content(message, content))
             .collect()
     }
 
@@ -200,20 +372,25 @@ impl TurnItemRuntimeProjector {
         &mut self,
         message: &Message,
         content: &MessageContent,
-    ) -> Option<AgentEvent> {
+    ) -> Vec<AgentEvent> {
         match content {
             MessageContent::Text(text_content) => self.project_text_content(message, text_content),
-            MessageContent::Thinking(thinking_content) => {
-                self.project_thinking_content(message, thinking_content)
-            }
-            MessageContent::ToolRequest(tool_request) => self.project_tool_request(tool_request),
+            MessageContent::Thinking(thinking_content) => self
+                .project_thinking_content(message, thinking_content)
+                .into_iter()
+                .collect(),
+            MessageContent::ToolRequest(tool_request) => self
+                .project_tool_request(tool_request)
+                .into_iter()
+                .collect(),
             MessageContent::ToolResponse(tool_response) => {
-                Some(self.project_tool_response(tool_response))
+                self.project_tool_response(tool_response)
             }
-            MessageContent::ActionRequired(action_required) => {
-                self.project_action_required(action_required)
-            }
-            _ => None,
+            MessageContent::ActionRequired(action_required) => self
+                .project_action_required(action_required)
+                .into_iter()
+                .collect(),
+            _ => Vec::new(),
         }
     }
 
@@ -221,18 +398,28 @@ impl TurnItemRuntimeProjector {
         &mut self,
         message: &Message,
         text_content: &TextContent,
-    ) -> Option<AgentEvent> {
+    ) -> Vec<AgentEvent> {
         if text_content.text.trim().is_empty() {
-            return None;
+            return Vec::new();
         }
 
         let item_id = self.message_item_id(message, "assistant");
         let next_text = self.append_agent_message_text(&item_id, &text_content.text);
-
-        Some(self.upsert_in_progress(
+        let mut events = vec![self.upsert_in_progress(
             item_id,
-            ItemRuntimePayload::AgentMessage { text: next_text },
-        ))
+            ItemRuntimePayload::AgentMessage {
+                text: next_text.clone(),
+            },
+        )];
+
+        if let Some(plan_text) = extract_proposed_plan_block(&next_text) {
+            events.push(self.upsert_in_progress(
+                format!("plan:{}", self.turn_id),
+                ItemRuntimePayload::Plan { text: plan_text },
+            ));
+        }
+
+        events
     }
 
     fn project_thinking_content(
@@ -268,7 +455,7 @@ impl TurnItemRuntimeProjector {
         ))
     }
 
-    fn project_tool_response(&mut self, tool_response: &ToolResponse) -> AgentEvent {
+    fn project_tool_response(&mut self, tool_response: &ToolResponse) -> Vec<AgentEvent> {
         let existing = self.items.get(&tool_response.id).cloned();
         let (tool_name, arguments) = match existing.as_ref().map(|item| &item.payload) {
             Some(ItemRuntimePayload::ToolCall {
@@ -287,8 +474,7 @@ impl TurnItemRuntimeProjector {
             ),
             Err(err) => (None, Some(false), Some(err.to_string()), ItemStatus::Failed),
         };
-
-        self.complete_item(
+        let tool_event = self.complete_item(
             tool_response.id.clone(),
             ItemRuntimePayload::ToolCall {
                 tool_name,
@@ -303,7 +489,42 @@ impl TurnItemRuntimeProjector {
                 .as_ref()
                 .map(|item| item.started_at)
                 .unwrap_or_else(Utc::now),
-        )
+        );
+
+        let artifact_metadata = tool_response
+            .tool_result
+            .as_ref()
+            .ok()
+            .and_then(extract_tool_result_metadata);
+        let artifact_status = resolve_file_artifact_status(artifact_metadata.as_ref());
+        let artifact_source = resolve_file_artifact_source(artifact_metadata.as_ref());
+
+        let mut events = vec![tool_event];
+        for (path, artifact_id) in extract_file_artifacts(artifact_metadata.as_ref()) {
+            let item_id =
+                artifact_id.unwrap_or_else(|| format!("artifact:{}:{}", tool_response.id, path));
+            let payload = ItemRuntimePayload::FileArtifact {
+                path,
+                source: artifact_source.clone(),
+                content: None,
+                metadata: artifact_metadata.clone(),
+            };
+
+            let event = match artifact_status {
+                ItemStatus::InProgress => self.upsert_in_progress(item_id, payload),
+                ItemStatus::Completed | ItemStatus::Failed => {
+                    let started_at = self
+                        .items
+                        .get(&item_id)
+                        .map(|item| item.started_at)
+                        .unwrap_or_else(Utc::now);
+                    self.complete_item(item_id, payload, artifact_status, started_at)
+                }
+            };
+            events.push(event);
+        }
+
+        events
     }
 
     fn project_action_required(&mut self, action_required: &ActionRequired) -> Option<AgentEvent> {
@@ -532,6 +753,10 @@ impl Agent {
             session_store: None, // 默认使用全局 SessionManager
             thread_runtime_store: Arc::new(InMemoryThreadRuntimeStore::default()),
         }
+    }
+
+    pub fn new_with_required_shared_thread_runtime_store() -> Result<Self> {
+        Ok(Self::new().with_thread_runtime_store(require_shared_thread_runtime_store()?))
     }
 
     /// 设置自定义 session 存储
@@ -812,6 +1037,26 @@ impl Agent {
             .as_ref()
             .cloned()
             .ok_or_else(|| anyhow!("Missing turn id after session normalization"))?;
+        if let Some(mut existing) = self.thread_runtime_store.get_turn(&turn_id).await? {
+            let mut changed = false;
+
+            if existing.input_text.is_none() && input_text.is_some() {
+                existing.input_text = input_text;
+                changed = true;
+            }
+            if existing.context_override.is_none() && session_config.turn_context.is_some() {
+                existing.context_override = session_config.turn_context.clone();
+                changed = true;
+            }
+
+            if changed {
+                existing.updated_at = Utc::now();
+                return self.thread_runtime_store.update_turn(existing).await;
+            }
+
+            return Ok(existing);
+        }
+
         let thread_id = session_config.resolved_thread_id().to_string();
         let turn = TurnRuntime::new(
             turn_id,
@@ -909,24 +1154,103 @@ impl Agent {
         Ok(())
     }
 
-    pub async fn runtime_snapshot(&self, session_id: &str) -> Result<SessionRuntimeSnapshot> {
-        let threads = self.thread_runtime_store.list_threads(session_id).await?;
-        let mut snapshots = Vec::with_capacity(threads.len());
+    fn runtime_status_item_id(turn_id: &str) -> String {
+        format!("turn_summary:{turn_id}")
+    }
 
-        for thread in threads {
-            let turns = self.thread_runtime_store.list_turns(&thread.id).await?;
-            let items = self.thread_runtime_store.list_items(&thread.id).await?;
-            snapshots.push(ThreadRuntimeSnapshot {
-                thread,
-                turns,
-                items,
-            });
+    pub async fn ensure_runtime_turn_initialized(
+        &self,
+        session_config: &SessionConfig,
+        input_text: Option<String>,
+    ) -> Result<TurnRuntime> {
+        let session_config = session_config.clone().with_runtime_defaults();
+        let session = self.store_get_session(&session_config.id, false).await?;
+        self.ensure_thread_runtime(&session, &session_config)
+            .await?;
+        self.create_turn_runtime(&session, &session_config, input_text)
+            .await
+    }
+
+    pub async fn upsert_runtime_status_item(
+        &self,
+        session_config: &SessionConfig,
+        phase: impl Into<String>,
+        title: impl Into<String>,
+        detail: impl Into<String>,
+        checkpoints: Vec<String>,
+    ) -> Result<AgentEvent> {
+        let turn = self
+            .ensure_runtime_turn_initialized(session_config, None)
+            .await?;
+        let item_id = Self::runtime_status_item_id(&turn.id);
+        let payload = ItemRuntimePayload::RuntimeStatus {
+            phase: phase.into(),
+            title: title.into(),
+            detail: detail.into(),
+            checkpoints,
+        };
+        let now = Utc::now();
+
+        if let Some(mut existing) = self.thread_runtime_store.get_item(&item_id).await? {
+            existing.status = ItemStatus::InProgress;
+            existing.completed_at = None;
+            existing.updated_at = now;
+            existing.payload = payload;
+            let item = self.thread_runtime_store.update_item(existing).await?;
+            return Ok(AgentEvent::ItemUpdated { item });
         }
 
-        Ok(SessionRuntimeSnapshot {
-            session_id: session_id.to_string(),
-            threads: snapshots,
-        })
+        let next_sequence = self
+            .thread_runtime_store
+            .list_items(&turn.thread_id)
+            .await?
+            .into_iter()
+            .map(|item| item.sequence)
+            .max()
+            .unwrap_or(0)
+            + 1;
+        let item = ItemRuntime {
+            id: item_id,
+            thread_id: turn.thread_id,
+            turn_id: turn.id,
+            sequence: next_sequence,
+            status: ItemStatus::InProgress,
+            started_at: now,
+            completed_at: None,
+            updated_at: now,
+            payload,
+        };
+        let item = self.thread_runtime_store.create_item(item).await?;
+        Ok(AgentEvent::ItemStarted { item })
+    }
+
+    pub async fn complete_runtime_status_item(
+        &self,
+        session_config: &SessionConfig,
+    ) -> Result<Option<AgentEvent>> {
+        let session_config = session_config.clone().with_runtime_defaults();
+        let Some(turn_id) = session_config.turn_id.as_ref() else {
+            return Ok(None);
+        };
+        let item_id = Self::runtime_status_item_id(turn_id);
+        let Some(mut item) = self.thread_runtime_store.get_item(&item_id).await? else {
+            return Ok(None);
+        };
+
+        if item.status == ItemStatus::Completed {
+            return Ok(None);
+        }
+
+        let now = Utc::now();
+        item.status = ItemStatus::Completed;
+        item.completed_at = Some(now);
+        item.updated_at = now;
+        let item = self.thread_runtime_store.update_item(item).await?;
+        Ok(Some(AgentEvent::ItemCompleted { item }))
+    }
+
+    pub async fn runtime_snapshot(&self, session_id: &str) -> Result<SessionRuntimeSnapshot> {
+        load_session_runtime_snapshot(self.thread_runtime_store.as_ref(), session_id).await
     }
 
     // ========== End Session 存储辅助方法 ==========
@@ -2644,6 +2968,101 @@ impl Agent {
 mod tests {
     use super::*;
     use crate::recipe::Response;
+    use crate::session::{initialize_shared_thread_runtime_store, InMemoryThreadRuntimeStore};
+    use std::sync::Arc;
+
+    #[test]
+    fn test_new_with_required_shared_thread_runtime_store_uses_initialized_store() {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+        assert!(Agent::new_with_required_shared_thread_runtime_store().is_ok());
+    }
+
+    #[test]
+    fn test_extract_proposed_plan_block_returns_inner_markdown() {
+        let text = "前言\n<proposed_plan>\n- 调研\n- 实现\n</proposed_plan>\n结尾";
+        assert_eq!(
+            extract_proposed_plan_block(text).as_deref(),
+            Some("- 调研\n- 实现")
+        );
+    }
+
+    #[test]
+    fn test_project_message_emits_plan_runtime_item() {
+        let turn = TurnRuntime::new(
+            "turn-1",
+            "session-1",
+            "thread-1",
+            Some("实现计划".to_string()),
+            None,
+        );
+        let mut projector = TurnItemRuntimeProjector::new(&turn);
+        let message = Message::assistant()
+            .with_text("先说明\n<proposed_plan>\n- 调研\n- 实现\n</proposed_plan>\n再继续");
+
+        let events = projector.project_agent_event(&AgentEvent::Message(message));
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                AgentEvent::ItemStarted { item } | AgentEvent::ItemUpdated { item }
+                    if matches!(&item.payload, ItemRuntimePayload::Plan { text } if text == "- 调研\n- 实现")
+            )),
+            "应生成显式的 plan runtime item"
+        );
+    }
+
+    #[test]
+    fn test_project_tool_response_emits_file_artifact_runtime_item() {
+        let turn = TurnRuntime::new(
+            "turn-1",
+            "session-1",
+            "thread-1",
+            Some("生成产物".to_string()),
+            None,
+        );
+        let mut projector = TurnItemRuntimeProjector::new(&turn);
+        let mut artifact_meta = rmcp::model::Meta::new();
+        artifact_meta.0.insert(
+            "output_file".to_string(),
+            Value::String("/tmp/result.md".to_string()),
+        );
+        artifact_meta.0.insert(
+            "artifact_id".to_string(),
+            Value::String("artifact-1".to_string()),
+        );
+
+        let message = Message::user().with_tool_response(
+            "tool-call-1",
+            Ok(CallToolResult {
+                content: vec![Content::text("写入完成")],
+                structured_content: None,
+                is_error: Some(false),
+                meta: Some(artifact_meta),
+            }),
+        );
+
+        let events = projector.project_agent_event(&AgentEvent::Message(message));
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                AgentEvent::ItemCompleted { item }
+                    if item.id == "artifact-1"
+                        && matches!(
+                            &item.payload,
+                            ItemRuntimePayload::FileArtifact { path, source, content, metadata }
+                                if path == "/tmp/result.md"
+                                    && source == "tool_result"
+                                    && content.is_none()
+                                    && metadata
+                                        .as_ref()
+                                        .and_then(|value| value.get("output_file"))
+                                        == Some(&Value::String("/tmp/result.md".to_string()))
+                        )
+            )),
+            "应生成显式的 file artifact runtime item"
+        );
+    }
 
     #[tokio::test]
     async fn test_add_final_output_tool() -> Result<()> {

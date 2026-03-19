@@ -11,6 +11,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::ops::Deref;
 
+fn convert_image_to_input_image(mime_type: &str, data: &str) -> Value {
+    json!({
+        "type": "input_image",
+        "image_url": format!("data:{mime_type};base64,{data}")
+    })
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResponsesApiResponse {
     pub id: String,
@@ -250,18 +257,30 @@ fn add_conversation_history(input_items: &mut Vec<Value>, messages: &[Message]) 
 
         let mut content_items = Vec::new();
         for content in &message.content {
-            if let MessageContent::Text(text) = content {
-                if !text.text.is_empty() {
-                    let content_type = if message.role == Role::Assistant {
-                        "output_text"
-                    } else {
-                        "input_text"
-                    };
-                    content_items.push(json!({
-                        "type": content_type,
-                        "text": text.text
-                    }));
+            match content {
+                MessageContent::Text(text) => {
+                    if !text.text.is_empty() {
+                        let content_type = if message.role == Role::Assistant {
+                            "output_text"
+                        } else {
+                            "input_text"
+                        };
+                        content_items.push(json!({
+                            "type": content_type,
+                            "text": text.text
+                        }));
+                    }
                 }
+                MessageContent::Image(image) => {
+                    if message.role == Role::User
+                        && !image.mime_type.is_empty()
+                        && !image.data.is_empty()
+                    {
+                        content_items
+                            .push(convert_image_to_input_image(&image.mime_type, &image.data));
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -730,5 +749,39 @@ mod tests {
         let description = payload["tools"][0]["description"].as_str().unwrap_or("");
         assert!(description.contains("Input examples:"));
         assert!(description.contains("Critical"));
+    }
+
+    #[test]
+    fn test_create_responses_request_preserves_user_images() {
+        let model_config = ModelConfig::new("gpt-5.4").unwrap();
+        let message = Message::user()
+            .with_text("请识别这张图")
+            .with_image("aGVsbG8=", "image/png");
+
+        let payload = create_responses_request(&model_config, "", &[message], &[]).unwrap();
+        let content = payload["input"][0]["content"].as_array().unwrap();
+
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["type"], "input_text");
+        assert_eq!(content[1]["type"], "input_image");
+        assert_eq!(content[1]["image_url"], "data:image/png;base64,aGVsbG8=");
+    }
+
+    #[test]
+    fn test_create_responses_request_preserves_multiple_user_images() {
+        let model_config = ModelConfig::new("gpt-5.4").unwrap();
+        let message = Message::user()
+            .with_text("请对比两张图")
+            .with_image("Zmlyc3Q=", "image/png")
+            .with_image("c2Vjb25k", "image/jpeg");
+
+        let payload = create_responses_request(&model_config, "", &[message], &[]).unwrap();
+        let content = payload["input"][0]["content"].as_array().unwrap();
+
+        assert_eq!(content.len(), 3);
+        assert_eq!(content[1]["type"], "input_image");
+        assert_eq!(content[1]["image_url"], "data:image/png;base64,Zmlyc3Q=");
+        assert_eq!(content[2]["type"], "input_image");
+        assert_eq!(content[2]["image_url"], "data:image/jpeg;base64,c2Vjb25k");
     }
 }
