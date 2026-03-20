@@ -43,6 +43,7 @@ mod runtime_store;
 pub mod session_manager;
 mod statistics;
 mod store;
+mod subagent;
 
 // 导出存储抽象
 pub use bootstrap::{
@@ -99,4 +100,8 @@ pub use runtime_store::{
 pub use session_manager::{Session, SessionInsights, SessionManager, SessionType};
 pub use statistics::{
     calculate_statistics, generate_report, get_all_statistics, SessionStatistics, SessionSummary,
+};
+pub use subagent::{
+    list_subagent_child_sessions, list_subagent_sessions_with_metadata,
+    resolve_subagent_session_metadata, SubagentSessionMetadata, SUBAGENT_SESSION_ORIGIN_TOOL,
 };

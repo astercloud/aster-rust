@@ -16,9 +16,10 @@ use crate::providers;
 use crate::recipe::build_recipe::build_recipe_from_template;
 use crate::recipe::local_recipes::load_local_recipe_file;
 use crate::recipe::{Recipe, SubRecipe};
-use crate::session::SessionManager;
+use crate::session::{SessionManager, SubagentSessionMetadata};
 
 pub const SUBAGENT_TOOL_NAME: &str = "subagent";
+const SUBAGENT_TASK_SUMMARY_MAX_CHARS: usize = 160;
 
 const SUMMARY_INSTRUCTIONS: &str = r#"
 Important: Your parent agent will only receive your final message as a summary of your work.
@@ -35,6 +36,7 @@ Be concise but complete.
 pub struct SubagentParams {
     pub instructions: Option<String>,
     pub subrecipe: Option<String>,
+    pub role_hint: Option<String>,
     pub parameters: Option<HashMap<String, Value>>,
     pub extensions: Option<Vec<String>>,
     pub settings: Option<SubagentSettings>,
@@ -73,6 +75,10 @@ pub fn create_subagent_tool(sub_recipes: &[SubRecipe]) -> Tool {
             "subrecipe": {
                 "type": "string",
                 "description": "Name of a predefined subrecipe to run."
+            },
+            "role_hint": {
+                "type": "string",
+                "description": "Optional role or display label for the subagent, for example 'planner' or 'Image #1'."
             },
             "parameters": {
                 "type": "object",
@@ -261,9 +267,17 @@ async fn execute_subagent(
     working_dir: PathBuf,
     cancellation_token: Option<CancellationToken>,
 ) -> Result<rmcp::model::CallToolResult, ErrorData> {
+    let task_config = apply_settings_overrides(task_config, &params)
+        .await
+        .map_err(|e| ErrorData {
+            code: ErrorCode::INVALID_PARAMS,
+            message: Cow::from(e.to_string()),
+            data: None,
+        })?;
+
     let session = SessionManager::create_session(
         working_dir,
-        "Subagent task".to_string(),
+        build_subagent_session_name(&params, &recipe),
         crate::session::session_manager::SessionType::SubAgent,
     )
     .await
@@ -273,13 +287,20 @@ async fn execute_subagent(
         data: None,
     })?;
 
-    let task_config = apply_settings_overrides(task_config, &params)
-        .await
-        .map_err(|e| ErrorData {
-            code: ErrorCode::INVALID_PARAMS,
-            message: Cow::from(e.to_string()),
-            data: None,
-        })?;
+    persist_subagent_session_metadata(
+        &session.id,
+        &session,
+        build_subagent_session_metadata(&task_config, &params, &recipe),
+    )
+    .await
+    .map_err(|e| ErrorData {
+        code: ErrorCode::INTERNAL_ERROR,
+        message: Cow::from(format!(
+            "Failed to persist subagent session metadata: {}",
+            e
+        )),
+        data: None,
+    })?;
 
     let result = run_complete_subagent_task(
         recipe,
@@ -304,6 +325,126 @@ async fn execute_subagent(
             data: None,
         }),
     }
+}
+
+fn build_subagent_session_metadata(
+    task_config: &TaskConfig,
+    params: &SubagentParams,
+    recipe: &Recipe,
+) -> SubagentSessionMetadata {
+    SubagentSessionMetadata::new(task_config.parent_session_id.clone())
+        .with_task_summary(build_subagent_task_summary(params, recipe))
+        .with_role_hint(build_subagent_role_hint(params))
+        .with_created_from_turn_id(resolve_parent_turn_id(&task_config.parent_session_id))
+}
+
+fn build_subagent_task_summary(params: &SubagentParams, recipe: &Recipe) -> Option<String> {
+    let subrecipe_name = params
+        .subrecipe
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let instruction_preview = params
+        .instructions
+        .as_deref()
+        .map(normalize_whitespace)
+        .filter(|value| !value.is_empty())
+        .map(|value| truncate_chars(&value, SUBAGENT_TASK_SUMMARY_MAX_CHARS));
+
+    match (subrecipe_name, instruction_preview) {
+        (Some(subrecipe), Some(instruction)) => Some(truncate_chars(
+            &format!("Run subrecipe `{}`: {}", subrecipe, instruction),
+            SUBAGENT_TASK_SUMMARY_MAX_CHARS,
+        )),
+        (Some(subrecipe), None) => Some(truncate_chars(
+            &format!("Run subrecipe `{}`", subrecipe),
+            SUBAGENT_TASK_SUMMARY_MAX_CHARS,
+        )),
+        (None, Some(instruction)) => Some(instruction),
+        (None, None) => {
+            let title = recipe.title.trim();
+            if title.is_empty() {
+                None
+            } else {
+                Some(truncate_chars(title, SUBAGENT_TASK_SUMMARY_MAX_CHARS))
+            }
+        }
+    }
+}
+
+fn build_subagent_role_hint(params: &SubagentParams) -> Option<String> {
+    normalize_subagent_label(params.role_hint.as_deref())
+        .or_else(|| normalize_subagent_label(params.subrecipe.as_deref()))
+}
+
+fn resolve_parent_turn_id(parent_session_id: &str) -> Option<String> {
+    let scope = crate::session_context::current_action_scope()?;
+    if scope.session_id.as_deref() != Some(parent_session_id) {
+        return None;
+    }
+
+    normalize_optional_identifier(scope.turn_id)
+}
+
+fn build_subagent_session_name(params: &SubagentParams, recipe: &Recipe) -> String {
+    build_subagent_role_hint(params)
+        .or_else(|| {
+            build_subagent_task_summary(params, recipe)
+                .map(|summary| truncate_chars(&summary, SUBAGENT_TASK_SUMMARY_MAX_CHARS))
+        })
+        .unwrap_or_else(|| "Subagent task".to_string())
+}
+
+fn normalize_whitespace(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn normalize_subagent_label(value: Option<&str>) -> Option<String> {
+    let normalized = value
+        .map(normalize_whitespace)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+fn normalize_optional_identifier(value: Option<String>) -> Option<String> {
+    let normalized = value?.trim().to_string();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value.to_string();
+    }
+
+    if max_chars <= 3 {
+        return value.chars().take(max_chars).collect();
+    }
+
+    let truncated: String = value.chars().take(max_chars - 3).collect();
+    format!("{}...", truncated)
+}
+
+async fn persist_subagent_session_metadata(
+    session_id: &str,
+    session: &crate::session::Session,
+    metadata: SubagentSessionMetadata,
+) -> Result<()> {
+    let extension_data = metadata.into_updated_extension_data(session)?;
+    SessionManager::update_session(session_id)
+        .extension_data(extension_data)
+        .apply()
+        .await
 }
 
 fn build_recipe(
@@ -444,6 +585,7 @@ async fn apply_settings_overrides(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::conversation::message::ActionRequiredScope;
 
     #[test]
     fn test_tool_name() {
@@ -514,6 +656,7 @@ mod tests {
         let params: SubagentParams = serde_json::from_value(json!({
             "instructions": "Extra context",
             "subrecipe": "my_recipe",
+            "role_hint": "Image #1",
             "parameters": {"key": "value"},
             "extensions": ["developer"],
             "settings": {"model": "gpt-4"},
@@ -523,8 +666,154 @@ mod tests {
 
         assert_eq!(params.instructions, Some("Extra context".to_string()));
         assert_eq!(params.subrecipe, Some("my_recipe".to_string()));
+        assert_eq!(params.role_hint, Some("Image #1".to_string()));
         assert!(params.parameters.is_some());
         assert_eq!(params.extensions, Some(vec!["developer".to_string()]));
         assert!(!params.summary);
+    }
+
+    #[test]
+    fn test_build_subagent_task_summary_prefers_subrecipe_and_instruction_preview() {
+        let params = SubagentParams {
+            instructions: Some("Investigate   the    failing \n integration test".to_string()),
+            subrecipe: Some("debug_failure".to_string()),
+            role_hint: None,
+            parameters: None,
+            extensions: None,
+            settings: None,
+            summary: true,
+            images: None,
+        };
+
+        let recipe = Recipe::builder()
+            .version("1.0.0")
+            .title("Fallback title")
+            .description("Fallback description")
+            .instructions("Unused")
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            build_subagent_task_summary(&params, &recipe),
+            Some(
+                "Run subrecipe `debug_failure`: Investigate the failing integration test"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn test_build_subagent_task_summary_falls_back_to_recipe_title() {
+        let params = SubagentParams {
+            instructions: None,
+            subrecipe: None,
+            role_hint: None,
+            parameters: None,
+            extensions: None,
+            settings: None,
+            summary: true,
+            images: None,
+        };
+
+        let recipe = Recipe::builder()
+            .version("1.0.0")
+            .title("Subagent Task")
+            .description("Ad-hoc task")
+            .instructions("Inspect the repository")
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            build_subagent_task_summary(&params, &recipe),
+            Some("Subagent Task".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_subagent_role_hint_prefers_explicit_role_hint() {
+        let params = SubagentParams {
+            instructions: None,
+            subrecipe: Some("planner_recipe".to_string()),
+            role_hint: Some("Image #1".to_string()),
+            parameters: None,
+            extensions: None,
+            settings: None,
+            summary: true,
+            images: None,
+        };
+
+        assert_eq!(
+            build_subagent_role_hint(&params),
+            Some("Image #1".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_subagent_session_name_prefers_role_hint() {
+        let params = SubagentParams {
+            instructions: Some("处理图片风格统一".to_string()),
+            subrecipe: Some("image_pipeline".to_string()),
+            role_hint: Some("Image #1".to_string()),
+            parameters: None,
+            extensions: None,
+            settings: None,
+            summary: true,
+            images: None,
+        };
+
+        let recipe = Recipe::builder()
+            .version("1.0.0")
+            .title("Fallback title")
+            .description("Fallback description")
+            .instructions("Unused")
+            .build()
+            .unwrap();
+
+        assert_eq!(build_subagent_session_name(&params, &recipe), "Image #1");
+    }
+
+    #[tokio::test]
+    async fn test_build_subagent_session_metadata_uses_current_parent_turn_id() {
+        let params = SubagentParams {
+            instructions: Some("处理图片风格统一".to_string()),
+            subrecipe: Some("image_pipeline".to_string()),
+            role_hint: Some("Image #1".to_string()),
+            parameters: None,
+            extensions: None,
+            settings: None,
+            summary: true,
+            images: None,
+        };
+        let recipe = Recipe::builder()
+            .version("1.0.0")
+            .title("Fallback title")
+            .description("Fallback description")
+            .instructions("Unused")
+            .build()
+            .unwrap();
+        let task_config = TaskConfig {
+            provider: std::sync::Arc::new(
+                crate::providers::testprovider::TestProvider::new_replaying(
+                    "/tmp/aster-subagent-tool-metadata.json",
+                )
+                .expect("provider"),
+            ),
+            parent_session_id: "parent-session-1".to_string(),
+            parent_working_dir: PathBuf::from("/tmp/workspace-parent"),
+            extensions: Vec::new(),
+            max_turns: Some(3),
+        };
+        let scope = ActionRequiredScope {
+            session_id: Some("parent-session-1".to_string()),
+            thread_id: Some("thread-1".to_string()),
+            turn_id: Some("turn-1".to_string()),
+        };
+
+        let metadata = crate::session_context::with_action_scope(scope, async move {
+            build_subagent_session_metadata(&task_config, &params, &recipe)
+        })
+        .await;
+
+        assert_eq!(metadata.created_from_turn_id.as_deref(), Some("turn-1"));
     }
 }

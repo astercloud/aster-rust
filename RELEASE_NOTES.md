@@ -1,64 +1,55 @@
-# Release v0.19.0
+# Release v0.20.0
 
 ## 🎉 主要功能
 
-### 共享运行时队列与启动引导
+### Assistant tool 调用保持原子消息结构
 
-新增共享 `SessionRuntimeQueueService` 与启动辅助能力，让多入口场景可以在同一套 runtime store 之上协调执行：
+本次更新调整了 assistant 响应在工具调用前后的归一化策略，确保推理、正文与 tool request 保持在同一条 provider 回合消息中：
 
-- **共享初始化**：新增 `initialize_shared_thread_runtime_store`、`require_shared_thread_runtime_store` 与 session bootstrap 辅助逻辑
-- **排队执行**：支持 `QueuedTurnRuntime` 持久化、按 session 排队、取出下一轮以及清理队列
-- **跨进程一致性**：SQLite 与内存存储都支持 queued turn 生命周期管理
+- **原子回合保留**：不再把 thinking 与 tool request 人工拆成多条 assistant 消息
+- **请求归一化**：在分类工具请求时回写标准化后的 `ToolRequest`，保留 metadata 与 tool meta
+- **多工具顺序稳定**：多个 tool request 会按原始顺序重新组装，减少后续 provider 回放歧义
 
-### 运行时项目投影增强
+### OpenAI / DeepSeek reasoning_content 往返增强
 
-`Agent` 的运行时事件投影能力继续扩展，支持把更多结构化信息落到 runtime items：
+围绕 `reasoning_content` 的格式转换链路做了补强，改善带推理内容的 tool calling 兼容性：
 
-- **计划块提取**：自动识别 `<proposed_plan>`，生成显式 plan runtime item
-- **文件产物追踪**：从工具返回元数据中提取 artifact path / id，写入 file artifact runtime item
-- **状态项更新**：补齐 runtime status item 的初始化、更新与完成链路
+- **完整推理拼接**：格式化消息时会保留多段 Thinking 内容并合并写入 `reasoning_content`
+- **响应反序列化补齐**：从 OpenAI 风格响应恢复消息时，支持把 `reasoning_content` 还原成 Thinking 内容
+- **工具调用协同**：带 reasoning 的 assistant tool-call 消息在下一轮发送时更完整
 
-### TODO 状态结构化演进
+### Subagent 会话元数据落盘
 
-TODO 扩展从单纯 markdown 兼容态继续演进到结构化清单：
+新增 subagent session metadata 能力，让父子会话关系和展示语义更清晰：
 
-- **优先使用 `todo.v1`**：运行时优先读取结构化 `TodoListState`
-- **保留兼容回退**：仍支持 legacy `todo.v0` markdown 状态
-- **工具链收口**：`todo_write_tool` 与 workflow 集成统一走结构化 TODO 解析/持久化
+- **父会话关联**：记录 `parent_session_id` 与来源工具
+- **任务摘要**：自动生成 subrecipe / instructions 摘要，便于会话列表识别
+- **角色提示**：支持显式 `role_hint`，用于展示更友好的子代理标签
+- **来源 turn 追踪**：在上下文可用时记录创建该 subagent 的父 turn id
 
 ## 🔧 改进
 
-### CLI / Server / Scheduler 对齐
+### Session 元数据查询能力
 
-- CLI 会话构建器与命令入口改为显式接入共享 runtime store
-- Server 状态管理补齐 runtime queue 与共享 store 初始化
-- Scheduler、ExecutionManager 与 SessionManager 的 runtime 协作链路进一步收口
+- 导出 subagent session metadata 相关查询与列表方法
+- 支持按父会话筛选并按更新时间倒序返回子会话
 
-### 工具系统精简
+### 测试覆盖补强
 
-- 移除 `three_files_tool`
-- 保留并加强 TODO / workflow 现役路径，减少平行实现
-
-### Provider 与格式细节修正
-
-- 调整 Google / OpenAI Responses 格式处理，改善与新的 runtime item 投影协作
-
-## 📝 文档
-
-- 更新 `docs/aiprompts/session-management.md`，补充共享 runtime store、队列与状态投影说明
+- 为 tool request 归一化、reasoning_content 往返与 subagent metadata 新增针对性测试
+- 补充多工具、多段推理与 parent turn 透传场景断言
 
 ## 🔄 Breaking Changes
 
-- 依赖共享 runtime store 的入口现在要求先完成 bootstrap / initialize，再创建带必需 store 的 `Agent`
-- `three_files_tool` 已移除，依赖该工具名的外部调用需要切换到现役工具路径
-- TODO 扩展优先读取结构化状态，依赖 legacy markdown 直读的逻辑需要适配
+- 依赖把 thinking 与 tool request 拆成独立 assistant 消息的下游逻辑，需要改为兼容新的原子消息结构
+- Subagent 工具新增 `role_hint` 参数；如果有自定义 schema 校验，需要同步更新
 
 ## 🐛 Bug 修复
 
-- 修复 `todo_extension` 测试作用域缺失 trait 导入导致的编译问题
-- 修复 CLI session builder 中 fallible runtime store 初始化的错误处理
-- 修复严格 clippy 下字符串切片、large enum variant 与 `manual_map` 报警
+- 修复部分 provider 在 assistant 工具调用回合丢失推理内容，导致下一轮请求上下文不完整的问题
+- 修复 tool request 标准化后 metadata / tool meta 可能未回写到原始响应结构的问题
+- 修复 subagent 会话创建后缺少结构化元数据，导致父子关系与展示信息缺失的问题
 
 ---
 
-**完整变更**: v0.18.0...v0.19.0
+**完整变更**: v0.19.0...v0.20.0

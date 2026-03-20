@@ -68,8 +68,8 @@ pub fn format_messages(messages: &[Message], image_format: &ImageFormat) -> Vec<
         let mut output = Vec::new();
         let mut content_array = Vec::new();
         let mut text_array = Vec::new();
-        // 收集 Thinking 内容用于 DeepSeek reasoner 的 reasoning_content
-        let mut reasoning_content: Option<String> = None;
+        // 收集完整 Thinking 内容用于 DeepSeek reasoner 的 reasoning_content
+        let mut reasoning_content = String::new();
 
         for content in &message.content {
             match content {
@@ -88,9 +88,9 @@ pub fn format_messages(messages: &[Message], image_format: &ImageFormat) -> Vec<
                     }
                 }
                 MessageContent::Thinking(thinking) => {
-                    // 保存 Thinking 内容用于 DeepSeek reasoner 的 reasoning_content
+                    // 保留完整 Thinking 内容，避免多段推理在下一轮 tool 调用时丢失
                     if !thinking.thinking.is_empty() {
-                        reasoning_content = Some(thinking.thinking.clone());
+                        reasoning_content.push_str(&thinking.thinking);
                     }
                 }
                 MessageContent::RedactedThinking(_) => {
@@ -254,8 +254,8 @@ pub fn format_messages(messages: &[Message], image_format: &ImageFormat) -> Vec<
         }
 
         // 添加 reasoning_content 字段（用于 DeepSeek reasoner 模型）
-        if let Some(reasoning) = reasoning_content {
-            converted["reasoning_content"] = json!(reasoning);
+        if !reasoning_content.is_empty() {
+            converted["reasoning_content"] = json!(reasoning_content);
         }
 
         if converted.get("content").is_some() || converted.get("tool_calls").is_some() {
@@ -305,6 +305,12 @@ pub fn response_to_message(response: &Value) -> anyhow::Result<Message> {
     };
 
     let mut content = Vec::new();
+
+    if let Some(reasoning) = original.get("reasoning_content").and_then(|v| v.as_str()) {
+        if !reasoning.is_empty() {
+            content.push(MessageContent::thinking(reasoning, ""));
+        }
+    }
 
     if let Some(text) = original.get("content") {
         if let Some(text_str) = text.as_str() {
@@ -854,6 +860,37 @@ mod tests {
     }
 
     #[test]
+    fn test_format_messages_preserves_full_reasoning_content_with_tool_calls() -> anyhow::Result<()>
+    {
+        let message = Message::assistant()
+            .with_thinking("第一段推理。", "")
+            .with_thinking("第二段推理。", "")
+            .with_tool_request(
+                "tool1",
+                Ok(CallToolRequestParam {
+                    name: "example".into(),
+                    arguments: Some(object!({"param1": "value1"})),
+                }),
+            )
+            .with_tool_request(
+                "tool2",
+                Ok(CallToolRequestParam {
+                    name: "example_two".into(),
+                    arguments: Some(object!({"param2": "value2"})),
+                }),
+            );
+
+        let spec = format_messages(&[message], &ImageFormat::OpenAi);
+
+        assert_eq!(spec.len(), 1);
+        assert_eq!(spec[0]["role"], "assistant");
+        assert_eq!(spec[0]["reasoning_content"], "第一段推理。第二段推理。");
+        assert_eq!(spec[0]["tool_calls"].as_array().map(Vec::len), Some(2));
+
+        Ok(())
+    }
+
+    #[test]
     fn test_format_tools() -> anyhow::Result<()> {
         let tool = Tool::new(
             "test_tool",
@@ -1103,6 +1140,33 @@ mod tests {
             panic!("Expected Text content");
         }
         assert!(matches!(message.role, Role::Assistant));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_response_to_message_with_reasoning_content() -> anyhow::Result<()> {
+        let response = json!({
+            "choices": [{
+                "role": "assistant",
+                "message": {
+                    "reasoning_content": "先推理，再调用工具。",
+                    "tool_calls": [{
+                        "id": "tool-1",
+                        "type": "function",
+                        "function": {
+                            "name": "example_fn",
+                            "arguments": "{\"param\": \"value\"}"
+                        }
+                    }]
+                }
+            }]
+        });
+
+        let message = response_to_message(&response)?;
+        assert_eq!(message.content.len(), 2);
+        assert!(matches!(message.content[0], MessageContent::Thinking(_)));
+        assert!(matches!(message.content[1], MessageContent::ToolRequest(_)));
 
         Ok(())
     }

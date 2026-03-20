@@ -95,6 +95,33 @@ fn coerce_tool_arguments(
     Some(coerced)
 }
 
+fn normalize_response_tool_requests(response: &Message, tool_requests: &[ToolRequest]) -> Message {
+    let mut normalized_response = response.clone();
+    let mut normalized_content = Vec::with_capacity(response.content.len());
+    let mut tool_request_index = 0;
+
+    for content in &response.content {
+        match content {
+            MessageContent::ToolRequest(_) => {
+                if let Some(request) = tool_requests.get(tool_request_index) {
+                    normalized_content.push(MessageContent::ToolRequest(request.clone()));
+                }
+                tool_request_index += 1;
+            }
+            _ => normalized_content.push(content.clone()),
+        }
+    }
+
+    debug_assert_eq!(
+        tool_request_index,
+        tool_requests.len(),
+        "normalized tool request count should match response tool request count",
+    );
+
+    normalized_response.content = normalized_content;
+    normalized_response
+}
+
 async fn toolshim_postprocess(
     response: Message,
     toolshim_tools: &[Tool],
@@ -262,7 +289,7 @@ impl Agent {
         &self,
         response: &Message,
         tools: &[Tool],
-    ) -> (Vec<ToolRequest>, Vec<ToolRequest>, Message) {
+    ) -> (Vec<ToolRequest>, Vec<ToolRequest>, Message, Message) {
         // First collect all tool requests with coercion applied
         let tool_requests: Vec<ToolRequest> = response
             .content
@@ -326,6 +353,8 @@ impl Agent {
             filtered_message = filtered_message.with_id(id);
         }
 
+        let normalized_response = normalize_response_tool_requests(response, &tool_requests);
+
         // Categorize tool requests
         let mut frontend_requests = Vec::new();
         let mut other_requests = Vec::new();
@@ -343,7 +372,12 @@ impl Agent {
             }
         }
 
-        (frontend_requests, other_requests, filtered_message)
+        (
+            frontend_requests,
+            other_requests,
+            filtered_message,
+            normalized_response,
+        )
     }
 
     pub(crate) async fn update_session_metrics(
@@ -420,7 +454,7 @@ impl Agent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::conversation::message::Message;
+    use crate::conversation::message::{Message, MessageContent, ToolRequest};
     use crate::model::ModelConfig;
     use crate::providers::base::{Provider, ProviderUsage, Usage};
     use crate::providers::errors::ProviderError;
@@ -593,5 +627,100 @@ mod tests {
         assert_eq!(names, sorted);
 
         Ok(())
+    }
+
+    #[test]
+    fn normalize_response_tool_requests_keeps_thinking_and_original_request_order() {
+        let response = Message::assistant()
+            .with_thinking("先分析问题。", "")
+            .with_text("准备并行调用两个工具。")
+            .with_tool_request(
+                "tool-1",
+                Ok(rmcp::model::CallToolRequestParam {
+                    name: "developer__shell".into(),
+                    arguments: Some(object!({"command": "ls"})),
+                }),
+            )
+            .with_tool_request(
+                "tool-2",
+                Ok(rmcp::model::CallToolRequestParam {
+                    name: "developer__read".into(),
+                    arguments: Some(object!({"path": "Cargo.toml"})),
+                }),
+            );
+
+        let normalized = normalize_response_tool_requests(
+            &response,
+            &[
+                ToolRequest {
+                    id: "tool-1".to_string(),
+                    tool_call: Ok(rmcp::model::CallToolRequestParam {
+                        name: "developer__shell".into(),
+                        arguments: Some(object!({"command": "ls"})),
+                    }),
+                    metadata: Some(serde_json::Map::from_iter([(
+                        "source".to_string(),
+                        Value::String("normalized-1".to_string()),
+                    )])),
+                    tool_meta: Some(json!({"title": "Shell"})),
+                },
+                ToolRequest {
+                    id: "tool-2".to_string(),
+                    tool_call: Ok(rmcp::model::CallToolRequestParam {
+                        name: "developer__read".into(),
+                        arguments: Some(object!({"path": "Cargo.toml"})),
+                    }),
+                    metadata: Some(serde_json::Map::from_iter([(
+                        "source".to_string(),
+                        Value::String("normalized-2".to_string()),
+                    )])),
+                    tool_meta: Some(json!({"title": "Read"})),
+                },
+            ],
+        );
+
+        assert_eq!(normalized.content.len(), 4);
+        assert!(matches!(normalized.content[0], MessageContent::Thinking(_)));
+        assert!(matches!(normalized.content[1], MessageContent::Text(_)));
+
+        let MessageContent::ToolRequest(first_request) = &normalized.content[2] else {
+            panic!("third content should be the first normalized tool request");
+        };
+        let MessageContent::ToolRequest(second_request) = &normalized.content[3] else {
+            panic!("fourth content should be the second normalized tool request");
+        };
+
+        assert_eq!(
+            first_request
+                .metadata
+                .as_ref()
+                .and_then(|value| value.get("source"))
+                .and_then(|value| value.as_str()),
+            Some("normalized-1"),
+        );
+        assert_eq!(
+            second_request
+                .metadata
+                .as_ref()
+                .and_then(|value| value.get("source"))
+                .and_then(|value| value.as_str()),
+            Some("normalized-2"),
+        );
+        assert_eq!(
+            first_request
+                .tool_meta
+                .as_ref()
+                .and_then(|value| value.get("title"))
+                .and_then(|value| value.as_str()),
+            Some("Shell"),
+        );
+        assert_eq!(
+            second_request
+                .tool_meta
+                .as_ref()
+                .and_then(|value| value.get("title"))
+                .and_then(|value| value.as_str()),
+            Some("Read"),
+        );
     }
 }

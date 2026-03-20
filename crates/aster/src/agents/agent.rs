@@ -258,6 +258,7 @@ pub struct ToolCategorizeResult {
     pub frontend_requests: Vec<ToolRequest>,
     pub remaining_requests: Vec<ToolRequest>,
     pub filtered_response: Message,
+    pub normalized_response: Message,
 }
 
 /// The main aster Agent
@@ -1464,13 +1465,14 @@ impl Agent {
         tools: &[rmcp::model::Tool],
     ) -> ToolCategorizeResult {
         // Categorize tool requests
-        let (frontend_requests, remaining_requests, filtered_response) =
+        let (frontend_requests, remaining_requests, filtered_response, normalized_response) =
             self.categorize_tool_requests(response, tools).await;
 
         ToolCategorizeResult {
             frontend_requests,
             remaining_requests,
             filtered_response,
+            normalized_response,
         }
     }
 
@@ -2348,6 +2350,7 @@ impl Agent {
                                     frontend_requests,
                                     remaining_requests,
                                     filtered_response,
+                                    normalized_response,
                                 } = self.categorize_tools(&response, &tools).await;
 
                                 yield AgentEvent::Message(filtered_response.clone());
@@ -2355,7 +2358,7 @@ impl Agent {
 
                                 let num_tool_requests = frontend_requests.len() + remaining_requests.len();
                                 if num_tool_requests == 0 {
-                                    messages_to_add.push(response.clone());
+                                    messages_to_add.push(normalized_response);
                                     continue;
                                 }
 
@@ -2511,32 +2514,14 @@ impl Agent {
                                     }
                                 }
 
-                                // Preserve thinking content from the original response
-                                // Gemini (and other thinking models) require thinking to be echoed back
-                                let thinking_content: Vec<MessageContent> = response.content.iter()
-                                    .filter(|c| matches!(c, MessageContent::Thinking(_)))
-                                    .cloned()
-                                    .collect();
-                                if !thinking_content.is_empty() {
-                                    let thinking_msg = Message::new(
-                                        response.role.clone(),
-                                        response.created,
-                                        thinking_content,
-                                    ).with_id(format!("msg_{}", Uuid::new_v4()));
-                                    messages_to_add.push(thinking_msg);
-                                }
+                                // Preserve the original assistant turn as one atomic provider round:
+                                // thinking/text/tool requests must stay together so providers like
+                                // DeepSeek can receive reasoning_content on the same assistant
+                                // tool-call message during the next turn.
+                                messages_to_add.push(normalized_response);
 
                                 for (idx, request) in frontend_requests.iter().chain(remaining_requests.iter()).enumerate() {
                                     if request.tool_call.is_ok() {
-                                        let request_msg = Message::assistant()
-                                            .with_id(format!("msg_{}", Uuid::new_v4()))
-                                            .with_tool_request_with_metadata(
-                                                request.id.clone(),
-                                                request.tool_call.clone(),
-                                                request.metadata.as_ref(),
-                                                request.tool_meta.clone(),
-                                            );
-                                        messages_to_add.push(request_msg);
                                         let final_response = tool_response_messages[idx]
                                                                 .lock().await.clone();
                                         yield AgentEvent::Message(final_response.clone());
