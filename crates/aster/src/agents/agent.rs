@@ -1009,7 +1009,11 @@ impl Agent {
         stream: BoxStream<'a, Result<AgentEvent>>,
     ) -> BoxStream<'a, Result<AgentEvent>> {
         let scope = session_config.runtime_scope();
-        Box::pin(crate::session_context::scope_stream(scope, stream))
+        Box::pin(crate::session_context::scope_stream(
+            scope,
+            session_config.turn_context.clone(),
+            stream,
+        ))
     }
 
     async fn ensure_thread_runtime(

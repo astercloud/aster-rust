@@ -5,7 +5,7 @@ use super::errors::ProviderError;
 use super::formats::openai::{create_request, get_usage, response_to_message};
 use super::formats::openai_responses::{
     create_responses_request, get_responses_usage, responses_api_to_message,
-    responses_api_to_streaming_message, ResponsesApiResponse,
+    responses_api_to_streaming_message, ResponsesApiResponse, ResponsesRequestOptions,
 };
 use super::retry::ProviderRetry;
 use super::utils::{
@@ -209,6 +209,77 @@ impl OpenAiProvider {
         Self::force_responses_api() || Self::looks_like_codex_responses_model(model_name)
     }
 
+    fn normalize_optional_text(value: Option<&str>) -> Option<String> {
+        value
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    }
+
+    fn resolve_previous_response_id_from_turn_context() -> Option<String> {
+        let turn_context = crate::session_context::current_turn_context()?;
+        let provider_continuation = turn_context
+            .metadata
+            .get("provider_continuation")?
+            .as_object()?;
+        if provider_continuation
+            .get("enabled")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            return None;
+        }
+        if provider_continuation
+            .get("kind")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            != Some("previous_response_id")
+        {
+            return None;
+        }
+
+        Self::normalize_optional_text(
+            provider_continuation
+                .get("previous_response_id")
+                .and_then(Value::as_str),
+        )
+    }
+
+    fn split_messages_after_response_id<'a>(
+        messages: &'a [Message],
+        previous_response_id: &str,
+    ) -> Option<&'a [Message]> {
+        let boundary = messages.iter().rposition(|message| {
+            Self::normalize_optional_text(message.id.as_deref()).as_deref()
+                == Some(previous_response_id)
+        })?;
+        Some(&messages[boundary + 1..])
+    }
+
+    fn resolve_responses_request_context(
+        messages: &[Message],
+    ) -> (&[Message], ResponsesRequestOptions) {
+        let Some(previous_response_id) = Self::resolve_previous_response_id_from_turn_context()
+        else {
+            return (messages, ResponsesRequestOptions::default());
+        };
+
+        let Some(incremental_messages) =
+            Self::split_messages_after_response_id(messages, previous_response_id.as_str())
+        else {
+            tracing::warn!(
+                previous_response_id = %previous_response_id,
+                "OpenAI Responses continuation 边界未命中历史消息，降级为完整历史重放"
+            );
+            return (messages, ResponsesRequestOptions::default());
+        };
+
+        (
+            incremental_messages,
+            ResponsesRequestOptions::with_previous_response_id(previous_response_id),
+        )
+    }
+
     async fn post(&self, payload: &Value) -> Result<Value, ProviderError> {
         let response = self
             .api_client
@@ -272,7 +343,9 @@ impl Provider for OpenAiProvider {
         tools: &[Tool],
     ) -> Result<(Message, ProviderUsage), ProviderError> {
         if Self::uses_responses_api(&model_config.model_name) {
-            let payload = create_responses_request(model_config, system, messages, tools)?;
+            let (messages, request_options) = Self::resolve_responses_request_context(messages);
+            let payload =
+                create_responses_request(model_config, system, messages, tools, &request_options)?;
             let mut log = RequestLog::start(&self.model, &payload)?;
 
             let json_response = self
@@ -379,7 +452,9 @@ impl Provider for OpenAiProvider {
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
         if Self::uses_responses_api(&self.model.model_name) {
-            let mut payload = create_responses_request(&self.model, system, messages, tools)?;
+            let (messages, request_options) = Self::resolve_responses_request_context(messages);
+            let mut payload =
+                create_responses_request(&self.model, system, messages, tools, &request_options)?;
             payload["stream"] = serde_json::Value::Bool(true);
 
             let mut log = RequestLog::start(&self.model, &payload)?;
@@ -508,6 +583,9 @@ impl EmbeddingCapable for OpenAiProvider {
 #[cfg(test)]
 mod tests {
     use super::OpenAiProvider;
+    use crate::conversation::message::Message;
+    use crate::session::TurnContextOverride;
+    use std::collections::HashMap;
 
     #[test]
     fn test_uses_responses_api_for_codex_models_without_force_flag() {
@@ -525,5 +603,66 @@ mod tests {
         std::env::set_var("OPENAI_FORCE_RESPONSES_API", "1");
         assert!(OpenAiProvider::uses_responses_api("gpt-4o"));
         std::env::remove_var("OPENAI_FORCE_RESPONSES_API");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_responses_request_context_uses_previous_response_id_from_turn_context() {
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            "provider_continuation".to_string(),
+            serde_json::json!({
+                "enabled": true,
+                "kind": "previous_response_id",
+                "previous_response_id": "resp-1"
+            }),
+        );
+        let turn_context = TurnContextOverride {
+            metadata,
+            ..TurnContextOverride::default()
+        };
+        let messages = vec![
+            Message::assistant()
+                .with_id("resp-1")
+                .with_text("上一轮回复"),
+            Message::user().with_text("继续"),
+        ];
+
+        let (request_messages, options) =
+            crate::session_context::with_turn_context(Some(turn_context), async {
+                OpenAiProvider::resolve_responses_request_context(&messages)
+            })
+            .await;
+
+        assert_eq!(request_messages, &messages[1..]);
+        assert_eq!(options.previous_response_id.as_deref(), Some("resp-1"));
+        assert!(options.store);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_responses_request_context_falls_back_when_boundary_missing() {
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            "provider_continuation".to_string(),
+            serde_json::json!({
+                "enabled": true,
+                "kind": "previous_response_id",
+                "previous_response_id": "resp-missing"
+            }),
+        );
+        let turn_context = TurnContextOverride {
+            metadata,
+            ..TurnContextOverride::default()
+        };
+        let messages = vec![Message::user().with_text("继续")];
+
+        let (request_messages, options) =
+            crate::session_context::with_turn_context(Some(turn_context), async {
+                OpenAiProvider::resolve_responses_request_context(&messages)
+            })
+            .await;
+
+        assert_eq!(request_messages, messages.as_slice());
+        assert_eq!(options.previous_response_id, None);
+        assert!(!options.store);
     }
 }

@@ -18,6 +18,21 @@ fn convert_image_to_input_image(mime_type: &str, data: &str) -> Value {
     })
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ResponsesRequestOptions {
+    pub previous_response_id: Option<String>,
+    pub store: bool,
+}
+
+impl ResponsesRequestOptions {
+    pub fn with_previous_response_id(previous_response_id: impl Into<String>) -> Self {
+        Self {
+            previous_response_id: Some(previous_response_id.into()),
+            store: true,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResponsesApiResponse {
     pub id: String,
@@ -379,6 +394,7 @@ pub fn create_responses_request(
     system: &str,
     messages: &[Message],
     tools: &[Tool],
+    options: &ResponsesRequestOptions,
 ) -> anyhow::Result<Value, Error> {
     let mut input_items = Vec::new();
 
@@ -399,8 +415,15 @@ pub fn create_responses_request(
     let mut payload = json!({
         "model": model_config.model_name,
         "input": input_items,
-        "store": false,  // Don't store responses on server (we replay history ourselves)
+        "store": options.store,
     });
+
+    if let Some(previous_response_id) = options.previous_response_id.as_ref() {
+        payload.as_object_mut().unwrap().insert(
+            "previous_response_id".to_string(),
+            json!(previous_response_id),
+        );
+    }
 
     if !tools.is_empty() {
         let tools_spec: Vec<Value> = tools
@@ -745,7 +768,14 @@ mod tests {
         })));
 
         let model_config = ModelConfig::new("gpt-4.1").unwrap();
-        let payload = create_responses_request(&model_config, "", &[], &[tool]).unwrap();
+        let payload = create_responses_request(
+            &model_config,
+            "",
+            &[],
+            &[tool],
+            &ResponsesRequestOptions::default(),
+        )
+        .unwrap();
         let description = payload["tools"][0]["description"].as_str().unwrap_or("");
         assert!(description.contains("Input examples:"));
         assert!(description.contains("Critical"));
@@ -758,7 +788,14 @@ mod tests {
             .with_text("请识别这张图")
             .with_image("aGVsbG8=", "image/png");
 
-        let payload = create_responses_request(&model_config, "", &[message], &[]).unwrap();
+        let payload = create_responses_request(
+            &model_config,
+            "",
+            &[message],
+            &[],
+            &ResponsesRequestOptions::default(),
+        )
+        .unwrap();
         let content = payload["input"][0]["content"].as_array().unwrap();
 
         assert_eq!(content.len(), 2);
@@ -775,7 +812,14 @@ mod tests {
             .with_image("Zmlyc3Q=", "image/png")
             .with_image("c2Vjb25k", "image/jpeg");
 
-        let payload = create_responses_request(&model_config, "", &[message], &[]).unwrap();
+        let payload = create_responses_request(
+            &model_config,
+            "",
+            &[message],
+            &[],
+            &ResponsesRequestOptions::default(),
+        )
+        .unwrap();
         let content = payload["input"][0]["content"].as_array().unwrap();
 
         assert_eq!(content.len(), 3);
@@ -783,5 +827,23 @@ mod tests {
         assert_eq!(content[1]["image_url"], "data:image/png;base64,Zmlyc3Q=");
         assert_eq!(content[2]["type"], "input_image");
         assert_eq!(content[2]["image_url"], "data:image/jpeg;base64,c2Vjb25k");
+    }
+
+    #[test]
+    fn test_create_responses_request_supports_previous_response_id() {
+        let model_config = ModelConfig::new("o3").unwrap();
+        let payload = create_responses_request(
+            &model_config,
+            "system",
+            &[Message::user().with_text("继续")],
+            &[],
+            &ResponsesRequestOptions::with_previous_response_id("resp-1"),
+        )
+        .unwrap();
+
+        assert_eq!(payload["store"], serde_json::json!(true));
+        assert_eq!(payload["previous_response_id"], "resp-1");
+        assert_eq!(payload["input"][0]["role"], "system");
+        assert_eq!(payload["input"][1]["role"], "user");
     }
 }

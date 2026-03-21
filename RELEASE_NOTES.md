@@ -1,55 +1,36 @@
-# Release v0.20.0
+# Release v0.20.1
 
 ## 🎉 主要功能
 
-### Assistant tool 调用保持原子消息结构
+### OpenAI Responses continuation 支持 previous_response_id
 
-本次更新调整了 assistant 响应在工具调用前后的归一化策略，确保推理、正文与 tool request 保持在同一条 provider 回合消息中：
+本次更新为 OpenAI Responses API 增加基于 `previous_response_id` 的增量续写能力，减少需要整段历史重放的场景：
 
-- **原子回合保留**：不再把 thinking 与 tool request 人工拆成多条 assistant 消息
-- **请求归一化**：在分类工具请求时回写标准化后的 `ToolRequest`，保留 metadata 与 tool meta
-- **多工具顺序稳定**：多个 tool request 会按原始顺序重新组装，减少后续 provider 回放歧义
+- **请求选项抽象**：新增 `ResponsesRequestOptions`，统一承载 `previous_response_id` 与 `store` 之类的请求附加参数
+- **续写边界裁剪**：命中历史响应 id 时，只发送边界之后的增量消息，避免重复回放整段上下文
+- **安全降级**：如果历史边界缺失或 continuation 元数据不完整，会自动退回完整历史重放
 
-### OpenAI / DeepSeek reasoning_content 往返增强
+### Turn context 透传到 provider 执行期
 
-围绕 `reasoning_content` 的格式转换链路做了补强，改善带推理内容的 tool calling 兼容性：
+本次同时把 turn 级上下文继续往 provider 执行链路透传，使 provider 可以在运行时读取 continuation 元数据：
 
-- **完整推理拼接**：格式化消息时会保留多段 Thinking 内容并合并写入 `reasoning_content`
-- **响应反序列化补齐**：从 OpenAI 风格响应恢复消息时，支持把 `reasoning_content` 还原成 Thinking 内容
-- **工具调用协同**：带 reasoning 的 assistant tool-call 消息在下一轮发送时更完整
-
-### Subagent 会话元数据落盘
-
-新增 subagent session metadata 能力，让父子会话关系和展示语义更清晰：
-
-- **父会话关联**：记录 `parent_session_id` 与来源工具
-- **任务摘要**：自动生成 subrecipe / instructions 摘要，便于会话列表识别
-- **角色提示**：支持显式 `role_hint`，用于展示更友好的子代理标签
-- **来源 turn 追踪**：在上下文可用时记录创建该 subagent 的父 turn id
+- **流式场景补齐**：`scope_stream` 现在会携带 `turn_context`，避免流式 provider 分支拿不到当前 turn 元数据
+- **Provider 侧读取统一**：OpenAI provider 直接从 `session_context` 读取 `provider_continuation`，不再依赖外部手动拼接
+- **兼容现有模型路由**：仅在 Responses API / continuation 条件满足时启用，不影响其他 provider 路径
 
 ## 🔧 改进
 
-### Session 元数据查询能力
+### Responses API 请求构造更清晰
 
-- 导出 subagent session metadata 相关查询与列表方法
-- 支持按父会话筛选并按更新时间倒序返回子会话
-
-### 测试覆盖补强
-
-- 为 tool request 归一化、reasoning_content 往返与 subagent metadata 新增针对性测试
-- 补充多工具、多段推理与 parent turn 透传场景断言
-
-## 🔄 Breaking Changes
-
-- 依赖把 thinking 与 tool request 拆成独立 assistant 消息的下游逻辑，需要改为兼容新的原子消息结构
-- Subagent 工具新增 `role_hint` 参数；如果有自定义 schema 校验，需要同步更新
+- `create_responses_request` 现在显式接收请求选项对象，减少后续再加 provider 特定参数时的函数签名震荡
+- 为 `previous_response_id` 增加针对性单测，覆盖 `store = true` 与请求载荷断言
 
 ## 🐛 Bug 修复
 
-- 修复部分 provider 在 assistant 工具调用回合丢失推理内容，导致下一轮请求上下文不完整的问题
-- 修复 tool request 标准化后 metadata / tool meta 可能未回写到原始响应结构的问题
-- 修复 subagent 会话创建后缺少结构化元数据，导致父子关系与展示信息缺失的问题
+- 修复 OpenAI Responses continuation 在 provider 执行期拿不到 `turn_context`，导致无法命中历史 response id 的问题
+- 修复 continuation 历史边界命中失败时缺少明确降级路径的问题
+- 修复相关请求构造测试仍假定当前版本即可产生升级提示的基线漂移问题
 
 ---
 
-**完整变更**: v0.19.0...v0.20.0
+**完整变更**: v0.20.0...v0.20.1

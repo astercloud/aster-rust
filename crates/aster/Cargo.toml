@@ -36,7 +36,7 @@ tokio = { workspace = true }
 reqwest = { workspace = true, features = ["json", "rustls-tls-native-roots"] }
 
 [dependencies]
-aster-models = { path = "../aster-models", version = "0.20.0" }
+aster-models = { path = "../aster-models", version = "0.20.1" }
 lru = "0.12"
 rmcp = { workspace = true, features = [
     "client",
