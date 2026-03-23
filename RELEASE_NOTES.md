@@ -1,36 +1,34 @@
-# Release v0.20.1
+# Release v0.21.0
 
 ## 🎉 主要功能
 
-### OpenAI Responses continuation 支持 previous_response_id
+### 上下文压缩支持显式事件与手动触发
 
-本次更新为 OpenAI Responses API 增加基于 `previous_response_id` 的增量续写能力，减少需要整段历史重放的场景：
+本次更新把上下文压缩从“内部静默恢复”提升为“可观察、可操作”的能力，方便 CLI、UI 与上层集成统一感知压缩生命周期：
 
-- **请求选项抽象**：新增 `ResponsesRequestOptions`，统一承载 `previous_response_id` 与 `store` 之类的请求附加参数
-- **续写边界裁剪**：命中历史响应 id 时，只发送边界之后的增量消息，避免重复回放整段上下文
-- **安全降级**：如果历史边界缺失或 continuation 元数据不完整，会自动退回完整历史重放
-
-### Turn context 透传到 provider 执行期
-
-本次同时把 turn 级上下文继续往 provider 执行链路透传，使 provider 可以在运行时读取 continuation 元数据：
-
-- **流式场景补齐**：`scope_stream` 现在会携带 `turn_context`，避免流式 provider 分支拿不到当前 turn 元数据
-- **Provider 侧读取统一**：OpenAI provider 直接从 `session_context` 读取 `provider_continuation`，不再依赖外部手动拼接
-- **兼容现有模型路由**：仅在 Responses API / continuation 条件满足时启用，不影响其他 provider 路径
+- **新增压缩事件**：自动压缩、溢出恢复压缩、手动压缩都会发出开始、完成与警告事件
+- **手动压缩入口统一**：会话手动 compact 现在复用统一压缩流程，行为与自动压缩保持一致
+- **历史替换更清晰**：压缩完成后会明确广播 `HistoryReplaced`，上层更容易同步会话状态
 
 ## 🔧 改进
 
-### Responses API 请求构造更清晰
+### 压缩摘要持久化能力补齐
 
-- `create_responses_request` 现在显式接收请求选项对象，减少后续再加 provider 特定参数时的函数签名震荡
-- 为 `previous_response_id` 增加针对性单测，覆盖 `store = true` 与请求载荷断言
+- `compact_messages_with_summary` 现在会返回摘要文本，避免压缩后摘要只存在内存中
+- 自动压缩、溢出恢复、手动 compact 都会尝试缓存 summary，便于后续诊断与恢复
+- 摘要缓存会记录估算 turn 数，降低后续会话状态判断的分散实现
+
+### 溢出恢复逻辑职责更清晰
+
+- `OverflowHandler` 拆出独立的 compaction attempt 计数逻辑，减少“记录尝试”和“执行压缩”耦合
+- Agent 主流程统一负责触发压缩事件、替换历史、告警提示，避免分支间行为漂移
 
 ## 🐛 Bug 修复
 
-- 修复 OpenAI Responses continuation 在 provider 执行期拿不到 `turn_context`，导致无法命中历史 response id 的问题
-- 修复 continuation 历史边界命中失败时缺少明确降级路径的问题
-- 修复相关请求构造测试仍假定当前版本即可产生升级提示的基线漂移问题
+- 修复上下文溢出恢复路径与普通压缩路径行为不一致的问题
+- 修复手动 compact 后未持久化摘要缓存，导致后续状态恢复信息不完整的问题
+- 修复子 agent 聚合事件时未显式忽略新的上下文压缩事件，可能污染消息收集流的问题
 
 ---
 
-**完整变更**: v0.20.0...v0.20.1
+**完整变更**: v0.20.1...v0.21.0

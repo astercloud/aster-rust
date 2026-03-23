@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 
-use crate::context_mgmt::compact_messages;
+use crate::context_mgmt::compact_messages_with_summary;
 use crate::conversation::message::{Message, SystemNotificationType};
 use crate::recipe::build_recipe::build_recipe_from_template_with_positional_params;
-use crate::session::SessionManager;
+use crate::session::{save_summary, SessionManager};
 
 use super::Agent;
 
@@ -86,7 +86,13 @@ impl Agent {
             .conversation
             .ok_or_else(|| anyhow!("Session has no conversation"))?;
 
-        let (compacted_conversation, _usage) = compact_messages(
+        let summarized_turn_count = conversation
+            .messages()
+            .iter()
+            .filter(|message| message.is_agent_visible() && message.role == rmcp::model::Role::User)
+            .count();
+
+        let (compacted_conversation, _usage, summary_text) = compact_messages_with_summary(
             self.provider().await?.as_ref(),
             &conversation,
             true, // is_manual_compact
@@ -95,6 +101,13 @@ impl Agent {
 
         self.store_replace_conversation(session_id, &compacted_conversation)
             .await?;
+        if let Err(error) = save_summary(session_id, &summary_text, Some(summarized_turn_count)) {
+            tracing::warn!(
+                session_id = %session_id,
+                ?error,
+                "Failed to persist manual compact summary cache"
+            );
+        }
 
         Ok(Some(Message::assistant().with_system_notification(
             SystemNotificationType::InlineMessage,

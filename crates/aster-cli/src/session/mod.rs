@@ -1228,6 +1228,26 @@ impl CliSession {
                         | Some(Ok(AgentEvent::ItemStarted { .. }))
                         | Some(Ok(AgentEvent::ItemUpdated { .. }))
                         | Some(Ok(AgentEvent::ItemCompleted { .. })) => {}
+                        Some(Ok(AgentEvent::ContextCompactionStarted { detail, .. }))
+                        | Some(Ok(AgentEvent::ContextCompactionCompleted { detail, .. })) => {
+                            if self.debug {
+                                if let Some(detail) = detail {
+                                    eprintln!("{}", detail);
+                                }
+                            }
+                        }
+                        Some(Ok(AgentEvent::ContextCompactionWarning { message })) => {
+                            if is_stream_json_mode {
+                                emit_stream_event(&StreamEvent::Notification {
+                                    extension_id: "aster".to_string(),
+                                    data: NotificationData::Log {
+                                        message: message.clone(),
+                                    },
+                                });
+                            } else if !is_json_mode {
+                                output::render_text(&message, Some(Color::Yellow), true);
+                            }
+                        }
                         Some(Ok(AgentEvent::ModelChange { model, mode })) => {
                             if is_stream_json_mode {
                                 emit_stream_event(&StreamEvent::ModelChange {

@@ -214,7 +214,10 @@ fn get_agent_messages(
                 Ok(AgentEvent::TurnStarted { .. })
                 | Ok(AgentEvent::ItemStarted { .. })
                 | Ok(AgentEvent::ItemUpdated { .. })
-                | Ok(AgentEvent::ItemCompleted { .. }) => {}
+                | Ok(AgentEvent::ItemCompleted { .. })
+                | Ok(AgentEvent::ContextCompactionStarted { .. })
+                | Ok(AgentEvent::ContextCompactionCompleted { .. })
+                | Ok(AgentEvent::ContextCompactionWarning { .. }) => {}
                 Ok(AgentEvent::Message(msg)) => conversation.push(msg),
                 Ok(AgentEvent::McpNotification(_)) | Ok(AgentEvent::ModelChange { .. }) => {}
                 Ok(AgentEvent::HistoryReplaced(updated_conversation)) => {

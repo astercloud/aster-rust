@@ -414,7 +414,10 @@ mod tests {
                     Ok(AgentEvent::TurnStarted { .. })
                     | Ok(AgentEvent::ItemStarted { .. })
                     | Ok(AgentEvent::ItemUpdated { .. })
-                    | Ok(AgentEvent::ItemCompleted { .. }) => {}
+                    | Ok(AgentEvent::ItemCompleted { .. })
+                    | Ok(AgentEvent::ContextCompactionStarted { .. })
+                    | Ok(AgentEvent::ContextCompactionCompleted { .. })
+                    | Ok(AgentEvent::ContextCompactionWarning { .. }) => {}
                     Ok(AgentEvent::Message(response)) => {
                         if let Some(MessageContent::ActionRequired(action)) =
                             response.content.first()

@@ -30,7 +30,7 @@ use crate::agents::types::{FrontendTool, SharedProvider, ToolResultReceiver};
 use crate::config::{get_enabled_extensions, AsterMode, Config};
 use crate::context::ContextTraceStep;
 use crate::context_mgmt::{
-    check_if_compaction_needed, compact_messages, DEFAULT_COMPACTION_THRESHOLD,
+    check_if_compaction_needed, compact_messages_with_summary, DEFAULT_COMPACTION_THRESHOLD,
 };
 use crate::conversation::message::{
     ActionRequired, ActionRequiredData, Message, MessageContent, ProviderMetadata,
@@ -48,9 +48,10 @@ use crate::scheduler_trait::SchedulerTrait;
 use crate::security::security_inspector::SecurityInspector;
 use crate::session::extension_data::{EnabledExtensionsState, ExtensionState};
 use crate::session::{
-    load_session_runtime_snapshot, require_shared_thread_runtime_store, InMemoryThreadRuntimeStore,
-    ItemRuntime, ItemRuntimePayload, ItemStatus, Session, SessionManager, SessionRuntimeSnapshot,
-    SessionStore, SessionType, ThreadRuntime, ThreadRuntimeStore, TurnRuntime, TurnStatus,
+    load_session_runtime_snapshot, require_shared_thread_runtime_store, save_summary,
+    InMemoryThreadRuntimeStore, ItemRuntime, ItemRuntimePayload, ItemStatus, Session,
+    SessionManager, SessionRuntimeSnapshot, SessionStore, SessionType, ThreadRuntime,
+    ThreadRuntimeStore, TurnRuntime, TurnStatus,
 };
 use crate::tool_inspection::ToolInspectionManager;
 use crate::tool_monitor::RepetitionInspector;
@@ -70,6 +71,8 @@ use tracing::{debug, error, info, instrument, warn};
 
 const DEFAULT_MAX_TURNS: u32 = 1000;
 const COMPACTION_THINKING_TEXT: &str = "aster is compacting the conversation...";
+const CONTEXT_COMPACTION_WARNING_TEXT: &str =
+    "长对话和多次上下文压缩会降低模型准确性；如果后续结果开始漂移，建议新开会话。";
 const PROPOSED_PLAN_OPEN: &str = "<proposed_plan>";
 const PROPOSED_PLAN_CLOSE: &str = "</proposed_plan>";
 const FILE_ARTIFACT_METADATA_KEYS: [&str; 9] = [
@@ -295,15 +298,79 @@ pub struct Agent {
 
 #[derive(Clone, Debug)]
 pub enum AgentEvent {
-    TurnStarted { turn: TurnRuntime },
-    ItemStarted { item: ItemRuntime },
-    ItemUpdated { item: ItemRuntime },
-    ItemCompleted { item: ItemRuntime },
+    TurnStarted {
+        turn: TurnRuntime,
+    },
+    ItemStarted {
+        item: ItemRuntime,
+    },
+    ItemUpdated {
+        item: ItemRuntime,
+    },
+    ItemCompleted {
+        item: ItemRuntime,
+    },
+    ContextCompactionStarted {
+        item_id: String,
+        trigger: String,
+        detail: Option<String>,
+    },
+    ContextCompactionCompleted {
+        item_id: String,
+        trigger: String,
+        detail: Option<String>,
+    },
+    ContextCompactionWarning {
+        message: String,
+    },
     Message(Message),
     McpNotification((String, ServerNotification)),
-    ModelChange { model: String, mode: String },
+    ModelChange {
+        model: String,
+        mode: String,
+    },
     HistoryReplaced(Conversation),
-    ContextTrace { steps: Vec<ContextTraceStep> },
+    ContextTrace {
+        steps: Vec<ContextTraceStep>,
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ContextCompactionTrigger {
+    Auto,
+    Overflow,
+    Manual,
+}
+
+impl ContextCompactionTrigger {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Overflow => "overflow",
+            Self::Manual => "manual",
+        }
+    }
+
+    fn started_detail(self) -> &'static str {
+        match self {
+            Self::Auto => "Context window is nearing its limit. Compacting earlier messages into a summary.",
+            Self::Overflow => "Context limit was reached. Compacting earlier messages into a summary before retrying.",
+            Self::Manual => "Compacting the current session on request and replacing earlier history with a summary.",
+        }
+    }
+
+    fn completed_detail(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto-compaction finished. The assistant will continue from the compacted summary.",
+            Self::Overflow => "Recovery compaction finished. The assistant will retry with the compacted summary.",
+            Self::Manual => "Context compaction finished. Earlier history was replaced with a summary for future turns.",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ContextCompactionResult {
+    compacted_conversation: Conversation,
 }
 
 impl Default for Agent {
@@ -1161,6 +1228,127 @@ impl Agent {
 
     fn runtime_status_item_id(turn_id: &str) -> String {
         format!("turn_summary:{turn_id}")
+    }
+
+    fn context_compaction_item_id(turn_id: &str) -> String {
+        format!("context_compaction:{turn_id}:{}", Uuid::new_v4())
+    }
+
+    fn estimated_compacted_turn_count(conversation: &Conversation) -> usize {
+        conversation
+            .messages()
+            .iter()
+            .filter(|message| message.is_agent_visible() && message.role == Role::User)
+            .count()
+    }
+
+    pub(crate) async fn perform_context_compaction(
+        &self,
+        session_config: &SessionConfig,
+        conversation: &Conversation,
+        manual_compact: bool,
+    ) -> Result<ContextCompactionResult> {
+        let (compacted_conversation, summarization_usage, summary_text) =
+            compact_messages_with_summary(
+                self.provider().await?.as_ref(),
+                conversation,
+                manual_compact,
+            )
+            .await?;
+
+        self.store_replace_conversation(&session_config.id, &compacted_conversation)
+            .await?;
+        Self::update_session_metrics(
+            session_config,
+            &summarization_usage,
+            true,
+            self.session_store.as_ref(),
+        )
+        .await?;
+
+        let turn_count = Self::estimated_compacted_turn_count(conversation);
+        if let Err(error) = save_summary(&session_config.id, &summary_text, Some(turn_count)) {
+            warn!(
+                session_id = %session_config.id,
+                ?error,
+                "Failed to persist compacted summary cache"
+            );
+        }
+
+        Ok(ContextCompactionResult {
+            compacted_conversation,
+        })
+    }
+
+    pub async fn compact_session(
+        &self,
+        session_config: SessionConfig,
+    ) -> Result<BoxStream<'_, Result<AgentEvent>>> {
+        let session_config = session_config.with_runtime_defaults();
+        let session = self.store_get_session(&session_config.id, true).await?;
+        let conversation = session
+            .conversation
+            .clone()
+            .ok_or_else(|| anyhow!("Session {} has no conversation", session_config.id))?;
+        let scoped_session_config = session_config.clone();
+        let turn_session_config = session_config.clone();
+        let turn_session = session.clone();
+
+        Ok(Self::scope_reply_stream(
+            &session_config,
+            Box::pin(async_stream::try_stream! {
+                self.ensure_thread_runtime(&turn_session, &turn_session_config).await?;
+                let turn_runtime = self
+                    .create_turn_runtime(&turn_session, &turn_session_config, None)
+                    .await?;
+                let item_id = Self::context_compaction_item_id(&turn_runtime.id);
+
+                yield AgentEvent::TurnStarted {
+                    turn: turn_runtime,
+                };
+                yield AgentEvent::ContextCompactionStarted {
+                    item_id: item_id.clone(),
+                    trigger: ContextCompactionTrigger::Manual.as_str().to_string(),
+                    detail: Some(ContextCompactionTrigger::Manual.started_detail().to_string()),
+                };
+
+                match self
+                    .perform_context_compaction(&scoped_session_config, &conversation, true)
+                    .await
+                {
+                    Ok(result) => {
+                        yield AgentEvent::HistoryReplaced(result.compacted_conversation);
+                        yield AgentEvent::ContextCompactionCompleted {
+                            item_id,
+                            trigger: ContextCompactionTrigger::Manual.as_str().to_string(),
+                            detail: Some(
+                                ContextCompactionTrigger::Manual
+                                    .completed_detail()
+                                    .to_string(),
+                            ),
+                        };
+                        yield AgentEvent::ContextCompactionWarning {
+                            message: CONTEXT_COMPACTION_WARNING_TEXT.to_string(),
+                        };
+                        self.finalize_turn_runtime(
+                            &scoped_session_config,
+                            TurnStatus::Completed,
+                            None,
+                        )
+                        .await?;
+                    }
+                    Err(error) => {
+                        self.finalize_turn_runtime(
+                            &scoped_session_config,
+                            TurnStatus::Failed,
+                            Some(error.to_string()),
+                        )
+                        .await?;
+                        Err(error)?;
+                    }
+                }
+            }),
+        ))
     }
 
     pub async fn ensure_runtime_turn_initialized(
@@ -2126,12 +2314,42 @@ impl Agent {
                         )
                     );
 
-                    match compact_messages(self.provider().await?.as_ref(), &conversation_to_compact, false).await {
-                        Ok((compacted_conversation, summarization_usage)) => {
-                            self.store_replace_conversation(&stream_session_config.id, &compacted_conversation).await?;
-                            Self::update_session_metrics(&stream_session_config, &summarization_usage, true, self.session_store.as_ref()).await?;
+                    let compaction_item_id = Self::context_compaction_item_id(
+                        stream_session_config
+                            .turn_id
+                            .as_deref()
+                            .unwrap_or("unknown-turn"),
+                    );
+                    yield AgentEvent::ContextCompactionStarted {
+                        item_id: compaction_item_id.clone(),
+                        trigger: ContextCompactionTrigger::Auto.as_str().to_string(),
+                        detail: Some(ContextCompactionTrigger::Auto.started_detail().to_string()),
+                    };
 
-                            yield AgentEvent::HistoryReplaced(compacted_conversation.clone());
+                    match self
+                        .perform_context_compaction(
+                            &stream_session_config,
+                            &conversation_to_compact,
+                            false,
+                        )
+                        .await
+                    {
+                        Ok(result) => {
+                            yield AgentEvent::HistoryReplaced(
+                                result.compacted_conversation.clone(),
+                            );
+                            yield AgentEvent::ContextCompactionCompleted {
+                                item_id: compaction_item_id,
+                                trigger: ContextCompactionTrigger::Auto.as_str().to_string(),
+                                detail: Some(
+                                    ContextCompactionTrigger::Auto
+                                        .completed_detail()
+                                        .to_string(),
+                                ),
+                            };
+                            yield AgentEvent::ContextCompactionWarning {
+                                message: CONTEXT_COMPACTION_WARNING_TEXT.to_string(),
+                            };
 
                             yield AgentEvent::Message(
                                 Message::assistant().with_system_notification(
@@ -2140,7 +2358,7 @@ impl Agent {
                                 )
                             );
 
-                            compacted_conversation
+                            result.compacted_conversation
                         }
                         Err(e) => {
                             yield AgentEvent::Message(
@@ -2567,15 +2785,53 @@ impl Agent {
                                 )
                             );
 
-                            match overflow_handler.handle_overflow(self.provider().await?.as_ref(), &conversation, &session).await {
-                                Ok((compacted_conversation, usage, should_retry)) => {
-                                    if should_retry {
-                                        self.store_replace_conversation(&session_config.id, &compacted_conversation).await?;
-                                        Self::update_session_metrics(&session_config, &usage, true, self.session_store.as_ref()).await?;
-                                        conversation = compacted_conversation;
-                                        did_recovery_compact_this_iteration = true;
-                                        yield AgentEvent::HistoryReplaced(conversation.clone());
-                                    }
+                            if let Err(e) = overflow_handler.note_compaction_attempt() {
+                                crate::posthog::emit_error("compaction_failed", &e.to_string());
+                                error!("Compaction failed: {}", e);
+                                yield AgentEvent::Message(
+                                    Message::assistant().with_system_notification(
+                                        SystemNotificationType::InlineMessage,
+                                        format!("Compaction failed: {}", e),
+                                    )
+                                );
+                                break;
+                            }
+
+                            let compaction_item_id = Self::context_compaction_item_id(
+                                session_config.turn_id.as_deref().unwrap_or("unknown-turn"),
+                            );
+                            yield AgentEvent::ContextCompactionStarted {
+                                item_id: compaction_item_id.clone(),
+                                trigger: ContextCompactionTrigger::Overflow.as_str().to_string(),
+                                detail: Some(
+                                    ContextCompactionTrigger::Overflow
+                                        .started_detail()
+                                        .to_string(),
+                                ),
+                            };
+
+                            match self
+                                .perform_context_compaction(&session_config, &conversation, false)
+                                .await
+                            {
+                                Ok(result) => {
+                                    conversation = result.compacted_conversation;
+                                    did_recovery_compact_this_iteration = true;
+                                    yield AgentEvent::HistoryReplaced(conversation.clone());
+                                    yield AgentEvent::ContextCompactionCompleted {
+                                        item_id: compaction_item_id,
+                                        trigger: ContextCompactionTrigger::Overflow
+                                            .as_str()
+                                            .to_string(),
+                                        detail: Some(
+                                            ContextCompactionTrigger::Overflow
+                                                .completed_detail()
+                                                .to_string(),
+                                        ),
+                                    };
+                                    yield AgentEvent::ContextCompactionWarning {
+                                        message: CONTEXT_COMPACTION_WARNING_TEXT.to_string(),
+                                    };
                                     break;
                                 }
                                 Err(e) => {

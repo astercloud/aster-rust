@@ -621,7 +621,19 @@ async fn process_message_streaming(
                     }
                     Ok(AgentEvent::ItemStarted { .. })
                     | Ok(AgentEvent::ItemUpdated { .. })
-                    | Ok(AgentEvent::ItemCompleted { .. }) => {}
+                    | Ok(AgentEvent::ItemCompleted { .. })
+                    | Ok(AgentEvent::ContextCompactionStarted { .. })
+                    | Ok(AgentEvent::ContextCompactionCompleted { .. }) => {}
+                    Ok(AgentEvent::ContextCompactionWarning { message }) => {
+                        let mut sender = sender.lock().await;
+                        let _ = sender
+                            .send(Message::Text(
+                                serde_json::to_string(&WebSocketMessage::Thinking { message })
+                                    .unwrap()
+                                    .into(),
+                            ))
+                            .await;
+                    }
                     Ok(AgentEvent::McpNotification(_notification)) => {
                         tracing::info!("Received MCP notification in web interface");
                     }

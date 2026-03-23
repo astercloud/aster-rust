@@ -52,6 +52,17 @@ pub async fn compact_messages(
     conversation: &Conversation,
     manual_compact: bool,
 ) -> Result<(Conversation, ProviderUsage)> {
+    let (conversation, usage, _summary) =
+        compact_messages_with_summary(provider, conversation, manual_compact).await?;
+    Ok((conversation, usage))
+}
+
+/// Compact messages by summarizing them and return the summary text as well.
+pub async fn compact_messages_with_summary(
+    provider: &dyn Provider,
+    conversation: &Conversation,
+    manual_compact: bool,
+) -> Result<(Conversation, ProviderUsage, String)> {
     info!("Performing message compaction");
 
     let messages = conversation.messages();
@@ -111,6 +122,7 @@ pub async fn compact_messages(
     let messages_to_compact = messages.as_slice();
 
     let (summary_message, summarization_usage) = do_compact(provider, messages_to_compact).await?;
+    let summary_text = summary_message.as_concat_text();
 
     // Create the final message list with updated visibility metadata:
     // 1. Original messages become user_visible but not agent_visible
@@ -161,6 +173,7 @@ pub async fn compact_messages(
     Ok((
         Conversation::new_unvalidated(final_messages),
         summarization_usage,
+        summary_text,
     ))
 }
 

@@ -158,6 +158,19 @@ pub enum MessageEvent {
     ItemCompleted {
         item: ItemRuntime,
     },
+    ContextCompactionStarted {
+        item_id: String,
+        trigger: String,
+        detail: Option<String>,
+    },
+    ContextCompactionCompleted {
+        item_id: String,
+        trigger: String,
+        detail: Option<String>,
+    },
+    ContextCompactionWarning {
+        message: String,
+    },
     ModelChange {
         model: String,
         mode: String,
@@ -387,7 +400,7 @@ pub async fn reply(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ChatRequest>,
 ) -> Result<SseResponse, StatusCode> {
-    let session_start = std::time::Instant::now();
+    let _session_start = std::time::Instant::now();
 
     tracing::info!(
         counter.aster.session_starts = 1,
@@ -397,9 +410,9 @@ pub async fn reply(
     );
 
     let session_id = request.session_id.clone();
-    let include_context_trace = request.include_context_trace.unwrap_or(false);
-    let context_trace_level = request.context_trace_level.unwrap_or_default();
-    let context_trace_redact = request.context_trace_redact.unwrap_or(true);
+    let _include_context_trace = request.include_context_trace.unwrap_or(false);
+    let _context_trace_level = request.context_trace_level.unwrap_or_default();
+    let _context_trace_redact = request.context_trace_redact.unwrap_or(true);
 
     if let Some(recipe_name) = request.recipe_name.clone() {
         if state.mark_recipe_run_if_absent(&session_id).await {
@@ -423,11 +436,11 @@ pub async fn reply(
     let stream = ReceiverStream::new(rx);
     let cancel_token = CancellationToken::new();
 
-    let user_message = request.user_message;
+    let _user_message = request.user_message;
     let conversation_so_far = request.conversation_so_far;
 
-    let task_cancel = cancel_token.clone();
-    let task_tx = tx.clone();
+    let _task_cancel = cancel_token.clone();
+    let _task_tx = tx.clone();
 
     drop(tokio::spawn(async move {
         let agent = match state.get_agent(session_id.clone()).await {
@@ -438,8 +451,8 @@ pub async fn reply(
                     MessageEvent::Error {
                         error: format!("Failed to get session agent: {}", e),
                     },
-                    &task_tx,
-                    &task_cancel,
+                    &_task_tx,
+                    &_task_cancel,
                 )
                 .await;
                 return;
@@ -454,7 +467,7 @@ pub async fn reply(
                     MessageEvent::Error {
                         error: format!("Failed to read session: {}", e),
                     },
-                    &task_tx,
+                    &_task_tx,
                     &cancel_token,
                 )
                 .await;
@@ -470,7 +483,7 @@ pub async fn reply(
             max_turns: None,
             retry_config: None,
             system_prompt: None,
-            include_context_trace: Some(include_context_trace),
+            include_context_trace: Some(_include_context_trace),
             turn_context: request.turn_context.clone(),
         }
         .with_runtime_defaults();
@@ -489,13 +502,13 @@ pub async fn reply(
             }
             None => session.conversation.unwrap_or_default(),
         };
-        all_messages.push(user_message.clone());
+        all_messages.push(_user_message.clone());
 
         let mut stream = match agent
             .reply(
-                user_message.clone(),
+                _user_message.clone(),
                 session_config,
-                Some(task_cancel.clone()),
+                Some(_task_cancel.clone()),
             )
             .await
         {
@@ -506,7 +519,7 @@ pub async fn reply(
                     MessageEvent::Error {
                         error: e.to_string(),
                     },
-                    &task_tx,
+                    &_task_tx,
                     &cancel_token,
                 )
                 .await;
@@ -517,7 +530,7 @@ pub async fn reply(
         let mut heartbeat_interval = tokio::time::interval(Duration::from_millis(500));
         loop {
             tokio::select! {
-                _ = task_cancel.cancelled() => {
+                _ = _task_cancel.cancelled() => {
                     tracing::info!("Agent task cancelled");
                     break;
                 }
@@ -547,6 +560,38 @@ pub async fn reply(
                         Ok(Some(Ok(AgentEvent::ItemCompleted { item }))) => {
                             stream_event(MessageEvent::ItemCompleted { item }, &tx, &cancel_token).await;
                         }
+                        Ok(Some(Ok(AgentEvent::ContextCompactionStarted { item_id, trigger, detail }))) => {
+                            stream_event(
+                                MessageEvent::ContextCompactionStarted {
+                                    item_id,
+                                    trigger,
+                                    detail,
+                                },
+                                &tx,
+                                &cancel_token,
+                            )
+                            .await;
+                        }
+                        Ok(Some(Ok(AgentEvent::ContextCompactionCompleted { item_id, trigger, detail }))) => {
+                            stream_event(
+                                MessageEvent::ContextCompactionCompleted {
+                                    item_id,
+                                    trigger,
+                                    detail,
+                                },
+                                &tx,
+                                &cancel_token,
+                            )
+                            .await;
+                        }
+                        Ok(Some(Ok(AgentEvent::ContextCompactionWarning { message }))) => {
+                            stream_event(
+                                MessageEvent::ContextCompactionWarning { message },
+                                &tx,
+                                &cancel_token,
+                            )
+                            .await;
+                        }
                         Ok(Some(Ok(AgentEvent::Message(message)))) => {
                             for content in &message.content {
                                 track_tool_telemetry(content, all_messages.messages());
@@ -571,8 +616,8 @@ pub async fn reply(
                                 MessageEvent::ContextTrace {
                                     steps: transform_context_trace_steps(
                                         steps,
-                                        context_trace_level,
-                                        context_trace_redact,
+                                        _context_trace_level,
+                                        _context_trace_redact,
                                     ),
                                 },
                                 &tx,
@@ -612,7 +657,7 @@ pub async fn reply(
             }
         }
 
-        let session_duration = session_start.elapsed();
+        let session_duration = _session_start.elapsed();
 
         if let Ok(session) = SessionManager::get_session(&session_id, true).await {
             let total_tokens = session.total_tokens.unwrap_or(0);
@@ -675,7 +720,7 @@ pub async fn reply(
                 reason: "stop".to_string(),
                 token_state: final_token_state,
             },
-            &task_tx,
+            &_task_tx,
             &cancel_token,
         )
         .await;

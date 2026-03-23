@@ -81,6 +81,9 @@ async fn main() -> anyhow::Result<()> {
             AgentEvent::McpNotification(_)
             | AgentEvent::ModelChange { .. }
             | AgentEvent::HistoryReplaced(_)
+            | AgentEvent::ContextCompactionStarted { .. }
+            | AgentEvent::ContextCompactionCompleted { .. }
+            | AgentEvent::ContextCompactionWarning { .. }
             | AgentEvent::ContextTrace { .. } => {}
         }
     }

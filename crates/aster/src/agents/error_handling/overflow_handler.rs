@@ -97,6 +97,29 @@ impl OverflowHandler {
         self.compaction_attempts < self.max_retries
     }
 
+    /// Record a compaction attempt without performing the compaction yet.
+    pub fn note_compaction_attempt(&mut self) -> Result<()> {
+        self.compaction_attempts += 1;
+        self.compaction_attempted = true;
+
+        info!(
+            "Handling context overflow (attempt {}/{})",
+            self.compaction_attempts, self.max_retries
+        );
+
+        if self.compaction_attempts > self.max_retries {
+            warn!("Maximum compaction retries ({}) exceeded", self.max_retries);
+            return Err(anyhow::anyhow!(
+                "Context limit exceeded after {} compaction attempts. \
+                 Try using a shorter message, a model with a larger context window, \
+                 or start a new session.",
+                self.max_retries
+            ));
+        }
+
+        Ok(())
+    }
+
     /// Reset the handler state for a new request cycle.
     pub fn reset(&mut self) {
         self.compaction_attempted = false;
@@ -133,23 +156,7 @@ impl OverflowHandler {
         conversation: &Conversation,
         _session: &Session,
     ) -> Result<(Conversation, ProviderUsage, bool)> {
-        self.compaction_attempts += 1;
-        self.compaction_attempted = true;
-
-        info!(
-            "Handling context overflow (attempt {}/{})",
-            self.compaction_attempts, self.max_retries
-        );
-
-        if self.compaction_attempts > self.max_retries {
-            warn!("Maximum compaction retries ({}) exceeded", self.max_retries);
-            return Err(anyhow::anyhow!(
-                "Context limit exceeded after {} compaction attempts. \
-                 Try using a shorter message, a model with a larger context window, \
-                 or start a new session.",
-                self.max_retries
-            ));
-        }
+        self.note_compaction_attempt()?;
 
         debug!("Attempting conversation compaction");
 
