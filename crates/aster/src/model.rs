@@ -71,7 +71,7 @@ static MODEL_SPECIFIC_LIMITS: Lazy<Vec<(&'static str, usize)>> = Lazy::new(|| {
     ]
 });
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
 pub struct ModelConfig {
     pub model_name: String,
     pub context_limit: Option<usize>,
@@ -280,6 +280,32 @@ impl ModelConfig {
         self
     }
 
+    pub fn with_model_name(mut self, model_name: String) -> Self {
+        self.model_name = model_name;
+        self
+    }
+
+    pub fn rebuild_with_model_name(&self, model_name: &str) -> Result<Self, ConfigError> {
+        let mut rebuilt = Self::new(model_name)?;
+
+        if self.has_custom_context_limit()? {
+            rebuilt.context_limit = self.context_limit;
+        }
+
+        rebuilt.temperature = self.temperature;
+        rebuilt.max_tokens = self.max_tokens;
+        rebuilt.toolshim = self.toolshim;
+        rebuilt.toolshim_model = self.toolshim_model.clone();
+        rebuilt.fast_model = self.fast_model.clone();
+
+        Ok(rebuilt)
+    }
+
+    fn has_custom_context_limit(&self) -> Result<bool, ConfigError> {
+        let baseline = Self::new(&self.model_name)?;
+        Ok(self.context_limit != baseline.context_limit)
+    }
+
     pub fn with_fast(mut self, fast_model: String) -> Self {
         self.fast_model = Some(fast_model);
         self
@@ -287,9 +313,12 @@ impl ModelConfig {
 
     pub fn use_fast_model(&self) -> Self {
         if let Some(fast_model) = &self.fast_model {
-            let mut config = self.clone();
-            config.model_name = fast_model.clone();
-            config
+            self.rebuild_with_model_name(fast_model)
+                .unwrap_or_else(|_| {
+                    let mut config = self.clone();
+                    config.model_name = fast_model.clone();
+                    config
+                })
         } else {
             self.clone()
         }
@@ -330,6 +359,65 @@ mod tests {
         let _guard = env_lock::lock_env([("ASTER_MAX_TOKENS", Some("4096"))]);
         let result = ModelConfig::parse_max_tokens().unwrap();
         assert_eq!(result, Some(4096));
+    }
+
+    #[test]
+    fn test_rebuild_with_model_name_recomputes_context_limit_and_preserves_tuning() {
+        let config = ModelConfig::new("gpt-4-turbo")
+            .unwrap()
+            .with_temperature(Some(0.2))
+            .with_max_tokens(Some(2048))
+            .with_toolshim(true)
+            .with_toolshim_model(Some("qwen3".to_string()));
+
+        let rebuilt = config.rebuild_with_model_name("gpt-4.1").unwrap();
+
+        assert_eq!(rebuilt.model_name, "gpt-4.1");
+        assert_eq!(rebuilt.context_limit, Some(1_000_000));
+        assert_eq!(rebuilt.temperature, Some(0.2));
+        assert_eq!(rebuilt.max_tokens, Some(2048));
+        assert!(rebuilt.toolshim);
+        assert_eq!(rebuilt.toolshim_model.as_deref(), Some("qwen3"));
+    }
+
+    #[test]
+    fn test_rebuild_with_model_name_preserves_custom_context_limit() {
+        let config = ModelConfig::new("gpt-4-turbo")
+            .unwrap()
+            .with_context_limit(Some(333_333));
+
+        let rebuilt = config.rebuild_with_model_name("gpt-4.1").unwrap();
+
+        assert_eq!(rebuilt.model_name, "gpt-4.1");
+        assert_eq!(rebuilt.context_limit, Some(333_333));
+    }
+
+    #[test]
+    fn test_use_fast_model_recomputes_fast_model_context_limit() {
+        let config = ModelConfig::new("gpt-4-turbo")
+            .unwrap()
+            .with_fast("gpt-4.1".to_string())
+            .with_temperature(Some(0.3));
+
+        let fast = config.use_fast_model();
+
+        assert_eq!(fast.model_name, "gpt-4.1");
+        assert_eq!(fast.context_limit, Some(1_000_000));
+        assert_eq!(fast.temperature, Some(0.3));
+        assert_eq!(fast.fast_model.as_deref(), Some("gpt-4.1"));
+    }
+
+    #[test]
+    fn test_use_fast_model_preserves_custom_context_limit() {
+        let config = ModelConfig::new("gpt-4-turbo")
+            .unwrap()
+            .with_fast("gpt-4.1".to_string())
+            .with_context_limit(Some(222_222));
+
+        let fast = config.use_fast_model();
+
+        assert_eq!(fast.model_name, "gpt-4.1");
+        assert_eq!(fast.context_limit, Some(222_222));
     }
 
     #[test]

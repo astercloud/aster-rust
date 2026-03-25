@@ -2,15 +2,14 @@
   "openapi": "3.0.3",
   "info": {
     "title": "aster-server",
-    "description": "An AI agent",
+    "description": "Aster - An AI agent framework",
     "contact": {
-      "name": "Block",
-      "email": "ai-oss-tools@block.xyz"
+      "name": "AsterCloud"
     },
     "license": {
       "name": "Apache-2.0"
     },
-    "version": "1.19.0"
+    "version": "0.22.0"
   },
   "paths": {
     "/action-required/tool-confirmation": {
@@ -238,6 +237,43 @@
           },
           "400": {
             "description": "Bad request - invalid working directory"
+          },
+          "401": {
+            "description": "Unauthorized - invalid secret key"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/agent/runtime/{session_id}": {
+      "get": {
+        "tags": [
+          "super::routes::agent"
+        ],
+        "operationId": "get_runtime_snapshot",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Unique identifier for the session",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Runtime snapshot retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRuntimeSnapshot"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized - invalid secret key"
@@ -1096,6 +1132,189 @@
         }
       }
     },
+    "/context/abstract": {
+      "get": {
+        "tags": [
+          "Context"
+        ],
+        "operationId": "abstract_context",
+        "parameters": [
+          {
+            "name": "uri",
+            "in": "query",
+            "description": "Context URI",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Abstract content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextReadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Context not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/context/overview": {
+      "get": {
+        "tags": [
+          "Context"
+        ],
+        "operationId": "overview_context",
+        "parameters": [
+          {
+            "name": "uri",
+            "in": "query",
+            "description": "Context URI",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Overview content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextReadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Context not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/context/read": {
+      "get": {
+        "tags": [
+          "Context"
+        ],
+        "operationId": "read_context",
+        "parameters": [
+          {
+            "name": "uri",
+            "in": "query",
+            "description": "Context URI",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detail content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextReadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Context not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/context/status": {
+      "get": {
+        "tags": [
+          "Context"
+        ],
+        "operationId": "context_status",
+        "responses": {
+          "200": {
+            "description": "Context pipeline status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextStatusResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to collect context status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/diagnostics/{session_id}": {
       "get": {
         "tags": [
@@ -1193,6 +1412,121 @@
           },
           "401": {
             "description": "Unauthorized - invalid or missing secret"
+          }
+        }
+      }
+    },
+    "/memory/extract": {
+      "post": {
+        "tags": [
+          "Memory"
+        ],
+        "operationId": "extract_memory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryExtractRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Memory extracted from session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitReport"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/memory/health": {
+      "get": {
+        "tags": [
+          "Memory"
+        ],
+        "operationId": "memory_health",
+        "responses": {
+          "200": {
+            "description": "Memory subsystem health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryHealth"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/memory/search": {
+      "post": {
+        "tags": [
+          "Memory"
+        ],
+        "operationId": "search_memory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemorySearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Memory search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemorySearchResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/memory/stats": {
+      "get": {
+        "tags": [
+          "Memory"
+        ],
+        "operationId": "memory_stats",
+        "responses": {
+          "200": {
+            "description": "Memory subsystem stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryStats"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
@@ -2532,6 +2866,14 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/ActionRequiredData"
+          },
+          "scope": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ActionRequiredScope"
+              }
+            ],
+            "nullable": true
           }
         }
       },
@@ -2614,6 +2956,23 @@
         ],
         "discriminator": {
           "propertyName": "actionType"
+        }
+      },
+      "ActionRequiredScope": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "threadId": {
+            "type": "string",
+            "nullable": true
+          },
+          "turnId": {
+            "type": "string",
+            "nullable": true
+          }
         }
       },
       "AddExtensionRequest": {
@@ -2723,11 +3082,27 @@
           "session_id"
         ],
         "properties": {
+          "context_trace_level": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContextTraceLevel"
+              }
+            ],
+            "nullable": true
+          },
+          "context_trace_redact": {
+            "type": "boolean",
+            "nullable": true
+          },
           "conversation_so_far": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Message"
             },
+            "nullable": true
+          },
+          "include_context_trace": {
+            "type": "boolean",
             "nullable": true
           },
           "recipe_name": {
@@ -2740,6 +3115,22 @@
           },
           "session_id": {
             "type": "string"
+          },
+          "thread_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "turn_context": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TurnContextOverride"
+              }
+            ],
+            "nullable": true
+          },
+          "turn_id": {
+            "type": "string",
+            "nullable": true
           },
           "user_message": {
             "$ref": "#/components/schemas/Message"
@@ -2763,6 +3154,49 @@
           "Builtin",
           "Recipe"
         ]
+      },
+      "CommitReport": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "messagesScanned",
+          "memoriesCreated",
+          "memoriesMerged",
+          "warnings"
+        ],
+        "properties": {
+          "memoriesCreated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "memoriesMerged": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "messagesScanned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "sourceEndTs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "sourceStartTs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "ConfigKey": {
         "type": "object",
@@ -2884,6 +3318,126 @@
             ]
           }
         ]
+      },
+      "ContextNamespaceStatusResponse": {
+        "type": "object",
+        "required": [
+          "namespace",
+          "path",
+          "exists",
+          "fileCount",
+          "dirCount"
+        ],
+        "properties": {
+          "dirCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "fileCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "ContextQuery": {
+        "type": "object",
+        "required": [
+          "uri"
+        ],
+        "properties": {
+          "include_trace": {
+            "type": "boolean",
+            "description": "是否返回解析轨迹（用于调试）",
+            "nullable": true
+          },
+          "uri": {
+            "type": "string",
+            "description": "上下文 URI，例如 aster://resources/docs/getting-started.md"
+          }
+        }
+      },
+      "ContextReadResponse": {
+        "type": "object",
+        "required": [
+          "uri",
+          "layer",
+          "content",
+          "sourcePath"
+        ],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "layer": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string"
+          },
+          "trace": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContextTraceStepResponse"
+            },
+            "nullable": true
+          },
+          "uri": {
+            "type": "string"
+          }
+        }
+      },
+      "ContextStatusResponse": {
+        "type": "object",
+        "required": [
+          "rootDir",
+          "rootExists",
+          "namespaces"
+        ],
+        "properties": {
+          "namespaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContextNamespaceStatusResponse"
+            }
+          },
+          "rootDir": {
+            "type": "string"
+          },
+          "rootExists": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ContextTraceLevel": {
+        "type": "string",
+        "enum": [
+          "basic",
+          "verbose"
+        ]
+      },
+      "ContextTraceStepResponse": {
+        "type": "object",
+        "required": [
+          "stage",
+          "detail"
+        ],
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          }
+        }
       },
       "Conversation": {
         "type": "array",
@@ -3223,6 +3777,16 @@
               "type"
             ],
             "properties": {
+              "allowed_caller": {
+                "type": "string",
+                "nullable": true
+              },
+              "always_expose_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "args": {
                 "type": "array",
                 "items": {
@@ -3241,6 +3805,9 @@
               },
               "cmd": {
                 "type": "string"
+              },
+              "deferred_loading": {
+                "type": "boolean"
               },
               "description": {
                 "type": "string"
@@ -3281,6 +3848,16 @@
               "type"
             ],
             "properties": {
+              "allowed_caller": {
+                "type": "string",
+                "nullable": true
+              },
+              "always_expose_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "available_tools": {
                 "type": "array",
                 "items": {
@@ -3290,6 +3867,9 @@
               "bundled": {
                 "type": "boolean",
                 "nullable": true
+              },
+              "deferred_loading": {
+                "type": "boolean"
               },
               "description": {
                 "type": "string"
@@ -3325,6 +3905,16 @@
               "type"
             ],
             "properties": {
+              "allowed_caller": {
+                "type": "string",
+                "nullable": true
+              },
+              "always_expose_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "available_tools": {
                 "type": "array",
                 "items": {
@@ -3334,6 +3924,9 @@
               "bundled": {
                 "type": "boolean",
                 "nullable": true
+              },
+              "deferred_loading": {
+                "type": "boolean"
               },
               "description": {
                 "type": "string"
@@ -3360,6 +3953,16 @@
               "type"
             ],
             "properties": {
+              "allowed_caller": {
+                "type": "string",
+                "nullable": true
+              },
+              "always_expose_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "available_tools": {
                 "type": "array",
                 "items": {
@@ -3369,6 +3972,9 @@
               "bundled": {
                 "type": "boolean",
                 "nullable": true
+              },
+              "deferred_loading": {
+                "type": "boolean"
               },
               "description": {
                 "type": "string"
@@ -3419,6 +4025,16 @@
               "type"
             ],
             "properties": {
+              "allowed_caller": {
+                "type": "string",
+                "nullable": true
+              },
+              "always_expose_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "available_tools": {
                 "type": "array",
                 "items": {
@@ -3428,6 +4044,9 @@
               "bundled": {
                 "type": "boolean",
                 "nullable": true
+              },
+              "deferred_loading": {
+                "type": "boolean"
               },
               "description": {
                 "type": "string"
@@ -3466,6 +4085,16 @@
               "type"
             ],
             "properties": {
+              "allowed_caller": {
+                "type": "string",
+                "nullable": true
+              },
+              "always_expose_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "available_tools": {
                 "type": "array",
                 "items": {
@@ -3475,6 +4104,9 @@
               "code": {
                 "type": "string",
                 "description": "The Python code to execute"
+              },
+              "deferred_loading": {
+                "type": "boolean"
               },
               "dependencies": {
                 "type": "array",
@@ -3682,6 +4314,306 @@
           }
         }
       },
+      "ItemRuntime": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ItemRuntimePayload"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "threadId",
+              "turnId",
+              "sequence",
+              "status",
+              "startedAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "completedAt": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "id": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "startedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "status": {
+                "$ref": "#/components/schemas/ItemStatus"
+              },
+              "threadId": {
+                "type": "string"
+              },
+              "turnId": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        ]
+      },
+      "ItemRuntimePayload": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "content",
+              "type"
+            ],
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user_message"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "text",
+              "type"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "agent_message"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "text",
+              "type"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "plan"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "phase",
+              "title",
+              "detail",
+              "type"
+            ],
+            "properties": {
+              "checkpoints": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "detail": {
+                "type": "string"
+              },
+              "phase": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "runtime_status"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "path",
+              "source",
+              "type"
+            ],
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "metadata": {
+                "type": "object"
+              },
+              "path": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "file_artifact"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "text",
+              "type"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reasoning"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "tool_name",
+              "type"
+            ],
+            "properties": {
+              "arguments": {
+                "type": "object"
+              },
+              "error": {
+                "type": "string",
+                "nullable": true
+              },
+              "metadata": {
+                "type": "object"
+              },
+              "output": {
+                "type": "object"
+              },
+              "success": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "tool_name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "tool_call"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "request_id",
+              "action_type",
+              "type"
+            ],
+            "properties": {
+              "action_type": {
+                "type": "string"
+              },
+              "arguments": {
+                "type": "object"
+              },
+              "prompt": {
+                "type": "string",
+                "nullable": true
+              },
+              "request_id": {
+                "type": "string"
+              },
+              "response": {
+                "type": "object"
+              },
+              "tool_name": {
+                "type": "string",
+                "nullable": true
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "approval_request"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "request_id",
+              "action_type",
+              "type"
+            ],
+            "properties": {
+              "action_type": {
+                "type": "string"
+              },
+              "prompt": {
+                "type": "string",
+                "nullable": true
+              },
+              "request_id": {
+                "type": "string"
+              },
+              "requested_schema": {
+                "type": "object"
+              },
+              "response": {
+                "type": "object"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "request_user_input"
+                ]
+              }
+            }
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type"
+        }
+      },
+      "ItemStatus": {
+        "type": "string",
+        "enum": [
+          "in_progress",
+          "completed",
+          "failed"
+        ]
+      },
       "JsonObject": {
         "type": "object",
         "additionalProperties": true
@@ -3783,6 +4715,191 @@
           "uri": {
             "type": "string",
             "description": "URI of the resource (must use ui:// scheme)"
+          }
+        }
+      },
+      "MemoryCategory": {
+        "type": "string",
+        "enum": [
+          "profile",
+          "preferences",
+          "entities",
+          "events",
+          "cases",
+          "patterns"
+        ]
+      },
+      "MemoryExtractRequest": {
+        "type": "object",
+        "required": [
+          "sessionId"
+        ],
+        "properties": {
+          "force": {
+            "type": "boolean"
+          },
+          "maxMessages": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        }
+      },
+      "MemoryHealth": {
+        "type": "object",
+        "required": [
+          "healthy",
+          "message"
+        ],
+        "properties": {
+          "healthy": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "MemoryRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "category",
+          "abstract",
+          "overview",
+          "content",
+          "contentHash",
+          "sourceStartTs",
+          "sourceEndTs",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "abstract": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/MemoryCategory"
+          },
+          "content": {
+            "type": "string"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "overview": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "sourceEndTs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sourceStartTs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MemorySearchRequest": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryCategory"
+            },
+            "nullable": true
+          },
+          "limit": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "query": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "MemorySearchResponse": {
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemorySearchResult"
+            }
+          }
+        }
+      },
+      "MemorySearchResult": {
+        "type": "object",
+        "required": [
+          "record",
+          "relevanceScore"
+        ],
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/MemoryRecord"
+          },
+          "relevanceScore": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "MemoryStats": {
+        "type": "object",
+        "required": [
+          "totalMemories",
+          "totalSessions",
+          "totalEvents",
+          "totalLinks"
+        ],
+        "properties": {
+          "totalEvents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalLinks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalMemories": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalSessions": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -4103,6 +5220,164 @@
           {
             "type": "object",
             "required": [
+              "session_id",
+              "thread_id",
+              "turn_id",
+              "type"
+            ],
+            "properties": {
+              "output_schema_runtime": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/TurnOutputSchemaRuntime"
+                  }
+                ],
+                "nullable": true
+              },
+              "session_id": {
+                "type": "string"
+              },
+              "thread_id": {
+                "type": "string"
+              },
+              "turn_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TurnContext"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "item",
+              "type"
+            ],
+            "properties": {
+              "item": {
+                "$ref": "#/components/schemas/ItemRuntime"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ItemStarted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "item",
+              "type"
+            ],
+            "properties": {
+              "item": {
+                "$ref": "#/components/schemas/ItemRuntime"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ItemUpdated"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "item",
+              "type"
+            ],
+            "properties": {
+              "item": {
+                "$ref": "#/components/schemas/ItemRuntime"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ItemCompleted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "item_id",
+              "trigger",
+              "type"
+            ],
+            "properties": {
+              "detail": {
+                "type": "string",
+                "nullable": true
+              },
+              "item_id": {
+                "type": "string"
+              },
+              "trigger": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ContextCompactionStarted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "item_id",
+              "trigger",
+              "type"
+            ],
+            "properties": {
+              "detail": {
+                "type": "string",
+                "nullable": true
+              },
+              "item_id": {
+                "type": "string"
+              },
+              "trigger": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ContextCompactionCompleted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "message",
+              "type"
+            ],
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ContextCompactionWarning"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
               "model",
               "mode",
               "type"
@@ -4158,6 +5433,27 @@
                 "type": "string",
                 "enum": [
                   "UpdateConversation"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "steps",
+              "type"
+            ],
+            "properties": {
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ContextTraceStepResponse"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ContextTrace"
                 ]
               }
             }
@@ -5307,6 +6603,24 @@
           }
         }
       },
+      "SessionRuntimeSnapshot": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "threads"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadRuntimeSnapshot"
+            }
+          }
+        }
+      },
       "SessionType": {
         "type": "string",
         "enum": [
@@ -5586,6 +6900,74 @@
           }
         }
       },
+      "ThreadRuntime": {
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "workingDir",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ThreadStatus"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "workingDir": {
+            "type": "string"
+          }
+        }
+      },
+      "ThreadRuntimeSnapshot": {
+        "type": "object",
+        "required": [
+          "thread",
+          "turns",
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemRuntime"
+            }
+          },
+          "thread": {
+            "$ref": "#/components/schemas/ThreadRuntime"
+          },
+          "turns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TurnRuntime"
+            }
+          }
+        }
+      },
+      "ThreadStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "archived"
+        ]
+      },
       "TokenState": {
         "type": "object",
         "required": [
@@ -5828,6 +7210,154 @@
           "running",
           "error",
           "disabled"
+        ]
+      },
+      "TurnContextOverride": {
+        "type": "object",
+        "properties": {
+          "approvalPolicy": {
+            "type": "string",
+            "nullable": true
+          },
+          "collaborationMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "effort": {
+            "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "outputSchema": {
+            "type": "object"
+          },
+          "sandboxPolicy": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TurnOutputSchemaRuntime": {
+        "type": "object",
+        "required": [
+          "source",
+          "strategy"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "$ref": "#/components/schemas/TurnOutputSchemaSource"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/TurnOutputSchemaStrategy"
+          }
+        }
+      },
+      "TurnOutputSchemaSource": {
+        "type": "string",
+        "enum": [
+          "session",
+          "turn"
+        ]
+      },
+      "TurnOutputSchemaStrategy": {
+        "type": "string",
+        "enum": [
+          "native",
+          "final_output_tool"
+        ]
+      },
+      "TurnRuntime": {
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "threadId",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "contextOverride": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TurnContextOverride"
+              }
+            ],
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "string"
+          },
+          "inputText": {
+            "type": "string",
+            "nullable": true
+          },
+          "outputSchemaRuntime": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TurnOutputSchemaRuntime"
+              }
+            ],
+            "nullable": true
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/TurnStatus"
+          },
+          "threadId": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TurnStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "completed",
+          "failed",
+          "aborted"
         ]
       },
       "UiMetadata": {

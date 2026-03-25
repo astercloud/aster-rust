@@ -1,12 +1,4 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { SearchView } from './conversation/SearchView';
 import LoadingAster from './LoadingAster';
@@ -36,10 +28,9 @@ import { substituteParameters } from '../utils/providerUtils';
 import CreateRecipeFromSessionModal from './recipes/CreateRecipeFromSessionModal';
 import { toastSuccess } from '../toasts';
 import { Recipe } from '../recipe';
-
-// Context for sharing current model info
-const CurrentModelContext = createContext<{ model: string; mode: string } | null>(null);
-export const useCurrentModelInfo = () => useContext(CurrentModelContext);
+import { SessionExecutionContext } from '../contexts/SessionExecutionContext';
+import { useSessionExecutionRuntime } from '../hooks/useSessionExecutionRuntime';
+import type { MessageEvent } from '../api';
 
 interface BaseChatProps {
   setChat: (chat: ChatType) => void;
@@ -55,13 +46,20 @@ interface BaseChatProps {
   initialMessage?: string;
 }
 
+interface BaseChatContentProps extends BaseChatProps {
+  onStreamEvent: (event: MessageEvent) => void;
+  syncExecutionRuntime: (session?: import('../api').Session | null) => void;
+}
+
 function BaseChatContent({
   renderHeader,
   customChatInputProps = {},
   customMainLayoutProps = {},
   sessionId,
   initialMessage,
-}: BaseChatProps) {
+  onStreamEvent,
+  syncExecutionRuntime,
+}: BaseChatContentProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -106,6 +104,7 @@ function BaseChatContent({
   } = useChatStream({
     sessionId,
     onStreamFinish,
+    onStreamEvent,
   });
 
   // Generate command history from user messages (most recent first)
@@ -157,9 +156,14 @@ function BaseChatContent({
     localInputTokens: 0,
     localOutputTokens: 0,
     session,
+    chatState,
   });
 
   const recipe = session?.recipe;
+
+  useEffect(() => {
+    syncExecutionRuntime(session);
+  }, [session, syncExecutionRuntime]);
 
   useEffect(() => {
     if (!recipe) return;
@@ -464,5 +468,17 @@ function BaseChatContent({
 }
 
 export default function BaseChat(props: BaseChatProps) {
-  return <BaseChatContent {...props} />;
+  const { currentModelInfo, syncSession, handleStreamEvent } = useSessionExecutionRuntime(
+    props.sessionId
+  );
+
+  return (
+    <SessionExecutionContext.Provider value={currentModelInfo}>
+      <BaseChatContent
+        {...props}
+        onStreamEvent={handleStreamEvent}
+        syncExecutionRuntime={syncSession}
+      />
+    </SessionExecutionContext.Provider>
+  );
 }

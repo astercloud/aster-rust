@@ -15,6 +15,7 @@ import { BottomMenuExtensionSelection } from './bottom_menu/BottomMenuExtensionS
 import { AlertType, useAlerts } from './alerts';
 import { useConfig } from './ConfigContext';
 import { useModelAndProvider } from './ModelAndProviderContext';
+import { useCurrentModelInfo } from '../contexts/SessionExecutionContext';
 import { useWhisper } from '../hooks/useWhisper';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import { toastError } from '../toasts';
@@ -142,7 +143,17 @@ export default function ChatInput({
     null
   ) as React.RefObject<HTMLDivElement>;
   const { getProviders, read } = useConfig();
+  const sessionExecutionInfo = useCurrentModelInfo();
   const { getCurrentModelAndProvider, currentModel, currentProvider } = useModelAndProvider();
+  const shouldUseRuntimeModel = chatState !== ChatState.Idle;
+  const effectiveModel =
+    shouldUseRuntimeModel && sessionExecutionInfo?.model
+      ? sessionExecutionInfo.model
+      : currentModel;
+  const effectiveProvider =
+    shouldUseRuntimeModel && sessionExecutionInfo?.provider
+      ? sessionExecutionInfo.provider
+      : currentProvider;
   const [tokenLimit, setTokenLimit] = useState<number>(TOKEN_LIMIT_DEFAULT);
   const [isTokenLimitLoaded, setIsTokenLimitLoaded] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
@@ -416,7 +427,11 @@ export default function ChatInput({
       setIsTokenLimitLoaded(false);
 
       // Get current model and provider first to avoid unnecessary provider fetches
-      const { model, provider } = await getCurrentModelAndProvider();
+      const resolved =
+        effectiveModel && effectiveProvider
+          ? { model: effectiveModel, provider: effectiveProvider }
+          : await getCurrentModelAndProvider();
+      const { model, provider } = resolved;
       if (!model || !provider) {
         console.log('No model or provider found');
         setIsTokenLimitLoaded(true);
@@ -461,7 +476,7 @@ export default function ChatInput({
   useEffect(() => {
     loadProviderDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentModel, currentProvider]);
+  }, [effectiveModel, effectiveProvider]);
 
   // Handle tool count alerts and token usage
   useEffect(() => {
@@ -1527,6 +1542,7 @@ export default function ChatInput({
                 <CostTracker
                   inputTokens={accumulatedInputTokens}
                   outputTokens={accumulatedOutputTokens}
+                  preferRuntime={shouldUseRuntimeModel}
                   sessionCosts={sessionCosts}
                 />
               </div>
@@ -1539,6 +1555,7 @@ export default function ChatInput({
                 dropdownRef={dropdownRef}
                 setView={setView}
                 alerts={alerts}
+                preferRuntime={shouldUseRuntimeModel}
               />
             </div>
           </Tooltip>

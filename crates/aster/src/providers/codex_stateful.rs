@@ -262,6 +262,10 @@ impl Provider for CodexStatefulProvider {
         self.model.clone()
     }
 
+    fn supports_native_output_schema(&self) -> bool {
+        true
+    }
+
     #[tracing::instrument(
         skip(self, model_config, system, messages, _tools),
         fields(model_config, input, output, input_tokens, output_tokens, total_tokens)

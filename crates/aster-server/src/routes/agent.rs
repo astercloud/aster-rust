@@ -371,7 +371,14 @@ async fn update_from_session(
         .await
         {
             Ok(Some(recipe)) => {
-                if let Some(prompt) = apply_recipe_to_agent(&agent, &recipe, true).await {
+                if let Some(prompt) =
+                    apply_recipe_to_agent(&agent, &recipe, true)
+                        .await
+                        .map_err(|err| ErrorResponse {
+                            message: format!("Failed to apply recipe to agent: {}", err),
+                            status: StatusCode::INTERNAL_SERVER_ERROR,
+                        })?
+                {
                     update_prompt = prompt;
                 }
             }

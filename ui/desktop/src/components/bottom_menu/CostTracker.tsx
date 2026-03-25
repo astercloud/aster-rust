@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useModelAndProvider } from '../ModelAndProviderContext';
+import { useCurrentModelInfo } from '../../contexts/SessionExecutionContext';
 import { CoinIcon } from '../icons';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import { fetchModelPricing } from '../../utils/pricing';
@@ -8,6 +9,7 @@ import { PricingData } from '../../api';
 interface CostTrackerProps {
   inputTokens?: number;
   outputTokens?: number;
+  preferRuntime?: boolean;
   sessionCosts?: {
     [key: string]: {
       inputTokens: number;
@@ -17,8 +19,20 @@ interface CostTrackerProps {
   };
 }
 
-export function CostTracker({ inputTokens = 0, outputTokens = 0, sessionCosts }: CostTrackerProps) {
+export function CostTracker({
+  inputTokens = 0,
+  outputTokens = 0,
+  preferRuntime = false,
+  sessionCosts,
+}: CostTrackerProps) {
+  const sessionExecutionInfo = useCurrentModelInfo();
   const { currentModel, currentProvider } = useModelAndProvider();
+  const effectiveModel =
+    preferRuntime && sessionExecutionInfo?.model ? sessionExecutionInfo.model : currentModel;
+  const effectiveProvider =
+    preferRuntime && sessionExecutionInfo?.provider
+      ? sessionExecutionInfo.provider
+      : currentProvider;
   const [costInfo, setCostInfo] = useState<PricingData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showPricing, setShowPricing] = useState(true);
@@ -38,14 +52,14 @@ export function CostTracker({ inputTokens = 0, outputTokens = 0, sessionCosts }:
 
   useEffect(() => {
     const loadCostInfo = async () => {
-      if (!currentModel || !currentProvider) {
+      if (!effectiveModel || !effectiveProvider) {
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
       try {
-        const costData = await fetchModelPricing(currentProvider, currentModel);
+        const costData = await fetchModelPricing(effectiveProvider, effectiveModel);
         if (costData) {
           setCostInfo(costData);
           setPricingFailed(false);
@@ -62,7 +76,7 @@ export function CostTracker({ inputTokens = 0, outputTokens = 0, sessionCosts }:
     };
 
     loadCostInfo();
-  }, [currentModel, currentProvider]);
+  }, [effectiveModel, effectiveProvider]);
 
   // Return null early if pricing is disabled
   if (!showPricing) {
@@ -113,7 +127,7 @@ export function CostTracker({ inputTokens = 0, outputTokens = 0, sessionCosts }:
   };
 
   // Show loading state or when we don't have model/provider info
-  if (!currentModel || !currentProvider) {
+  if (!effectiveModel || !effectiveProvider) {
     return null;
   }
 
@@ -136,7 +150,7 @@ export function CostTracker({ inputTokens = 0, outputTokens = 0, sessionCosts }:
   ) {
     // If it's a known free/local provider, show $0.000000 without "not available" message
     const freeProviders = ['ollama', 'local', 'localhost'];
-    if (freeProviders.includes(currentProvider.toLowerCase())) {
+    if (freeProviders.includes(effectiveProvider.toLowerCase())) {
       return (
         <>
           <Tooltip>
@@ -158,9 +172,9 @@ export function CostTracker({ inputTokens = 0, outputTokens = 0, sessionCosts }:
     // Otherwise show as unavailable
     const getUnavailableTooltip = () => {
       if (pricingFailed) {
-        return `Pricing data unavailable for ${currentModel}`;
+        return `Pricing data unavailable for ${effectiveModel}`;
       }
-      return `Cost data not available for ${currentModel} (${inputTokens.toLocaleString()} input, ${outputTokens.toLocaleString()} output tokens)`;
+      return `Cost data not available for ${effectiveModel} (${inputTokens.toLocaleString()} input, ${outputTokens.toLocaleString()} output tokens)`;
     };
 
     return (
@@ -185,7 +199,7 @@ export function CostTracker({ inputTokens = 0, outputTokens = 0, sessionCosts }:
   const getTooltipContent = (): string => {
     // Handle error states first
     if (pricingFailed) {
-      return `Pricing data unavailable for ${currentProvider}/${currentModel}`;
+      return `Pricing data unavailable for ${effectiveProvider}/${effectiveModel}`;
     }
 
     // Handle session costs
@@ -204,7 +218,7 @@ export function CostTracker({ inputTokens = 0, outputTokens = 0, sessionCosts }:
           inputTokens * (costInfo.input_token_cost || 0) +
           outputTokens * (costInfo.output_token_cost || 0);
         if (currentCost > 0) {
-          tooltip += `${currentProvider}/${currentModel} (current): ${costInfo.currency || '$'}${currentCost.toFixed(6)} (${inputTokens.toLocaleString()} in, ${outputTokens.toLocaleString()} out)\n`;
+          tooltip += `${effectiveProvider}/${effectiveModel} (current): ${costInfo.currency || '$'}${currentCost.toFixed(6)} (${inputTokens.toLocaleString()} in, ${outputTokens.toLocaleString()} out)\n`;
         }
       }
 

@@ -546,18 +546,52 @@ async fn apply_settings_overrides(
     params: &SubagentParams,
 ) -> Result<TaskConfig> {
     if let Some(settings) = &params.settings {
-        if settings.provider.is_some() || settings.model.is_some() || settings.temperature.is_some()
+        let current_model_config = task_config.provider.get_model_config();
+        let provider_override = settings
+            .provider
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        let model_override = settings
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+
+        if provider_override.is_some() || model_override.is_some() || settings.temperature.is_some()
         {
-            let provider_name = settings
-                .provider
+            let provider_name = provider_override
                 .clone()
                 .unwrap_or_else(|| task_config.provider.get_name().to_string());
+            let resolved_model_name = if let Some(model) = model_override.as_deref() {
+                model.to_string()
+            } else if provider_override.is_some() {
+                providers::create_with_default_model(&provider_name)
+                    .await
+                    .map_err(|e| {
+                        anyhow!(
+                            "Failed to resolve default model for provider '{}': {}",
+                            provider_name,
+                            e
+                        )
+                    })?
+                    .get_model_config()
+                    .model_name
+            } else {
+                current_model_config.model_name.clone()
+            };
 
-            let mut model_config = task_config.provider.get_model_config();
-
-            if let Some(model) = &settings.model {
-                model_config.model_name = model.clone();
-            }
+            let mut model_config = current_model_config
+                .rebuild_with_model_name(&resolved_model_name)
+                .map_err(|e| {
+                    anyhow!(
+                        "Failed to rebuild model config for model '{}': {}",
+                        resolved_model_name,
+                        e
+                    )
+                })?;
 
             if let Some(temp) = settings.temperature {
                 model_config = model_config.with_temperature(Some(temp));
@@ -566,6 +600,13 @@ async fn apply_settings_overrides(
             task_config.provider = providers::create(&provider_name, model_config)
                 .await
                 .map_err(|e| anyhow!("Failed to create provider '{}': {}", provider_name, e))?;
+
+            if provider_override.is_some() || model_override.is_some() {
+                let turn_context = task_config
+                    .turn_context
+                    .get_or_insert_with(crate::session::TurnContextOverride::default);
+                turn_context.model = Some(task_config.provider.get_model_config().model_name);
+            }
         }
     }
 
@@ -585,7 +626,11 @@ async fn apply_settings_overrides(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::declarative_providers::{DeclarativeProviderConfig, ProviderEngine};
     use crate::conversation::message::ActionRequiredScope;
+    use crate::providers::base::{ModelInfo, Provider};
+    use crate::session::TurnContextOverride;
+    use std::sync::Arc;
 
     #[test]
     fn test_tool_name() {
@@ -802,6 +847,7 @@ mod tests {
             parent_working_dir: PathBuf::from("/tmp/workspace-parent"),
             extensions: Vec::new(),
             max_turns: Some(3),
+            turn_context: None,
         };
         let scope = ActionRequiredScope {
             session_id: Some("parent-session-1".to_string()),
@@ -815,5 +861,125 @@ mod tests {
         .await;
 
         assert_eq!(metadata.created_from_turn_id.as_deref(), Some("turn-1"));
+    }
+
+    fn build_test_ollama_provider(model: &str) -> Arc<dyn Provider> {
+        Arc::new(
+            crate::providers::ollama::OllamaProvider::from_custom_config(
+                crate::model::ModelConfig::new_or_fail(model),
+                DeclarativeProviderConfig {
+                    name: "ollama".to_string(),
+                    engine: ProviderEngine::Ollama,
+                    display_name: "Test Ollama".to_string(),
+                    description: Some("Test-only Ollama provider".to_string()),
+                    api_key_env: "IGNORED".to_string(),
+                    base_url: "http://localhost:11434".to_string(),
+                    models: vec![ModelInfo::new(model, 128_000)],
+                    headers: None,
+                    timeout_seconds: Some(1),
+                    supports_streaming: Some(true),
+                },
+            )
+            .expect("provider"),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_apply_settings_overrides_syncs_explicit_model_into_turn_context() {
+        let task_config = TaskConfig {
+            provider: build_test_ollama_provider("qwen3"),
+            parent_session_id: "parent-session-1".to_string(),
+            parent_working_dir: PathBuf::from("/tmp/workspace-parent"),
+            extensions: Vec::new(),
+            max_turns: Some(3),
+            turn_context: Some(TurnContextOverride {
+                model: Some("parent-model".to_string()),
+                effort: Some("high".to_string()),
+                ..TurnContextOverride::default()
+            }),
+        };
+        let params = SubagentParams {
+            instructions: Some("分析仓库结构".to_string()),
+            subrecipe: None,
+            role_hint: None,
+            parameters: None,
+            extensions: None,
+            settings: Some(SubagentSettings {
+                provider: None,
+                model: Some("qwen3-coder:30b".to_string()),
+                temperature: Some(0.2),
+            }),
+            summary: true,
+            images: None,
+        };
+
+        let updated = apply_settings_overrides(task_config, &params)
+            .await
+            .expect("settings should apply");
+
+        assert_eq!(
+            updated.provider.get_model_config().model_name,
+            "qwen3-coder:30b"
+        );
+        assert_eq!(updated.provider.get_model_config().temperature, Some(0.2));
+        assert_eq!(
+            updated
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.model.as_deref()),
+            Some("qwen3-coder:30b")
+        );
+        assert_eq!(
+            updated
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.effort.as_deref()),
+            Some("high")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_apply_settings_overrides_provider_override_resets_to_provider_default_model() {
+        let task_config = TaskConfig {
+            provider: build_test_ollama_provider("qwen3-coder:30b"),
+            parent_session_id: "parent-session-1".to_string(),
+            parent_working_dir: PathBuf::from("/tmp/workspace-parent"),
+            extensions: Vec::new(),
+            max_turns: Some(3),
+            turn_context: Some(TurnContextOverride {
+                model: Some("qwen3-coder:30b".to_string()),
+                ..TurnContextOverride::default()
+            }),
+        };
+        let params = SubagentParams {
+            instructions: Some("分析仓库结构".to_string()),
+            subrecipe: None,
+            role_hint: None,
+            parameters: None,
+            extensions: None,
+            settings: Some(SubagentSettings {
+                provider: Some("ollama".to_string()),
+                model: None,
+                temperature: None,
+            }),
+            summary: true,
+            images: None,
+        };
+
+        let updated = apply_settings_overrides(task_config, &params)
+            .await
+            .expect("provider override should apply");
+
+        assert_eq!(
+            updated.provider.get_model_config().model_name,
+            crate::providers::ollama::OLLAMA_DEFAULT_MODEL
+        );
+        assert_eq!(
+            updated
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.model.as_deref()),
+            Some(crate::providers::ollama::OLLAMA_DEFAULT_MODEL)
+        );
     }
 }

@@ -1,5 +1,4 @@
 use crate::agents::tool_execution::ToolCallResult;
-use crate::recipe::Response;
 use indoc::formatdoc;
 use rmcp::model::{CallToolRequestParam, Content, ErrorCode, ErrorData, Tool, ToolAnnotations};
 use serde_json::Value;
@@ -9,30 +8,46 @@ pub const FINAL_OUTPUT_TOOL_NAME: &str = "recipe__final_output";
 pub const FINAL_OUTPUT_CONTINUATION_MESSAGE: &str =
     "You MUST call the `final_output` tool NOW with the final output for the user.";
 
+#[derive(Debug)]
 pub struct FinalOutputTool {
-    pub response: Response,
+    output_schema: Value,
     /// The final output collected for the user. It will be a single line string for easy script extraction from output.
     pub final_output: Option<String>,
 }
 
 impl FinalOutputTool {
-    pub fn new(response: Response) -> Self {
-        if response.json_schema.is_none() {
-            panic!("Cannot create FinalOutputTool: json_schema is required");
-        }
-        let schema = response.json_schema.as_ref().unwrap();
+    pub fn validate_output_schema(output_schema: &Value) -> Result<(), String> {
+        let Some(schema_object) = output_schema.as_object() else {
+            return Err(
+                "Cannot create FinalOutputTool: output_schema must be a JSON object".to_string(),
+            );
+        };
 
-        if let Some(obj) = schema.as_object() {
-            if obj.is_empty() {
-                panic!("Cannot create FinalOutputTool: empty json_schema is not allowed");
+        if schema_object.is_empty() {
+            return Err(
+                "Cannot create FinalOutputTool: empty output_schema is not allowed".to_string(),
+            );
+        }
+
+        if let Some(schema_type) = schema_object.get("type") {
+            if schema_type != "object" {
+                return Err(
+                    "Cannot create FinalOutputTool: top-level output_schema type must be object"
+                        .to_string(),
+                );
             }
         }
 
-        jsonschema::meta::validate(schema).unwrap();
-        Self {
-            response,
+        jsonschema::meta::validate(output_schema)
+            .map_err(|error| format!("Cannot create FinalOutputTool: invalid schema: {error}"))
+    }
+
+    pub fn new(output_schema: Value) -> Result<Self, String> {
+        Self::validate_output_schema(&output_schema)?;
+        Ok(Self {
+            output_schema,
             final_output: None,
-        }
+        })
     }
 
     pub fn tool(&self) -> Tool {
@@ -56,18 +71,12 @@ impl FinalOutputTool {
             When validation fails, you'll receive:
             - Specific validation errors
             - The expected format
-        "#, serde_json::to_string_pretty(self.response.json_schema.as_ref().unwrap()).unwrap()};
+        "#, serde_json::to_string_pretty(&self.output_schema).unwrap()};
 
         Tool::new(
             FINAL_OUTPUT_TOOL_NAME.to_string(),
             instructions,
-            self.response
-                .json_schema
-                .as_ref()
-                .unwrap()
-                .as_object()
-                .unwrap()
-                .clone(),
+            self.output_schema.as_object().unwrap().clone(),
         )
         .annotate(ToolAnnotations {
             title: Some("Final Output".to_string()),
@@ -88,17 +97,16 @@ impl FinalOutputTool {
             {}
 
             ----
-        "#, serde_json::to_string_pretty(self.response.json_schema.as_ref().unwrap()).unwrap()}
+        "#, serde_json::to_string_pretty(&self.output_schema).unwrap()}
     }
 
     async fn validate_json_output(&self, output: &Value) -> Result<Value, String> {
-        let compiled_schema =
-            match jsonschema::validator_for(self.response.json_schema.as_ref().unwrap()) {
-                Ok(schema) => schema,
-                Err(e) => {
-                    return Err(format!("Internal error: Failed to compile schema: {}", e));
-                }
-            };
+        let compiled_schema = match jsonschema::validator_for(&self.output_schema) {
+            Ok(schema) => schema,
+            Err(e) => {
+                return Err(format!("Internal error: Failed to compile schema: {}", e));
+            }
+        };
 
         let validation_errors: Vec<String> = compiled_schema
             .iter_errors(output)
@@ -111,7 +119,7 @@ impl FinalOutputTool {
             Err(format!(
                 "Validation failed:\n{}\n\nExpected format:\n{}\n\nPlease correct your output to match the expected JSON schema and try again.",
                 validation_errors.join("\n"),
-                serde_json::to_string_pretty(self.response.json_schema.as_ref().unwrap()).unwrap_or_else(|_| "Invalid schema".to_string())
+                serde_json::to_string_pretty(&self.output_schema).unwrap_or_else(|_| "Invalid schema".to_string())
             ))
         }
     }
@@ -156,7 +164,6 @@ impl FinalOutputTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::recipe::Response;
     use rmcp::model::CallToolRequestParam;
     use rmcp::object;
     use serde_json::json;
@@ -183,55 +190,55 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Cannot create FinalOutputTool: json_schema is required")]
-    fn test_new_with_missing_schema() {
-        let response = Response { json_schema: None };
-        FinalOutputTool::new(response);
+    fn test_new_with_non_object_schema_returns_error() {
+        let error = FinalOutputTool::new(json!("text")).unwrap_err();
+        assert!(error.contains("output_schema must be a JSON object"));
     }
 
     #[test]
-    #[should_panic(expected = "Cannot create FinalOutputTool: empty json_schema is not allowed")]
-    fn test_new_with_empty_schema() {
-        let response = Response {
-            json_schema: Some(json!({})),
-        };
-        FinalOutputTool::new(response);
+    fn test_new_with_empty_schema_returns_error() {
+        let error = FinalOutputTool::new(json!({})).unwrap_err();
+        assert!(error.contains("empty output_schema is not allowed"));
     }
 
     #[test]
-    #[should_panic]
-    fn test_new_with_invalid_schema() {
-        let response = Response {
-            json_schema: Some(json!({
-                "type": "invalid_type",
-                "properties": {
-                    "message": {
-                        "type": "unknown_type"
-                    }
+    fn test_new_with_non_object_root_type_returns_error() {
+        let error = FinalOutputTool::new(json!({
+            "type": "string"
+        }))
+        .unwrap_err();
+        assert!(error.contains("top-level output_schema type must be object"));
+    }
+
+    #[test]
+    fn test_new_with_invalid_schema_returns_error() {
+        let error = FinalOutputTool::new(json!({
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "unknown_type"
                 }
-            })),
-        };
-        FinalOutputTool::new(response);
+            }
+        }))
+        .unwrap_err();
+        assert!(error.contains("invalid schema"));
     }
 
     #[tokio::test]
     async fn test_execute_tool_call_schema_validation_failure() {
-        let response = Response {
-            json_schema: Some(json!({
-                "type": "object",
-                "properties": {
-                    "message": {
-                        "type": "string"
-                    },
-                    "count": {
-                        "type": "number"
-                    }
+        let mut tool = FinalOutputTool::new(json!({
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
                 },
-                "required": ["message", "count"]
-            })),
-        };
-
-        let mut tool = FinalOutputTool::new(response);
+                "count": {
+                    "type": "number"
+                }
+            },
+            "required": ["message", "count"]
+        }))
+        .expect("schema should be valid");
         let tool_call = CallToolRequestParam {
             name: FINAL_OUTPUT_TOOL_NAME.into(),
             arguments: Some(object!({
@@ -249,11 +256,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_tool_call_complex_valid_json() {
-        let response = Response {
-            json_schema: Some(create_complex_test_schema()),
-        };
-
-        let mut tool = FinalOutputTool::new(response);
+        let mut tool =
+            FinalOutputTool::new(create_complex_test_schema()).expect("schema should be valid");
         let tool_call = CallToolRequestParam {
             name: FINAL_OUTPUT_TOOL_NAME.into(),
             arguments: Some(object!({

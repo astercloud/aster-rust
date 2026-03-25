@@ -6,6 +6,7 @@ export type ClientOptions = {
 
 export type ActionRequired = {
     data: ActionRequiredData;
+    scope?: ActionRequiredScope | null;
 };
 
 export type ActionRequiredData = {
@@ -23,6 +24,12 @@ export type ActionRequiredData = {
     actionType: 'elicitationResponse';
     id: string;
     user_data: unknown;
+};
+
+export type ActionRequiredScope = {
+    sessionId?: string | null;
+    threadId?: string | null;
+    turnId?: string | null;
 };
 
 export type AddExtensionRequest = {
@@ -60,10 +67,16 @@ export type CallToolResponse = {
 };
 
 export type ChatRequest = {
+    context_trace_level?: ContextTraceLevel | null;
+    context_trace_redact?: boolean | null;
     conversation_so_far?: Array<Message> | null;
+    include_context_trace?: boolean | null;
     recipe_name?: string | null;
     recipe_version?: string | null;
     session_id: string;
+    thread_id?: string | null;
+    turn_context?: TurnContextOverride | null;
+    turn_id?: string | null;
     user_message: Message;
 };
 
@@ -72,6 +85,16 @@ export type CheckProviderRequest = {
 };
 
 export type CommandType = 'Builtin' | 'Recipe';
+
+export type CommitReport = {
+    memoriesCreated: number;
+    memoriesMerged: number;
+    messagesScanned: number;
+    sessionId: string;
+    sourceEndTs?: number | null;
+    sourceStartTs?: number | null;
+    warnings: Array<string>;
+};
 
 /**
  * Configuration key metadata for provider setup
@@ -119,6 +142,46 @@ export type ConfirmToolActionRequest = {
 };
 
 export type Content = RawTextContent | RawImageContent | RawEmbeddedResource | RawAudioContent | RawResource;
+
+export type ContextNamespaceStatusResponse = {
+    dirCount: number;
+    exists: boolean;
+    fileCount: number;
+    namespace: string;
+    path: string;
+};
+
+export type ContextQuery = {
+    /**
+     * 是否返回解析轨迹（用于调试）
+     */
+    include_trace?: boolean | null;
+    /**
+     * 上下文 URI，例如 aster://resources/docs/getting-started.md
+     */
+    uri: string;
+};
+
+export type ContextReadResponse = {
+    content: string;
+    layer: string;
+    sourcePath: string;
+    trace?: Array<ContextTraceStepResponse> | null;
+    uri: string;
+};
+
+export type ContextStatusResponse = {
+    namespaces: Array<ContextNamespaceStatusResponse>;
+    rootDir: string;
+    rootExists: boolean;
+};
+
+export type ContextTraceLevel = 'basic' | 'verbose';
+
+export type ContextTraceStepResponse = {
+    detail: string;
+    stage: string;
+};
 
 export type Conversation = Array<Message>;
 
@@ -235,10 +298,13 @@ export type ExtensionConfig = {
     type: 'sse';
     uri?: string | null;
 } | {
+    allowed_caller?: string | null;
+    always_expose_tools?: Array<string>;
     args: Array<string>;
     available_tools?: Array<string>;
     bundled?: boolean | null;
     cmd: string;
+    deferred_loading?: boolean;
     description: string;
     env_keys?: Array<string>;
     envs?: Envs;
@@ -249,8 +315,11 @@ export type ExtensionConfig = {
     timeout?: number | null;
     type: 'stdio';
 } | {
+    allowed_caller?: string | null;
+    always_expose_tools?: Array<string>;
     available_tools?: Array<string>;
     bundled?: boolean | null;
+    deferred_loading?: boolean;
     description: string;
     display_name?: string | null;
     /**
@@ -260,8 +329,11 @@ export type ExtensionConfig = {
     timeout?: number | null;
     type: 'builtin';
 } | {
+    allowed_caller?: string | null;
+    always_expose_tools?: Array<string>;
     available_tools?: Array<string>;
     bundled?: boolean | null;
+    deferred_loading?: boolean;
     description: string;
     /**
      * The name used to identify this extension
@@ -269,8 +341,11 @@ export type ExtensionConfig = {
     name: string;
     type: 'platform';
 } | {
+    allowed_caller?: string | null;
+    always_expose_tools?: Array<string>;
     available_tools?: Array<string>;
     bundled?: boolean | null;
+    deferred_loading?: boolean;
     description: string;
     env_keys?: Array<string>;
     envs?: Envs;
@@ -285,8 +360,11 @@ export type ExtensionConfig = {
     type: 'streamable_http';
     uri: string;
 } | {
+    allowed_caller?: string | null;
+    always_expose_tools?: Array<string>;
     available_tools?: Array<string>;
     bundled?: boolean | null;
+    deferred_loading?: boolean;
     description: string;
     /**
      * Instructions for how to use these tools
@@ -302,11 +380,14 @@ export type ExtensionConfig = {
     tools: Array<Tool>;
     type: 'frontend';
 } | {
+    allowed_caller?: string | null;
+    always_expose_tools?: Array<string>;
     available_tools?: Array<string>;
     /**
      * The Python code to execute
      */
     code: string;
+    deferred_loading?: boolean;
     /**
      * Python package dependencies required by this extension
      */
@@ -385,6 +466,84 @@ export type InspectJobResponse = {
     sessionId?: string | null;
 };
 
+export type ItemRuntime = ItemRuntimePayload & {
+    completedAt?: string | null;
+    id: string;
+    sequence: number;
+    startedAt: string;
+    status: ItemStatus;
+    threadId: string;
+    turnId: string;
+    updatedAt: string;
+};
+
+export type ItemRuntimePayload = {
+    content: string;
+    type: 'user_message';
+} | {
+    text: string;
+    type: 'agent_message';
+} | {
+    text: string;
+    type: 'plan';
+} | {
+    checkpoints?: Array<string>;
+    detail: string;
+    phase: string;
+    title: string;
+    type: 'runtime_status';
+} | {
+    content?: string;
+    metadata?: {
+        [key: string]: unknown;
+    };
+    path: string;
+    source: string;
+    type: 'file_artifact';
+} | {
+    text: string;
+    type: 'reasoning';
+} | {
+    arguments?: {
+        [key: string]: unknown;
+    };
+    error?: string | null;
+    metadata?: {
+        [key: string]: unknown;
+    };
+    output?: {
+        [key: string]: unknown;
+    };
+    success?: boolean | null;
+    tool_name: string;
+    type: 'tool_call';
+} | {
+    action_type: string;
+    arguments?: {
+        [key: string]: unknown;
+    };
+    prompt?: string | null;
+    request_id: string;
+    response?: {
+        [key: string]: unknown;
+    };
+    tool_name?: string | null;
+    type: 'approval_request';
+} | {
+    action_type: string;
+    prompt?: string | null;
+    request_id: string;
+    requested_schema?: {
+        [key: string]: unknown;
+    };
+    response?: {
+        [key: string]: unknown;
+    };
+    type: 'request_user_input';
+};
+
+export type ItemStatus = 'in_progress' | 'completed' | 'failed';
+
 export type JsonObject = {
     [key: string]: unknown;
 };
@@ -438,6 +597,56 @@ export type McpAppResource = {
     uri: string;
 };
 
+export type MemoryCategory = 'profile' | 'preferences' | 'entities' | 'events' | 'cases' | 'patterns';
+
+export type MemoryExtractRequest = {
+    force?: boolean;
+    maxMessages?: number | null;
+    sessionId: string;
+};
+
+export type MemoryHealth = {
+    healthy: boolean;
+    message: string;
+};
+
+export type MemoryRecord = {
+    abstract: string;
+    category: MemoryCategory;
+    content: string;
+    contentHash: string;
+    createdAt: string;
+    id: number;
+    overview: string;
+    sessionId: string;
+    sourceEndTs: number;
+    sourceStartTs: number;
+    updatedAt: string;
+};
+
+export type MemorySearchRequest = {
+    categories?: Array<MemoryCategory> | null;
+    limit?: number | null;
+    query: string;
+    sessionId?: string | null;
+};
+
+export type MemorySearchResponse = {
+    results: Array<MemorySearchResult>;
+};
+
+export type MemorySearchResult = {
+    record: MemoryRecord;
+    relevanceScore: number;
+};
+
+export type MemoryStats = {
+    totalEvents: number;
+    totalLinks: number;
+    totalMemories: number;
+    totalSessions: number;
+};
+
 /**
  * A message to or from an LLM
  */
@@ -486,6 +695,34 @@ export type MessageEvent = {
     token_state: TokenState;
     type: 'Finish';
 } | {
+    output_schema_runtime?: TurnOutputSchemaRuntime | null;
+    session_id: string;
+    thread_id: string;
+    turn_id: string;
+    type: 'TurnContext';
+} | {
+    item: ItemRuntime;
+    type: 'ItemStarted';
+} | {
+    item: ItemRuntime;
+    type: 'ItemUpdated';
+} | {
+    item: ItemRuntime;
+    type: 'ItemCompleted';
+} | {
+    detail?: string | null;
+    item_id: string;
+    trigger: string;
+    type: 'ContextCompactionStarted';
+} | {
+    detail?: string | null;
+    item_id: string;
+    trigger: string;
+    type: 'ContextCompactionCompleted';
+} | {
+    message: string;
+    type: 'ContextCompactionWarning';
+} | {
     mode: string;
     model: string;
     type: 'ModelChange';
@@ -498,6 +735,9 @@ export type MessageEvent = {
 } | {
     conversation: Conversation;
     type: 'UpdateConversation';
+} | {
+    steps: Array<ContextTraceStepResponse>;
+    type: 'ContextTrace';
 } | {
     type: 'Ping';
 };
@@ -899,6 +1139,11 @@ export type SessionListResponse = {
     sessions: Array<Session>;
 };
 
+export type SessionRuntimeSnapshot = {
+    sessionId: string;
+    threads: Array<ThreadRuntimeSnapshot>;
+};
+
 export type SessionType = 'user' | 'scheduled' | 'sub_agent' | 'hidden' | 'terminal';
 
 export type SessionsQuery = {
@@ -993,6 +1238,26 @@ export type ThinkingContent = {
     thinking: string;
 };
 
+export type ThreadRuntime = {
+    createdAt: string;
+    id: string;
+    metadata?: {
+        [key: string]: unknown;
+    };
+    sessionId: string;
+    status: ThreadStatus;
+    updatedAt: string;
+    workingDir: string;
+};
+
+export type ThreadRuntimeSnapshot = {
+    items: Array<ItemRuntime>;
+    thread: ThreadRuntime;
+    turns: Array<TurnRuntime>;
+};
+
+export type ThreadStatus = 'active' | 'archived';
+
 export type TokenState = {
     accumulatedInputTokens: number;
     accumulatedOutputTokens: number;
@@ -1082,6 +1347,49 @@ export type TunnelInfo = {
 };
 
 export type TunnelState = 'idle' | 'starting' | 'running' | 'error' | 'disabled';
+
+export type TurnContextOverride = {
+    approvalPolicy?: string | null;
+    collaborationMode?: string | null;
+    cwd?: string;
+    effort?: string | null;
+    metadata?: {
+        [key: string]: unknown;
+    };
+    model?: string | null;
+    outputSchema?: {
+        [key: string]: unknown;
+    };
+    sandboxPolicy?: string | null;
+};
+
+export type TurnOutputSchemaRuntime = {
+    modelName?: string | null;
+    providerName?: string | null;
+    source: TurnOutputSchemaSource;
+    strategy: TurnOutputSchemaStrategy;
+};
+
+export type TurnOutputSchemaSource = 'session' | 'turn';
+
+export type TurnOutputSchemaStrategy = 'native' | 'final_output_tool';
+
+export type TurnRuntime = {
+    completedAt?: string | null;
+    contextOverride?: TurnContextOverride | null;
+    createdAt: string;
+    errorMessage?: string | null;
+    id: string;
+    inputText?: string | null;
+    outputSchemaRuntime?: TurnOutputSchemaRuntime | null;
+    sessionId: string;
+    startedAt?: string | null;
+    status: TurnStatus;
+    threadId: string;
+    updatedAt: string;
+};
+
+export type TurnStatus = 'queued' | 'running' | 'completed' | 'failed' | 'aborted';
 
 /**
  * UI-specific metadata for MCP resources
@@ -1341,6 +1649,38 @@ export type ResumeAgentResponses = {
 };
 
 export type ResumeAgentResponse = ResumeAgentResponses[keyof ResumeAgentResponses];
+
+export type GetRuntimeSnapshotData = {
+    body?: never;
+    path: {
+        /**
+         * Unique identifier for the session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent/runtime/{session_id}';
+};
+
+export type GetRuntimeSnapshotErrors = {
+    /**
+     * Unauthorized - invalid secret key
+     */
+    401: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type GetRuntimeSnapshotResponses = {
+    /**
+     * Runtime snapshot retrieved successfully
+     */
+    200: SessionRuntimeSnapshot;
+};
+
+export type GetRuntimeSnapshotResponse = GetRuntimeSnapshotResponses[keyof GetRuntimeSnapshotResponses];
 
 export type StartAgentData = {
     body: StartAgentRequest;
@@ -1993,6 +2333,133 @@ export type ValidateConfigResponses = {
 
 export type ValidateConfigResponse = ValidateConfigResponses[keyof ValidateConfigResponses];
 
+export type AbstractContextData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Context URI
+         */
+        uri: string;
+    };
+    url: '/context/abstract';
+};
+
+export type AbstractContextErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorResponse;
+    /**
+     * Context not found
+     */
+    404: ErrorResponse;
+};
+
+export type AbstractContextError = AbstractContextErrors[keyof AbstractContextErrors];
+
+export type AbstractContextResponses = {
+    /**
+     * Abstract content
+     */
+    200: ContextReadResponse;
+};
+
+export type AbstractContextResponse = AbstractContextResponses[keyof AbstractContextResponses];
+
+export type OverviewContextData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Context URI
+         */
+        uri: string;
+    };
+    url: '/context/overview';
+};
+
+export type OverviewContextErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorResponse;
+    /**
+     * Context not found
+     */
+    404: ErrorResponse;
+};
+
+export type OverviewContextError = OverviewContextErrors[keyof OverviewContextErrors];
+
+export type OverviewContextResponses = {
+    /**
+     * Overview content
+     */
+    200: ContextReadResponse;
+};
+
+export type OverviewContextResponse = OverviewContextResponses[keyof OverviewContextResponses];
+
+export type ReadContextData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Context URI
+         */
+        uri: string;
+    };
+    url: '/context/read';
+};
+
+export type ReadContextErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorResponse;
+    /**
+     * Context not found
+     */
+    404: ErrorResponse;
+};
+
+export type ReadContextError = ReadContextErrors[keyof ReadContextErrors];
+
+export type ReadContextResponses = {
+    /**
+     * Detail content
+     */
+    200: ContextReadResponse;
+};
+
+export type ReadContextResponse = ReadContextResponses[keyof ReadContextResponses];
+
+export type ContextStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/context/status';
+};
+
+export type ContextStatusErrors = {
+    /**
+     * Failed to collect context status
+     */
+    500: ErrorResponse;
+};
+
+export type ContextStatusError = ContextStatusErrors[keyof ContextStatusErrors];
+
+export type ContextStatusResponses = {
+    /**
+     * Context pipeline status
+     */
+    200: ContextStatusResponse;
+};
+
+export type ContextStatusResponse2 = ContextStatusResponses[keyof ContextStatusResponses];
+
 export type DiagnosticsData = {
     body?: never;
     path: {
@@ -2069,6 +2536,102 @@ export type McpUiProxyResponses = {
      */
     200: unknown;
 };
+
+export type ExtractMemoryData = {
+    body: MemoryExtractRequest;
+    path?: never;
+    query?: never;
+    url: '/memory/extract';
+};
+
+export type ExtractMemoryErrors = {
+    /**
+     * Session not found
+     */
+    404: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ExtractMemoryResponses = {
+    /**
+     * Memory extracted from session
+     */
+    200: CommitReport;
+};
+
+export type ExtractMemoryResponse = ExtractMemoryResponses[keyof ExtractMemoryResponses];
+
+export type MemoryHealthData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/memory/health';
+};
+
+export type MemoryHealthErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type MemoryHealthResponses = {
+    /**
+     * Memory subsystem health
+     */
+    200: MemoryHealth;
+};
+
+export type MemoryHealthResponse = MemoryHealthResponses[keyof MemoryHealthResponses];
+
+export type SearchMemoryData = {
+    body: MemorySearchRequest;
+    path?: never;
+    query?: never;
+    url: '/memory/search';
+};
+
+export type SearchMemoryErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type SearchMemoryResponses = {
+    /**
+     * Memory search results
+     */
+    200: MemorySearchResponse;
+};
+
+export type SearchMemoryResponse = SearchMemoryResponses[keyof SearchMemoryResponses];
+
+export type MemoryStatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/memory/stats';
+};
+
+export type MemoryStatsErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type MemoryStatsResponses = {
+    /**
+     * Memory subsystem stats
+     */
+    200: MemoryStats;
+};
+
+export type MemoryStatsResponse = MemoryStatsResponses[keyof MemoryStatsResponses];
 
 export type CreateRecipeData = {
     body: CreateRecipeRequest;

@@ -23,6 +23,7 @@ use aster::permission::permission_confirmation::PrincipalType;
 use aster::permission::Permission;
 use aster::permission::PermissionConfirmation;
 use aster::providers::base::Provider;
+use aster::session::TurnOutputSchemaRuntime;
 use aster::utils::safe_truncate;
 pub use builder::{build_session, SessionBuilderConfig, SessionSettings};
 use console::Color;
@@ -67,6 +68,13 @@ struct JsonMetadata {
 #[derive(Serialize, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum StreamEvent {
+    TurnStarted {
+        session_id: String,
+        thread_id: String,
+        turn_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output_schema_runtime: Option<TurnOutputSchemaRuntime>,
+    },
     Message {
         message: Message,
     },
@@ -1224,8 +1232,31 @@ impl CliSession {
                         Some(Ok(AgentEvent::HistoryReplaced(updated_conversation))) => {
                             self.messages = updated_conversation;
                         }
-                        Some(Ok(AgentEvent::TurnStarted { .. }))
-                        | Some(Ok(AgentEvent::ItemStarted { .. }))
+                        Some(Ok(AgentEvent::TurnStarted { turn })) => {
+                            if is_stream_json_mode {
+                                emit_stream_event(&StreamEvent::TurnStarted {
+                                    session_id: turn.session_id,
+                                    thread_id: turn.thread_id,
+                                    turn_id: turn.id,
+                                    output_schema_runtime: turn.output_schema_runtime,
+                                });
+                            } else if self.debug {
+                                if let Some(runtime) = turn.output_schema_runtime.as_ref() {
+                                    eprintln!(
+                                        "Turn started: thread_id={}, turn_id={}, structured_output={} via {} ({})",
+                                        turn.thread_id,
+                                        turn.id,
+                                        match runtime.strategy {
+                                            aster::session::TurnOutputSchemaStrategy::Native => "native",
+                                            aster::session::TurnOutputSchemaStrategy::FinalOutputTool => "final_output_tool",
+                                        },
+                                        runtime.provider_name.as_deref().unwrap_or("unknown-provider"),
+                                        runtime.model_name.as_deref().unwrap_or("unknown-model"),
+                                    );
+                                }
+                            }
+                        }
+                        Some(Ok(AgentEvent::ItemStarted { .. }))
                         | Some(Ok(AgentEvent::ItemUpdated { .. }))
                         | Some(Ok(AgentEvent::ItemCompleted { .. })) => {}
                         Some(Ok(AgentEvent::ContextCompactionStarted { detail, .. }))
@@ -1724,6 +1755,7 @@ fn format_elapsed_time(duration: std::time::Duration) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aster::session::{TurnOutputSchemaSource, TurnOutputSchemaStrategy};
     use std::time::Duration;
 
     #[test]
@@ -1790,5 +1822,33 @@ mod tests {
         // 60.5 seconds should still show as 1m 00s (not 1m 00.5s)
         let duration = Duration::from_millis(60500);
         assert_eq!(format_elapsed_time(duration), "1m 00s");
+    }
+
+    #[test]
+    fn test_stream_event_turn_started_serializes_output_schema_runtime() {
+        let event = StreamEvent::TurnStarted {
+            session_id: "session-1".to_string(),
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            output_schema_runtime: Some(TurnOutputSchemaRuntime {
+                source: TurnOutputSchemaSource::Turn,
+                strategy: TurnOutputSchemaStrategy::FinalOutputTool,
+                provider_name: Some("codex_app_server".to_string()),
+                model_name: Some("gpt-5.3-codex".to_string()),
+            }),
+        };
+
+        let value = serde_json::to_value(event).expect("serialize stream event");
+        assert_eq!(value["type"], "turn_started");
+        assert_eq!(value["output_schema_runtime"]["source"], "turn");
+        assert_eq!(
+            value["output_schema_runtime"]["strategy"],
+            "final_output_tool"
+        );
+        assert_eq!(
+            value["output_schema_runtime"]["providerName"],
+            "codex_app_server"
+        );
+        assert_eq!(value["output_schema_runtime"]["modelName"], "gpt-5.3-codex");
     }
 }

@@ -9,6 +9,7 @@ use tracing::debug;
 use super::super::agents::Agent;
 use crate::conversation::message::{Message, MessageContent, ToolRequest};
 use crate::conversation::Conversation;
+use crate::model::ModelConfig;
 use crate::providers::base::{stream_from_single_message, MessageStream, Provider, ProviderUsage};
 use crate::providers::errors::ProviderError;
 use crate::providers::toolshim::{
@@ -140,6 +141,7 @@ impl Agent {
         &self,
         working_dir: &std::path::Path,
         session_prompt: Option<&str>,
+        model_config: &ModelConfig,
     ) -> Result<(Vec<Tool>, Vec<Tool>, String)> {
         // Get tools from extension manager
         let mut tools = self.list_tools(None).await;
@@ -167,15 +169,19 @@ impl Agent {
         let (extension_count, tool_count) =
             self.extension_manager.get_extension_and_tool_counts().await;
 
-        // Get model name from provider
-        let provider = self.provider().await?;
-        let model_config = provider.get_model_config();
+        let final_output_instruction = self
+            .final_output_tool
+            .lock()
+            .await
+            .as_ref()
+            .map(|tool| tool.system_prompt());
 
         let prompt_manager = self.prompt_manager.lock().await;
         let mut system_prompt = prompt_manager
             .builder()
             .with_extensions(extensions_info.into_iter())
             .with_frontend_instructions(self.frontend_instructions.lock().await.clone())
+            .with_additional_instruction(final_output_instruction)
             .with_extension_and_tool_counts(extension_count, tool_count)
             .with_code_execution_mode(code_execution_active)
             .with_hints(working_dir)
@@ -201,21 +207,21 @@ impl Agent {
     /// Handles toolshim transformations if needed
     pub(crate) async fn stream_response_from_provider(
         provider: Arc<dyn Provider>,
+        model_config: &ModelConfig,
         system_prompt: &str,
         messages: &[Message],
         tools: &[Tool],
         toolshim_tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
-        let config = provider.get_model_config();
-
         // Convert tool messages to text if toolshim is enabled
-        let messages_for_provider = if config.toolshim {
+        let messages_for_provider = if model_config.toolshim {
             convert_tool_messages_to_text(messages)
         } else {
             Conversation::new_unvalidated(messages.to_vec())
         };
 
         // Clone owned data to move into the async stream
+        let model_config = model_config.clone();
         let system_prompt = system_prompt.to_owned();
         let tools = tools.to_owned();
         let toolshim_tools = toolshim_tools.to_owned();
@@ -226,7 +232,8 @@ impl Agent {
         let stream_result = if provider.supports_streaming() {
             debug!("WAITING_LLM_STREAM_START");
             let result = provider
-                .stream(
+                .stream_with_model(
+                    &model_config,
                     system_prompt.as_str(),
                     messages_for_provider.messages(),
                     &tools,
@@ -237,7 +244,8 @@ impl Agent {
         } else {
             debug!("WAITING_LLM_START");
             let complete_result = provider
-                .complete(
+                .complete_with_model(
+                    &model_config,
                     system_prompt.as_str(),
                     messages_for_provider.messages(),
                     &tools,
@@ -271,7 +279,7 @@ impl Agent {
                 }
 
                 // Post-process / structure the response only if tool interpretation is enabled
-                if message.is_some() && config.toolshim {
+                if message.is_some() && model_config.toolshim {
                     message = Some(toolshim_postprocess(message.unwrap(), &toolshim_tools).await?);
                 }
 
@@ -469,6 +477,7 @@ mod tests {
     #[derive(Clone)]
     struct MockProvider {
         model_config: ModelConfig,
+        observed_models: Option<std::sync::Arc<std::sync::Mutex<Vec<String>>>>,
     }
 
     #[async_trait]
@@ -487,14 +496,20 @@ mod tests {
 
         async fn complete_with_model(
             &self,
-            _model_config: &ModelConfig,
+            model_config: &ModelConfig,
             _system: &str,
             _messages: &[Message],
             _tools: &[Tool],
         ) -> anyhow::Result<(Message, ProviderUsage), ProviderError> {
+            if let Some(observed_models) = &self.observed_models {
+                observed_models
+                    .lock()
+                    .expect("record model override")
+                    .push(model_config.model_name.clone());
+            }
             Ok((
                 Message::assistant().with_text("ok"),
-                ProviderUsage::new("mock".to_string(), Usage::default()),
+                ProviderUsage::new(model_config.model_name.clone(), Usage::default()),
             ))
         }
     }
@@ -579,7 +594,10 @@ mod tests {
         .await?;
 
         let model_config = ModelConfig::new("test-model").unwrap();
-        let provider = std::sync::Arc::new(MockProvider { model_config });
+        let provider = std::sync::Arc::new(MockProvider {
+            model_config,
+            observed_models: None,
+        });
         agent.update_provider(provider, &session.id).await?;
 
         // Add unsorted frontend tools
@@ -612,8 +630,9 @@ mod tests {
             .unwrap();
 
         let working_dir = std::env::current_dir()?;
-        let (tools, _toolshim_tools, _system_prompt) =
-            agent.prepare_tools_and_prompt(&working_dir, None).await?;
+        let (tools, _toolshim_tools, _system_prompt) = agent
+            .prepare_tools_and_prompt(&working_dir, None, &ModelConfig::new("test-model").unwrap())
+            .await?;
 
         // Ensure both platform and frontend tools are present
         let names: Vec<String> = tools.iter().map(|t| t.name.clone().into_owned()).collect();
@@ -626,6 +645,75 @@ mod tests {
         sorted.sort();
         assert_eq!(names, sorted);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn prepare_tools_and_prompt_includes_turn_output_instruction() -> anyhow::Result<()> {
+        let agent = crate::agents::Agent::new();
+
+        let session = SessionManager::create_session(
+            std::path::PathBuf::default(),
+            "test-prepare-tools-output-schema".to_string(),
+            SessionType::Hidden,
+        )
+        .await?;
+
+        let model_config = ModelConfig::new("test-model").unwrap();
+        let provider = std::sync::Arc::new(MockProvider {
+            model_config,
+            observed_models: None,
+        });
+        agent.update_provider(provider, &session.id).await?;
+        agent
+            .add_final_output_tool(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "answer": {"type": "string"}
+                }
+            }))
+            .await?;
+
+        let working_dir = std::env::current_dir()?;
+        let (_tools, _toolshim_tools, system_prompt) = agent
+            .prepare_tools_and_prompt(&working_dir, None, &ModelConfig::new("test-model").unwrap())
+            .await?;
+
+        assert!(system_prompt.contains("# Final Output Instructions"));
+        assert!(system_prompt.contains("\"answer\""));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stream_response_from_provider_uses_explicit_model_config() -> anyhow::Result<()> {
+        let observed_models = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let provider = std::sync::Arc::new(MockProvider {
+            model_config: ModelConfig::new("default-model").unwrap(),
+            observed_models: Some(observed_models.clone()),
+        });
+        let override_model_config = ModelConfig::new("override-model").unwrap();
+        let messages = vec![Message::user().with_text("hello")];
+
+        let mut stream = Agent::stream_response_from_provider(
+            provider,
+            &override_model_config,
+            "",
+            &messages,
+            &[],
+            &[],
+        )
+        .await?;
+
+        let first = stream.next().await.expect("stream item should exist")?;
+        let usage = first.1.expect("usage should exist");
+        assert_eq!(usage.model, "override-model");
+        assert_eq!(
+            observed_models
+                .lock()
+                .expect("read observed model")
+                .as_slice(),
+            ["override-model"]
+        );
         Ok(())
     }
 

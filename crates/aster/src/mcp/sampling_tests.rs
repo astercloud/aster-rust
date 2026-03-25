@@ -59,6 +59,7 @@ fn build_model_config_from_params(
 ) -> SimulatedModelConfig {
     let mut config = SimulatedModelConfig {
         model_name: base_model.to_string(),
+        context_limit: simulated_context_limit(base_model),
         max_tokens: None,
         temperature: None,
     };
@@ -67,6 +68,7 @@ fn build_model_config_from_params(
     if let Some(hint) = &params.model_hint {
         if !hint.is_empty() {
             config.model_name = hint.clone();
+            config.context_limit = simulated_context_limit(hint);
         }
     }
 
@@ -81,10 +83,21 @@ fn build_model_config_from_params(
     config
 }
 
+fn simulated_context_limit(model_name: &str) -> Option<usize> {
+    match model_name {
+        "gpt-4-turbo" => Some(128_000),
+        "gpt-4.1" => Some(1_000_000),
+        "gpt-4o" => Some(128_000),
+        "claude-3" | "claude-sonnet-4-20250514" => Some(200_000),
+        _ => None,
+    }
+}
+
 /// Simulated model config for testing
 #[derive(Debug, Clone, PartialEq)]
 pub struct SimulatedModelConfig {
     pub model_name: String,
+    pub context_limit: Option<usize>,
     pub max_tokens: Option<i32>,
     pub temperature: Option<f32>,
 }
@@ -402,6 +415,7 @@ mod unit_tests {
         let config = build_model_config_from_params("base-model", &params);
 
         assert_eq!(config.model_name, "gpt-4");
+        assert_eq!(config.context_limit, None);
         assert_eq!(config.max_tokens, Some(2000));
         assert_eq!(config.temperature, Some(0.5));
     }
@@ -412,8 +426,18 @@ mod unit_tests {
         let config = build_model_config_from_params("claude-3", &params);
 
         assert_eq!(config.model_name, "claude-3");
+        assert_eq!(config.context_limit, Some(200_000));
         assert_eq!(config.max_tokens, Some(500));
         assert_eq!(config.temperature, None);
+    }
+
+    #[test]
+    fn test_build_model_config_recomputes_context_limit_for_model_hint() {
+        let params = SamplingParams::new(500).with_model_hint("gpt-4.1".to_string());
+        let config = build_model_config_from_params("gpt-4-turbo", &params);
+
+        assert_eq!(config.model_name, "gpt-4.1");
+        assert_eq!(config.context_limit, Some(1_000_000));
     }
 
     #[test]

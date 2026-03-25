@@ -22,6 +22,7 @@ fn convert_image_to_input_image(mime_type: &str, data: &str) -> Value {
 pub struct ResponsesRequestOptions {
     pub previous_response_id: Option<String>,
     pub store: bool,
+    pub output_schema: Option<Value>,
 }
 
 impl ResponsesRequestOptions {
@@ -29,8 +30,20 @@ impl ResponsesRequestOptions {
         Self {
             previous_response_id: Some(previous_response_id.into()),
             store: true,
+            output_schema: None,
         }
     }
+}
+
+fn create_json_schema_text_format(output_schema: &Value) -> Value {
+    json!({
+        "format": {
+            "type": "json_schema",
+            "name": "aster_structured_output",
+            "strict": true,
+            "schema": output_schema,
+        }
+    })
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -422,6 +435,13 @@ pub fn create_responses_request(
         payload.as_object_mut().unwrap().insert(
             "previous_response_id".to_string(),
             json!(previous_response_id),
+        );
+    }
+
+    if let Some(output_schema) = options.output_schema.as_ref() {
+        payload.as_object_mut().unwrap().insert(
+            "text".to_string(),
+            create_json_schema_text_format(output_schema),
         );
     }
 
@@ -845,5 +865,36 @@ mod tests {
         assert_eq!(payload["previous_response_id"], "resp-1");
         assert_eq!(payload["input"][0]["role"], "system");
         assert_eq!(payload["input"][1]["role"], "user");
+    }
+
+    #[test]
+    fn test_create_responses_request_supports_native_output_schema() {
+        let model_config = ModelConfig::new("gpt-5.3-codex").unwrap();
+        let payload = create_responses_request(
+            &model_config,
+            "system",
+            &[Message::user().with_text("请返回结构化结果")],
+            &[],
+            &ResponsesRequestOptions {
+                output_schema: Some(json!({
+                    "type": "object",
+                    "properties": {
+                        "answer": { "type": "string" }
+                    },
+                    "required": ["answer"]
+                })),
+                ..ResponsesRequestOptions::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(payload["text"]["format"]["type"], "json_schema");
+        assert_eq!(payload["text"]["format"]["name"], "aster_structured_output");
+        assert_eq!(payload["text"]["format"]["strict"], true);
+        assert_eq!(payload["text"]["format"]["schema"]["type"], "object");
+        assert_eq!(
+            payload["text"]["format"]["schema"]["properties"]["answer"]["type"],
+            "string"
+        );
     }
 }

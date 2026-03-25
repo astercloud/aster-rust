@@ -76,6 +76,7 @@ pub struct SystemPromptBuilder<'a, M> {
 
     extensions_info: Vec<ExtensionInfo>,
     frontend_instructions: Option<String>,
+    additional_instructions: Vec<String>,
     extension_tool_count: Option<(usize, usize)>,
     subagents_enabled: bool,
     hints: Option<String>,
@@ -98,6 +99,13 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
 
     pub fn with_frontend_instructions(mut self, frontend_instructions: Option<String>) -> Self {
         self.frontend_instructions = frontend_instructions;
+        self
+    }
+
+    pub fn with_additional_instruction(mut self, instruction: Option<String>) -> Self {
+        if let Some(instruction) = instruction {
+            self.additional_instructions.push(instruction);
+        }
         self
     }
 
@@ -210,6 +218,7 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
         };
 
         let mut system_prompt_extras = self.manager.system_prompt_extras.clone();
+        system_prompt_extras.extend(self.additional_instructions);
 
         // Add hints if provided
         if let Some(hints) = self.hints {
@@ -392,6 +401,7 @@ impl PromptManager {
 
             extensions_info: vec![],
             frontend_instructions: None,
+            additional_instructions: vec![],
             extension_tool_count: None,
             subagents_enabled: false,
             hints: None,

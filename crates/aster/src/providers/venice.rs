@@ -56,6 +56,21 @@ impl std::fmt::Display for CapabilityFlags {
 fn strip_flags(model: &str) -> &str {
     model.split_whitespace().next().unwrap_or(model)
 }
+
+fn normalize_internal_model_config(model: &ModelConfig) -> ModelConfig {
+    let stripped_model = strip_flags(&model.model_name);
+    if stripped_model == model.model_name {
+        return model.clone();
+    }
+
+    model
+        .rebuild_with_model_name(stripped_model)
+        .unwrap_or_else(|_| {
+            let mut normalized = model.clone();
+            normalized.model_name = stripped_model.to_string();
+            normalized
+        })
+}
 // ---------- END Helpers ----------
 
 pub const VENICE_DOC_URL: &str = "https://docs.venice.ai/";
@@ -83,7 +98,7 @@ pub struct VeniceProvider {
 }
 
 impl VeniceProvider {
-    pub async fn from_env(mut model: ModelConfig) -> Result<Self> {
+    pub async fn from_env(model: ModelConfig) -> Result<Self> {
         let config = crate::config::Config::global();
         let api_key: String = config.get_secret("VENICE_API_KEY")?;
         let host: String = config
@@ -96,9 +111,6 @@ impl VeniceProvider {
             .get_param("VENICE_MODELS_PATH")
             .unwrap_or_else(|_| VENICE_DEFAULT_MODELS_PATH.to_string());
 
-        // Ensure we only keep the bare model id internally
-        model.model_name = strip_flags(&model.model_name).to_string();
-
         let auth = AuthMethod::BearerToken(api_key);
         let api_client = ApiClient::new(host, auth)?;
 
@@ -106,7 +118,7 @@ impl VeniceProvider {
             api_client,
             base_path,
             models_path,
-            model,
+            model: normalize_internal_model_config(&model),
             name: Self::metadata().name,
         };
 
@@ -532,5 +544,31 @@ mod tests {
         assert_eq!(metadata.config_keys[1].name, "VENICE_HOST");
         assert_eq!(metadata.config_keys[2].name, "VENICE_BASE_PATH");
         assert_eq!(metadata.config_keys[3].name, "VENICE_MODELS_PATH");
+    }
+
+    #[test]
+    fn test_normalize_internal_model_config_strips_flags() {
+        let model = ModelConfig::new("llama-3.3-70b [cvfr]")
+            .unwrap()
+            .with_temperature(Some(0.2))
+            .with_max_tokens(Some(2048));
+
+        let normalized = normalize_internal_model_config(&model);
+
+        assert_eq!(normalized.model_name, "llama-3.3-70b");
+        assert_eq!(normalized.temperature, Some(0.2));
+        assert_eq!(normalized.max_tokens, Some(2048));
+    }
+
+    #[test]
+    fn test_normalize_internal_model_config_preserves_custom_context_limit() {
+        let model = ModelConfig::new("llama-3.3-70b [cvfr]")
+            .unwrap()
+            .with_context_limit(Some(222_222));
+
+        let normalized = normalize_internal_model_config(&model);
+
+        assert_eq!(normalized.model_name, "llama-3.3-70b");
+        assert_eq!(normalized.context_limit, Some(222_222));
     }
 }

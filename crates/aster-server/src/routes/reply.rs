@@ -3,7 +3,9 @@ use aster::agents::{AgentEvent, SessionConfig};
 use aster::context::ContextTraceStep;
 use aster::conversation::message::{Message, MessageContent, TokenState};
 use aster::conversation::Conversation;
-use aster::session::{CommitOptions, ItemRuntime, SessionManager, TurnContextOverride};
+use aster::session::{
+    CommitOptions, ItemRuntime, SessionManager, TurnContextOverride, TurnOutputSchemaRuntime,
+};
 use axum::{
     extract::{DefaultBodyLimit, State},
     http::{self, StatusCode},
@@ -148,6 +150,8 @@ pub enum MessageEvent {
         session_id: String,
         thread_id: String,
         turn_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output_schema_runtime: Option<TurnOutputSchemaRuntime>,
     },
     ItemStarted {
         item: ItemRuntime,
@@ -545,6 +549,7 @@ pub async fn reply(
                                     session_id: turn.session_id,
                                     thread_id: turn.thread_id,
                                     turn_id: turn.id,
+                                    output_schema_runtime: turn.output_schema_runtime,
                                 },
                                 &tx,
                                 &cancel_token,
@@ -780,8 +785,30 @@ mod tests {
     mod integration_tests {
         use super::*;
         use aster::conversation::message::Message;
+        use aster::session::{TurnOutputSchemaSource, TurnOutputSchemaStrategy};
         use axum::{body::Body, http::Request};
         use tower::ServiceExt;
+
+        #[test]
+        fn turn_context_event_serializes_output_schema_runtime() {
+            let event = MessageEvent::TurnContext {
+                session_id: "session-1".to_string(),
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                output_schema_runtime: Some(TurnOutputSchemaRuntime {
+                    source: TurnOutputSchemaSource::Session,
+                    strategy: TurnOutputSchemaStrategy::Native,
+                    provider_name: Some("openai".to_string()),
+                    model_name: Some("gpt-5.4".to_string()),
+                }),
+            };
+
+            let value = serde_json::to_value(event).expect("serialize turn context event");
+            assert_eq!(value["output_schema_runtime"]["source"], "session");
+            assert_eq!(value["output_schema_runtime"]["strategy"], "native");
+            assert_eq!(value["output_schema_runtime"]["providerName"], "openai");
+            assert_eq!(value["output_schema_runtime"]["modelName"], "gpt-5.4");
+        }
 
         #[tokio::test(flavor = "multi_thread")]
         async fn test_reply_endpoint() {

@@ -613,11 +613,22 @@ async fn process_message_streaming(
                         tracing::info!("History replaced, compacting happened in reply");
                     }
                     Ok(AgentEvent::TurnStarted { turn }) => {
-                        tracing::debug!(
-                            "Turn started in web interface: thread_id={}, turn_id={}",
-                            turn.thread_id,
-                            turn.id
-                        );
+                        if let Some(runtime) = turn.output_schema_runtime.as_ref() {
+                            tracing::debug!(
+                                "Turn started in web interface: thread_id={}, turn_id={}, structured_output_strategy={:?}, provider={:?}, model={:?}",
+                                turn.thread_id,
+                                turn.id,
+                                runtime.strategy,
+                                runtime.provider_name,
+                                runtime.model_name
+                            );
+                        } else {
+                            tracing::debug!(
+                                "Turn started in web interface: thread_id={}, turn_id={}",
+                                turn.thread_id,
+                                turn.id
+                            );
+                        }
                     }
                     Ok(AgentEvent::ItemStarted { .. })
                     | Ok(AgentEvent::ItemUpdated { .. })

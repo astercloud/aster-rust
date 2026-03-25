@@ -94,7 +94,8 @@ pub use runtime_store::{
     load_session_runtime_snapshot, require_shared_thread_runtime_store, InMemoryThreadRuntimeStore,
     ItemRuntime, ItemRuntimePayload, ItemStatus, NoopThreadRuntimeStore, QueuedTurnRuntime,
     SessionExecutionGate, SessionRuntimeSnapshot, SqliteThreadRuntimeStore, ThreadRuntime,
-    ThreadRuntimeSnapshot, ThreadRuntimeStore, ThreadStatus, TurnContextOverride, TurnRuntime,
+    ThreadRuntimeSnapshot, ThreadRuntimeStore, ThreadStatus, TurnContextOverride,
+    TurnOutputSchemaRuntime, TurnOutputSchemaSource, TurnOutputSchemaStrategy, TurnRuntime,
     TurnStatus, RUNTIME_DB_NAME,
 };
 pub use session_manager::{Session, SessionInsights, SessionManager, SessionType};

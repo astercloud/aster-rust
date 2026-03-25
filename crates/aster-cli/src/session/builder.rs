@@ -310,7 +310,11 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
             session_config.final_output_response,
             true,
         )
-        .await;
+        .await
+        .unwrap_or_else(|e| {
+            output::render_error(&format!("Failed to configure recipe output schema: {}", e));
+            process::exit(1);
+        });
 
     let new_provider = match create(&provider_name, model_config).await {
         Ok(provider) => provider,

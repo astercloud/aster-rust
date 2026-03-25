@@ -27,6 +27,7 @@ interface UseChatStreamProps {
   sessionId: string;
   onStreamFinish: () => void;
   onSessionLoaded?: () => void;
+  onStreamEvent?: (event: MessageEvent) => void;
 }
 
 interface UseChatStreamReturn {
@@ -79,7 +80,8 @@ async function streamFromResponse(
   updateTokenState: (tokenState: TokenState) => void,
   updateChatState: (state: ChatState) => void,
   updateNotifications: (notification: NotificationEvent) => void,
-  onFinish: (error?: string) => void
+  onFinish: (error?: string) => void,
+  onStreamEvent?: (event: MessageEvent) => void
 ): Promise<void> {
   let currentMessages = initialMessages;
 
@@ -121,7 +123,21 @@ async function streamFromResponse(
           onFinish();
           return;
         }
+        case 'TurnContext': {
+          onStreamEvent?.(event);
+          break;
+        }
+        case 'ItemStarted':
+        case 'ItemUpdated':
+        case 'ItemCompleted':
+        case 'ContextCompactionStarted':
+        case 'ContextCompactionCompleted':
+        case 'ContextCompactionWarning':
         case 'ModelChange': {
+          onStreamEvent?.(event);
+          break;
+        }
+        case 'ContextTrace': {
           break;
         }
         case 'UpdateConversation': {
@@ -152,6 +168,7 @@ export function useChatStream({
   sessionId,
   onStreamFinish,
   onSessionLoaded,
+  onStreamEvent,
 }: UseChatStreamProps): UseChatStreamReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
@@ -324,7 +341,8 @@ export function useChatStream({
           setTokenState,
           setChatState,
           updateNotifications,
-          onFinish
+          onFinish,
+          onStreamEvent
         );
       } catch (error) {
         // AbortError is expected when user stops streaming
@@ -336,7 +354,7 @@ export function useChatStream({
         }
       }
     },
-    [sessionId, session, chatState, updateMessages, updateNotifications, onFinish]
+    [sessionId, session, chatState, updateMessages, updateNotifications, onFinish, onStreamEvent]
   );
 
   const submitElicitationResponse = useCallback(
@@ -370,7 +388,8 @@ export function useChatStream({
           setTokenState,
           setChatState,
           updateNotifications,
-          onFinish
+          onFinish,
+          onStreamEvent
         );
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
@@ -380,7 +399,7 @@ export function useChatStream({
         }
       }
     },
-    [sessionId, session, chatState, updateMessages, updateNotifications, onFinish]
+    [sessionId, session, chatState, updateMessages, updateNotifications, onFinish, onStreamEvent]
   );
 
   const setRecipeUserParams = useCallback(

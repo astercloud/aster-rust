@@ -196,7 +196,9 @@ impl ClientHandler for AsterClient {
                         // Use the hint name as the model name if it looks like a valid model
                         // The hint name can be a full model name or a pattern
                         if !name.is_empty() {
-                            model_config.model_name = name.clone();
+                            model_config = model_config
+                                .rebuild_with_model_name(name)
+                                .unwrap_or_else(|_| model_config.with_model_name(name.clone()));
                             break;
                         }
                     }

@@ -52,6 +52,11 @@ fn build_turn_start_params(
     if let Some(e) = effort {
         params["effort"] = json!(e);
     }
+    if let Some(turn_context) = crate::session_context::current_turn_context() {
+        if let Some(output_schema) = turn_context.output_schema {
+            params["outputSchema"] = output_schema;
+        }
+    }
 
     params
 }
@@ -764,6 +769,7 @@ impl Drop for CodexSessionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::session::TurnContextOverride;
 
     #[test]
     fn test_request_id_generation() {
@@ -815,5 +821,30 @@ mod tests {
         assert_eq!(params["effort"], json!("high"));
         assert_eq!(params["input"][0]["type"], json!("text"));
         assert_eq!(params["input"][0]["text"], json!("hello"));
+    }
+
+    #[tokio::test]
+    async fn test_build_turn_start_params_includes_output_schema_from_turn_context() {
+        let turn_context = TurnContextOverride {
+            output_schema: Some(json!({
+                "type": "object",
+                "properties": {
+                    "answer": { "type": "string" }
+                }
+            })),
+            ..TurnContextOverride::default()
+        };
+
+        crate::session_context::with_turn_context(Some(turn_context), async {
+            let params =
+                build_turn_start_params("thread-1", "hello", Some("gpt-5.3-codex"), Some("high"));
+
+            assert_eq!(params["outputSchema"]["type"], json!("object"));
+            assert_eq!(
+                params["outputSchema"]["properties"]["answer"]["type"],
+                json!("string")
+            );
+        })
+        .await;
     }
 }

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useModelAndProvider } from '../components/ModelAndProviderContext';
+import { useCurrentModelInfo } from '../contexts/SessionExecutionContext';
 import { fetchModelPricing } from '../utils/pricing';
 import { Session } from '../api';
+import { ChatState } from '../types/chatState';
 
 interface UseCostTrackingProps {
   sessionInputTokens: number;
@@ -9,6 +11,7 @@ interface UseCostTrackingProps {
   localInputTokens: number;
   localOutputTokens: number;
   session?: Session | null;
+  chatState: ChatState;
 }
 
 export const useCostTracking = ({
@@ -17,6 +20,7 @@ export const useCostTracking = ({
   localInputTokens,
   localOutputTokens,
   session,
+  chatState,
 }: UseCostTrackingProps) => {
   const [sessionCosts, setSessionCosts] = useState<{
     [key: string]: {
@@ -26,7 +30,15 @@ export const useCostTracking = ({
     };
   }>({});
 
+  const sessionExecutionInfo = useCurrentModelInfo();
   const { currentModel, currentProvider } = useModelAndProvider();
+  const shouldUseRuntimeInfo = chatState !== ChatState.Idle;
+  const effectiveModel =
+    shouldUseRuntimeInfo && sessionExecutionInfo?.model ? sessionExecutionInfo.model : currentModel;
+  const effectiveProvider =
+    shouldUseRuntimeInfo && sessionExecutionInfo?.provider
+      ? sessionExecutionInfo.provider
+      : currentProvider;
   const prevModelRef = useRef<string | undefined>(undefined);
   const prevProviderRef = useRef<string | undefined>(undefined);
 
@@ -36,7 +48,7 @@ export const useCostTracking = ({
       if (
         prevModelRef.current !== undefined &&
         prevProviderRef.current !== undefined &&
-        (prevModelRef.current !== currentModel || prevProviderRef.current !== currentProvider)
+        (prevModelRef.current !== effectiveModel || prevProviderRef.current !== effectiveProvider)
       ) {
         // Model/provider has changed, save the costs for the previous model
         const prevKey = `${prevProviderRef.current}/${prevModelRef.current}`;
@@ -66,24 +78,25 @@ export const useCostTracking = ({
           'Model changed from',
           `${prevProviderRef.current}/${prevModelRef.current}`,
           'to',
-          `${currentProvider}/${currentModel}`,
+          `${effectiveProvider}/${effectiveModel}`,
           '- saved costs and restored session token counters'
         );
       }
 
-      prevModelRef.current = currentModel || undefined;
-      prevProviderRef.current = currentProvider || undefined;
+      prevModelRef.current = effectiveModel || undefined;
+      prevProviderRef.current = effectiveProvider || undefined;
     };
 
     handleModelChange();
   }, [
-    currentModel,
-    currentProvider,
+    effectiveModel,
+    effectiveProvider,
     sessionInputTokens,
     sessionOutputTokens,
     localInputTokens,
     localOutputTokens,
     session,
+    chatState,
   ]);
 
   return {

@@ -161,18 +161,18 @@ pub async fn apply_recipe_to_agent(
     agent: &Arc<Agent>,
     recipe: &Recipe,
     include_final_output_tool: bool,
-) -> Option<String> {
+) -> Result<Option<String>> {
     agent
         .apply_recipe_components(
             recipe.sub_recipes.clone(),
             recipe.response.clone(),
             include_final_output_tool,
         )
-        .await;
+        .await?;
 
-    recipe.instructions.as_ref().map(|instructions| {
+    Ok(recipe.instructions.as_ref().map(|instructions| {
         let mut context: HashMap<&str, Value> = HashMap::new();
         context.insert("recipe_instructions", Value::String(instructions.clone()));
         render_global_file("desktop_recipe_instruction.md", &context).expect("Prompt should render")
-    })
+    }))
 }

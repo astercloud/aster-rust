@@ -10,17 +10,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../../../ui/dropdown-menu';
-import { useCurrentModelInfo } from '../../../BaseChat';
+import { useCurrentModelInfo } from '../../../../contexts/SessionExecutionContext';
 import { useConfig } from '../../../ConfigContext';
 import { getProviderMetadata } from '../modelInterface';
 import { Alert } from '../../../alerts';
 import BottomMenuAlertPopover from '../../../bottom_menu/BottomMenuAlertPopover';
+import { getModelDisplayName, getProviderDisplayName } from '../predefinedModelsUtils';
+import { getOutputSchemaRuntimeLabel } from '../../../../utils/sessionExecutionRuntime';
 
 interface ModelsBottomBarProps {
   sessionId: string | null;
   dropdownRef: React.RefObject<HTMLDivElement>;
   setView: (view: View) => void;
   alerts: Alert[];
+  preferRuntime?: boolean;
 }
 
 export default function ModelsBottomBar({
@@ -28,16 +31,15 @@ export default function ModelsBottomBar({
   dropdownRef,
   setView,
   alerts,
+  preferRuntime = false,
 }: ModelsBottomBarProps) {
-  const {
-    currentModel,
-    currentProvider,
-    getCurrentModelAndProviderForDisplay,
-    getCurrentModelDisplayName,
-    getCurrentProviderDisplayName,
-  } = useModelAndProvider();
+  const { currentModel, currentProvider } = useModelAndProvider();
   const currentModelInfo = useCurrentModelInfo();
   const { read, getProviders } = useConfig();
+  const effectiveModel =
+    preferRuntime && currentModelInfo?.model ? currentModelInfo.model : currentModel;
+  const effectiveProvider =
+    preferRuntime && currentModelInfo?.provider ? currentModelInfo.provider : currentProvider;
   const [displayProvider, setDisplayProvider] = useState<string | null>(null);
   const [displayModelName, setDisplayModelName] = useState<string>('Select Model');
   const [isAddModelModalOpen, setIsAddModelModalOpen] = useState(false);
@@ -78,8 +80,6 @@ export default function ModelsBottomBar({
     checkLeadWorker();
   };
 
-  // Since currentModelInfo.mode is not working, let's determine mode differently
-  // We'll need to get the lead model and compare it with the current model
   const [leadModelName, setLeadModelName] = useState<string>('');
   const [currentActiveModel, setCurrentActiveModel] = useState<string>('');
 
@@ -98,59 +98,68 @@ export default function ModelsBottomBar({
     getModelInfo();
   }, [read]);
 
-  // Determine the mode based on which model is currently active
-  const modelMode = isLeadWorkerActive
+  const fallbackMode = isLeadWorkerActive
     ? currentActiveModel === leadModelName
       ? 'lead'
       : 'worker'
     : undefined;
+  const modelMode = preferRuntime ? currentModelInfo?.mode || fallbackMode : fallbackMode;
 
-  // Determine which model to display - activeModel takes priority when lead/worker is active
-  const displayModel =
-    isLeadWorkerActive && currentModelInfo?.model
-      ? currentModelInfo.model
-      : currentModel || providerDefaultModel || displayModelName;
+  const displayModel = effectiveModel || providerDefaultModel || displayModelName;
+  const outputSchemaLabel = getOutputSchemaRuntimeLabel(currentModelInfo?.outputSchemaRuntime);
 
-  // Update display provider when current provider changes
+  // Resolve display provider from the effective runtime first, then fall back to provider metadata.
   useEffect(() => {
-    if (currentProvider) {
-      (async () => {
-        const providerDisplayName = await getCurrentProviderDisplayName();
-        if (providerDisplayName) {
-          setDisplayProvider(providerDisplayName);
-        } else {
-          const modelProvider = await getCurrentModelAndProviderForDisplay();
-          setDisplayProvider(modelProvider.provider);
-        }
-      })();
+    if (!effectiveProvider && !effectiveModel) {
+      setDisplayProvider(null);
+      return;
     }
-  }, [currentProvider, getCurrentProviderDisplayName, getCurrentModelAndProviderForDisplay]);
 
-  // Fetch provider default model when provider changes and no current model
+    (async () => {
+      const providerDisplayNameFromModel = effectiveModel
+        ? getProviderDisplayName(effectiveModel)
+        : '';
+      if (providerDisplayNameFromModel) {
+        setDisplayProvider(providerDisplayNameFromModel);
+        return;
+      }
+
+      if (!effectiveProvider) {
+        setDisplayProvider(null);
+        return;
+      }
+
+      try {
+        const metadata = await getProviderMetadata(effectiveProvider, getProviders);
+        setDisplayProvider(metadata.display_name);
+      } catch (error) {
+        console.error('Failed to resolve provider display name:', error);
+        setDisplayProvider(effectiveProvider);
+      }
+    })();
+  }, [effectiveProvider, effectiveModel, getProviders]);
+
+  // Fetch provider default model when provider changes and no effective model is present.
   useEffect(() => {
-    if (currentProvider && !currentModel) {
+    if (effectiveProvider && !effectiveModel) {
       (async () => {
         try {
-          const metadata = await getProviderMetadata(currentProvider, getProviders);
+          const metadata = await getProviderMetadata(effectiveProvider, getProviders);
           setProviderDefaultModel(metadata.default_model);
         } catch (error) {
           console.error('Failed to get provider default model:', error);
           setProviderDefaultModel(null);
         }
       })();
-    } else if (currentModel) {
-      // Clear provider default when we have a current model
+    } else if (effectiveModel) {
       setProviderDefaultModel(null);
     }
-  }, [currentProvider, currentModel, getProviders]);
+  }, [effectiveProvider, effectiveModel, getProviders]);
 
-  // Update display model name when current model changes
+  // The visible label should reflect the effective execution model when available.
   useEffect(() => {
-    (async () => {
-      const displayName = await getCurrentModelDisplayName();
-      setDisplayModelName(displayName);
-    })();
-  }, [currentModel, getCurrentModelDisplayName]);
+    setDisplayModelName(effectiveModel ? getModelDisplayName(effectiveModel) : 'Select Model');
+  }, [effectiveModel]);
 
   return (
     <div className="relative flex items-center" ref={dropdownRef}>
@@ -161,9 +170,7 @@ export default function ModelsBottomBar({
             <Bot className="mr-1 h-4 w-4 flex-shrink-0" />
             <span className="truncate text-xs">
               {displayModel}
-              {isLeadWorkerActive && modelMode && (
-                <span className="ml-1 text-[10px] opacity-60">({modelMode})</span>
-              )}
+              {modelMode && <span className="ml-1 text-[10px] opacity-60">({modelMode})</span>}
             </span>
           </div>
         </DropdownMenuTrigger>
@@ -173,6 +180,9 @@ export default function ModelsBottomBar({
             {displayModelName}
             {displayProvider && ` — ${displayProvider}`}
           </p>
+          {outputSchemaLabel ? (
+            <p className="mx-2 -mt-1 mb-2 text-[11px] text-text-muted">{outputSchemaLabel}</p>
+          ) : null}
           <DropdownMenuItem onClick={() => setIsAddModelModalOpen(true)}>
             <span>Change Model</span>
             <Sliders className="ml-auto h-4 w-4 rotate-90" />

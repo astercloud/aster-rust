@@ -245,6 +245,10 @@ impl OpenAiProvider {
         )
     }
 
+    fn resolve_output_schema_from_turn_context() -> Option<Value> {
+        crate::session_context::current_turn_context()?.output_schema
+    }
+
     fn split_messages_after_response_id<'a>(
         messages: &'a [Message],
         previous_response_id: &str,
@@ -259,9 +263,16 @@ impl OpenAiProvider {
     fn resolve_responses_request_context(
         messages: &[Message],
     ) -> (&[Message], ResponsesRequestOptions) {
+        let output_schema = Self::resolve_output_schema_from_turn_context();
         let Some(previous_response_id) = Self::resolve_previous_response_id_from_turn_context()
         else {
-            return (messages, ResponsesRequestOptions::default());
+            return (
+                messages,
+                ResponsesRequestOptions {
+                    output_schema,
+                    ..ResponsesRequestOptions::default()
+                },
+            );
         };
 
         let Some(incremental_messages) =
@@ -271,12 +282,22 @@ impl OpenAiProvider {
                 previous_response_id = %previous_response_id,
                 "OpenAI Responses continuation 边界未命中历史消息，降级为完整历史重放"
             );
-            return (messages, ResponsesRequestOptions::default());
+            return (
+                messages,
+                ResponsesRequestOptions {
+                    output_schema,
+                    ..ResponsesRequestOptions::default()
+                },
+            );
         };
 
         (
             incremental_messages,
-            ResponsesRequestOptions::with_previous_response_id(previous_response_id),
+            ResponsesRequestOptions {
+                previous_response_id: Some(previous_response_id),
+                store: true,
+                output_schema,
+            },
         )
     }
 
@@ -331,6 +352,14 @@ impl Provider for OpenAiProvider {
         self.model.clone()
     }
 
+    fn supports_native_output_schema(&self) -> bool {
+        Self::uses_responses_api(&self.model.model_name)
+    }
+
+    fn supports_native_output_schema_with_model(&self, model_config: &ModelConfig) -> bool {
+        Self::uses_responses_api(&model_config.model_name)
+    }
+
     #[tracing::instrument(
         skip(self, model_config, system, messages, tools),
         fields(model_config, input, output, input_tokens, output_tokens, total_tokens)
@@ -346,7 +375,7 @@ impl Provider for OpenAiProvider {
             let (messages, request_options) = Self::resolve_responses_request_context(messages);
             let payload =
                 create_responses_request(model_config, system, messages, tools, &request_options)?;
-            let mut log = RequestLog::start(&self.model, &payload)?;
+            let mut log = RequestLog::start(model_config, &payload)?;
 
             let json_response = self
                 .with_retry(|| async {
@@ -382,7 +411,7 @@ impl Provider for OpenAiProvider {
                 false,
             )?;
 
-            let mut log = RequestLog::start(&self.model, &payload)?;
+            let mut log = RequestLog::start(model_config, &payload)?;
             let json_response = self
                 .with_retry(|| async {
                     let payload_clone = payload.clone();
@@ -451,13 +480,24 @@ impl Provider for OpenAiProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
-        if Self::uses_responses_api(&self.model.model_name) {
+        self.stream_with_model(&self.model, system, messages, tools)
+            .await
+    }
+
+    async fn stream_with_model(
+        &self,
+        model_config: &ModelConfig,
+        system: &str,
+        messages: &[Message],
+        tools: &[Tool],
+    ) -> Result<MessageStream, ProviderError> {
+        if Self::uses_responses_api(&model_config.model_name) {
             let (messages, request_options) = Self::resolve_responses_request_context(messages);
             let mut payload =
-                create_responses_request(&self.model, system, messages, tools, &request_options)?;
+                create_responses_request(model_config, system, messages, tools, &request_options)?;
             payload["stream"] = serde_json::Value::Bool(true);
 
-            let mut log = RequestLog::start(&self.model, &payload)?;
+            let mut log = RequestLog::start(model_config, &payload)?;
 
             let response = self
                 .with_retry(|| async {
@@ -489,14 +529,14 @@ impl Provider for OpenAiProvider {
             }))
         } else {
             let payload = create_request(
-                &self.model,
+                model_config,
                 system,
                 messages,
                 tools,
                 &ImageFormat::OpenAi,
                 true,
             )?;
-            let mut log = RequestLog::start(&self.model, &payload)?;
+            let mut log = RequestLog::start(model_config, &payload)?;
 
             let response = self
                 .with_retry(|| async {
@@ -663,6 +703,36 @@ mod tests {
 
         assert_eq!(request_messages, messages.as_slice());
         assert_eq!(options.previous_response_id, None);
+        assert!(!options.store);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_responses_request_context_includes_output_schema_from_turn_context() {
+        let turn_context = TurnContextOverride {
+            output_schema: Some(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "answer": { "type": "string" }
+                }
+            })),
+            ..TurnContextOverride::default()
+        };
+        let messages = vec![Message::user().with_text("继续")];
+
+        let (request_messages, options) =
+            crate::session_context::with_turn_context(Some(turn_context), async {
+                OpenAiProvider::resolve_responses_request_context(&messages)
+            })
+            .await;
+
+        assert_eq!(request_messages, messages.as_slice());
+        assert_eq!(
+            options
+                .output_schema
+                .as_ref()
+                .and_then(|schema| schema.get("type")),
+            Some(&serde_json::json!("object"))
+        );
         assert!(!options.store);
     }
 }

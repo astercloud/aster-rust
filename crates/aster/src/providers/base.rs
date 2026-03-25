@@ -473,6 +473,17 @@ pub trait Provider: Send + Sync {
         false
     }
 
+    /// Whether this provider can enforce turn-level output_schema natively without the
+    /// framework-level final_output tool fallback.
+    fn supports_native_output_schema(&self) -> bool {
+        false
+    }
+
+    /// Model-aware variant of native output schema capability detection.
+    fn supports_native_output_schema_with_model(&self, _model_config: &ModelConfig) -> bool {
+        self.supports_native_output_schema()
+    }
+
     /// Create embeddings if supported. Default implementation returns an error.
     async fn create_embeddings(&self, _texts: Vec<String>) -> Result<Vec<Vec<f32>>, ProviderError> {
         Err(ProviderError::ExecutionError(
@@ -499,6 +510,23 @@ pub trait Provider: Send + Sync {
 
     fn supports_streaming(&self) -> bool {
         false
+    }
+
+    async fn stream_with_model(
+        &self,
+        model_config: &ModelConfig,
+        system: &str,
+        messages: &[Message],
+        tools: &[Tool],
+    ) -> Result<MessageStream, ProviderError> {
+        if self.get_model_config() == *model_config {
+            self.stream(system, messages, tools).await
+        } else {
+            let (message, usage) = self
+                .complete_with_model(model_config, system, messages, tools)
+                .await?;
+            Ok(stream_from_single_message(message, usage))
+        }
     }
 
     /// Get the currently active model name

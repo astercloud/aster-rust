@@ -26,6 +26,24 @@ struct SubagentPromptContext {
 type AgentMessagesFuture =
     Pin<Box<dyn Future<Output = Result<(Conversation, Option<String>)>> + Send>>;
 
+fn build_subagent_session_config(
+    session_id: String,
+    task_config: &TaskConfig,
+    recipe_retry: Option<crate::agents::types::RetryConfig>,
+) -> SessionConfig {
+    SessionConfig {
+        id: session_id,
+        thread_id: None,
+        turn_id: None,
+        schedule_id: None,
+        max_turns: task_config.max_turns.map(|v| v as u32),
+        retry_config: recipe_retry,
+        system_prompt: None,
+        include_context_trace: None,
+        turn_context: task_config.turn_context.clone(),
+    }
+}
+
 /// Standalone function to run a complete subagent task with output options
 pub async fn run_complete_subagent_task(
     recipe: Recipe,
@@ -135,11 +153,11 @@ fn get_agent_messages(
             .map_err(|e| anyhow!("Failed to get sub agent session file path: {}", e))?;
 
         agent
-            .update_provider(task_config.provider, &session_id)
+            .update_provider(task_config.provider.clone(), &session_id)
             .await
             .map_err(|e| anyhow!("Failed to set provider on sub agent: {}", e))?;
 
-        for extension in task_config.extensions {
+        for extension in &task_config.extensions {
             if let Err(e) = agent.add_extension(extension.clone()).await {
                 debug!(
                     "Failed to add extension '{}' to subagent: {}",
@@ -152,7 +170,8 @@ fn get_agent_messages(
         let has_response_schema = recipe.response.is_some();
         agent
             .apply_recipe_components(recipe.sub_recipes.clone(), recipe.response.clone(), true)
-            .await;
+            .await
+            .map_err(|e| anyhow!("Failed to configure subagent recipe components: {}", e))?;
 
         let tools = agent.list_tools(None).await;
         let subagent_prompt = render_global_file(
@@ -190,17 +209,8 @@ fn get_agent_messages(
                 info!("Recipe activity: {}", activity);
             }
         }
-        let session_config = SessionConfig {
-            id: session_id.clone(),
-            thread_id: None,
-            turn_id: None,
-            schedule_id: None,
-            max_turns: task_config.max_turns.map(|v| v as u32),
-            retry_config: recipe.retry,
-            system_prompt: None,
-            include_context_trace: None,
-            turn_context: None,
-        };
+        let session_config =
+            build_subagent_session_config(session_id.clone(), &task_config, recipe.retry);
 
         let mut stream = crate::session_context::with_session_id(Some(session_id.clone()), async {
             agent
@@ -244,4 +254,52 @@ fn get_agent_messages(
 
         Ok((conversation, final_output))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::testprovider::TestProvider;
+    use crate::session::TurnContextOverride;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    #[test]
+    fn build_subagent_session_config_preserves_inherited_turn_context() {
+        let task_config = TaskConfig {
+            provider: Arc::new(
+                TestProvider::new_replaying("/tmp/aster-subagent-handler.json").expect("provider"),
+            ),
+            parent_session_id: "parent-session-1".to_string(),
+            parent_working_dir: PathBuf::from("/tmp/workspace-parent"),
+            extensions: Vec::new(),
+            max_turns: Some(7),
+            turn_context: Some(TurnContextOverride {
+                model: Some("gpt-5.4".to_string()),
+                effort: Some("high".to_string()),
+                metadata: HashMap::new(),
+                ..TurnContextOverride::default()
+            }),
+        };
+
+        let session_config =
+            build_subagent_session_config("subagent-session-1".to_string(), &task_config, None);
+
+        assert_eq!(session_config.max_turns, Some(7));
+        assert_eq!(
+            session_config
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.model.as_deref()),
+            Some("gpt-5.4")
+        );
+        assert_eq!(
+            session_config
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.effort.as_deref()),
+            Some("high")
+        );
+    }
 }

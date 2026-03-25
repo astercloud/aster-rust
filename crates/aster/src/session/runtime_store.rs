@@ -41,6 +41,9 @@ pub struct TurnContextOverride {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Object)]
     pub output_schema: Option<Value>,
+    #[serde(skip, default)]
+    #[schema(skip)]
+    pub output_schema_source: Option<TurnOutputSchemaSource>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     #[schema(value_type = Object)]
     pub metadata: HashMap<String, Value>,
@@ -72,6 +75,31 @@ pub enum ItemStatus {
     InProgress,
     Completed,
     Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnOutputSchemaSource {
+    Session,
+    Turn,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnOutputSchemaStrategy {
+    Native,
+    FinalOutputTool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnOutputSchemaRuntime {
+    pub source: TurnOutputSchemaSource,
+    pub strategy: TurnOutputSchemaStrategy,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -209,6 +237,8 @@ pub struct TurnRuntime {
     pub error_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_override: Option<TurnContextOverride>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_schema_runtime: Option<TurnOutputSchemaRuntime>,
     pub created_at: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<DateTime<Utc>>,
@@ -234,11 +264,20 @@ impl TurnRuntime {
             input_text,
             error_message: None,
             context_override,
+            output_schema_runtime: None,
             created_at: now,
             started_at: Some(now),
             completed_at: None,
             updated_at: now,
         }
+    }
+
+    pub fn with_output_schema_runtime(
+        mut self,
+        output_schema_runtime: Option<TurnOutputSchemaRuntime>,
+    ) -> Self {
+        self.output_schema_runtime = output_schema_runtime;
+        self
     }
 }
 
@@ -464,6 +503,7 @@ impl SqliteThreadRuntimeStore {
                 input_text TEXT,
                 error_message TEXT,
                 context_override_json TEXT,
+                output_schema_runtime_json TEXT,
                 created_at TIMESTAMP NOT NULL,
                 started_at TIMESTAMP,
                 completed_at TIMESTAMP,
@@ -473,6 +513,9 @@ impl SqliteThreadRuntimeStore {
         )
         .execute(pool)
         .await?;
+
+        Self::ensure_optional_text_column(pool, "turn_runtimes", "output_schema_runtime_json")
+            .await?;
 
         sqlx::query(
             r#"
@@ -509,37 +552,41 @@ impl SqliteThreadRuntimeStore {
         .execute(pool)
         .await?;
 
-        sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_thread_runtimes_session ON thread_runtimes(session_id, created_at ASC)",
-        )
-        .execute(pool)
-        .await?;
-        sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_turn_runtimes_thread ON turn_runtimes(thread_id, created_at ASC)",
-        )
-        .execute(pool)
-        .await?;
-        sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_turn_runtimes_session ON turn_runtimes(session_id, created_at ASC)",
-        )
-        .execute(pool)
-        .await?;
-        sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_item_runtimes_thread ON item_runtimes(thread_id, sequence ASC, started_at ASC)",
-        )
-        .execute(pool)
-        .await?;
-        sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_item_runtimes_turn ON item_runtimes(turn_id, sequence ASC)",
-        )
-        .execute(pool)
-        .await?;
-        sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_queued_turn_runtimes_session ON queued_turn_runtimes(session_id, created_at ASC, queued_turn_id ASC)",
-        )
-        .execute(pool)
-        .await?;
+        Self::ensure_indexes(pool).await?;
 
+        Ok(())
+    }
+
+    async fn ensure_indexes(pool: &Pool<Sqlite>) -> Result<()> {
+        for statement in [
+            "CREATE INDEX IF NOT EXISTS idx_thread_runtimes_session ON thread_runtimes(session_id, created_at ASC)",
+            "CREATE INDEX IF NOT EXISTS idx_turn_runtimes_thread ON turn_runtimes(thread_id, created_at ASC)",
+            "CREATE INDEX IF NOT EXISTS idx_turn_runtimes_session ON turn_runtimes(session_id, created_at ASC)",
+            "CREATE INDEX IF NOT EXISTS idx_item_runtimes_thread ON item_runtimes(thread_id, sequence ASC, started_at ASC)",
+            "CREATE INDEX IF NOT EXISTS idx_item_runtimes_turn ON item_runtimes(turn_id, sequence ASC)",
+            "CREATE INDEX IF NOT EXISTS idx_queued_turn_runtimes_session ON queued_turn_runtimes(session_id, created_at ASC, queued_turn_id ASC)",
+        ] {
+            sqlx::query(statement).execute(pool).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn ensure_optional_text_column(
+        pool: &Pool<Sqlite>,
+        table: &str,
+        column: &str,
+    ) -> Result<()> {
+        let pragma = format!("PRAGMA table_info({table})");
+        let rows = sqlx::query(&pragma).fetch_all(pool).await?;
+        let exists = rows
+            .iter()
+            .filter_map(|row| row.try_get::<String, _>("name").ok())
+            .any(|name| name == column);
+        if !exists {
+            let alter = format!("ALTER TABLE {table} ADD COLUMN {column} TEXT");
+            sqlx::query(&alter).execute(pool).await?;
+        }
         Ok(())
     }
 
@@ -578,8 +625,9 @@ impl SqliteThreadRuntimeStore {
             r#"
             INSERT INTO turn_runtimes (
                 id, session_id, thread_id, status, input_text, error_message,
-                context_override_json, created_at, started_at, completed_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                context_override_json, output_schema_runtime_json, created_at, started_at,
+                completed_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 session_id = excluded.session_id,
                 thread_id = excluded.thread_id,
@@ -587,6 +635,7 @@ impl SqliteThreadRuntimeStore {
                 input_text = excluded.input_text,
                 error_message = excluded.error_message,
                 context_override_json = excluded.context_override_json,
+                output_schema_runtime_json = excluded.output_schema_runtime_json,
                 started_at = excluded.started_at,
                 completed_at = excluded.completed_at,
                 updated_at = excluded.updated_at
@@ -600,6 +649,12 @@ impl SqliteThreadRuntimeStore {
         .bind(&turn.error_message)
         .bind(
             turn.context_override
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()?,
+        )
+        .bind(
+            turn.output_schema_runtime
                 .as_ref()
                 .map(serde_json::to_string)
                 .transpose()?,
@@ -694,6 +749,8 @@ impl SqliteThreadRuntimeStore {
     fn decode_turn_row(row: SqliteRow) -> Result<TurnRuntime> {
         let status_raw: String = row.try_get("status")?;
         let context_override_json: Option<String> = row.try_get("context_override_json")?;
+        let output_schema_runtime_json: Option<String> =
+            row.try_get("output_schema_runtime_json")?;
         Ok(TurnRuntime {
             id: row.try_get("id")?,
             session_id: row.try_get("session_id")?,
@@ -702,6 +759,9 @@ impl SqliteThreadRuntimeStore {
             input_text: row.try_get("input_text")?,
             error_message: row.try_get("error_message")?,
             context_override: context_override_json
+                .map(|json| serde_json::from_str(&json))
+                .transpose()?,
+            output_schema_runtime: output_schema_runtime_json
                 .map(|json| serde_json::from_str(&json))
                 .transpose()?,
             created_at: row.try_get("created_at")?,
@@ -862,7 +922,8 @@ impl ThreadRuntimeStore for SqliteThreadRuntimeStore {
             r#"
             SELECT
                 id, session_id, thread_id, status, input_text, error_message,
-                context_override_json, created_at, started_at, completed_at, updated_at
+                context_override_json, output_schema_runtime_json, created_at, started_at,
+                completed_at, updated_at
             FROM turn_runtimes
             WHERE id = ?
         "#,
@@ -880,7 +941,8 @@ impl ThreadRuntimeStore for SqliteThreadRuntimeStore {
             r#"
             SELECT
                 id, session_id, thread_id, status, input_text, error_message,
-                context_override_json, created_at, started_at, completed_at, updated_at
+                context_override_json, output_schema_runtime_json, created_at, started_at,
+                completed_at, updated_at
             FROM turn_runtimes
             WHERE thread_id = ?
             ORDER BY created_at ASC, id ASC
@@ -1454,7 +1516,13 @@ mod tests {
             "thread-1",
             Some("hello".to_string()),
             None,
-        );
+        )
+        .with_output_schema_runtime(Some(TurnOutputSchemaRuntime {
+            source: TurnOutputSchemaSource::Session,
+            strategy: TurnOutputSchemaStrategy::FinalOutputTool,
+            provider_name: Some("openai".to_string()),
+            model_name: Some("gpt-5.3-codex".to_string()),
+        }));
         let now = Utc::now();
         let item = ItemRuntime {
             id: "item-1".to_string(),
@@ -1486,6 +1554,10 @@ mod tests {
         assert_eq!(stored_turn.thread_id, turn.thread_id);
         assert_eq!(stored_turn.status, turn.status);
         assert_eq!(stored_turn.input_text, turn.input_text);
+        assert_eq!(
+            stored_turn.output_schema_runtime,
+            turn.output_schema_runtime
+        );
         let stored_item = store.get_item("item-1").await.unwrap().unwrap();
         assert_eq!(stored_item.id, item.id);
         assert_eq!(stored_item.turn_id, item.turn_id);
@@ -1508,7 +1580,13 @@ mod tests {
             "thread-1",
             Some("hello".to_string()),
             None,
-        );
+        )
+        .with_output_schema_runtime(Some(TurnOutputSchemaRuntime {
+            source: TurnOutputSchemaSource::Turn,
+            strategy: TurnOutputSchemaStrategy::Native,
+            provider_name: Some("codex_stateful".to_string()),
+            model_name: Some("gpt-5.4".to_string()),
+        }));
         let now = Utc::now();
         let item = ItemRuntime {
             id: "item-1".to_string(),
@@ -1539,6 +1617,10 @@ mod tests {
         assert_eq!(stored_turn.id, turn.id);
         assert_eq!(stored_turn.thread_id, turn.thread_id);
         assert_eq!(stored_turn.input_text, turn.input_text);
+        assert_eq!(
+            stored_turn.output_schema_runtime,
+            turn.output_schema_runtime
+        );
 
         let stored_item = reopened.get_item("item-1").await.unwrap().unwrap();
         assert_eq!(stored_item.id, item.id);
@@ -1676,6 +1758,82 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn sqlite_store_migrates_existing_turn_runtimes_with_output_schema_runtime() {
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("runtime.db");
+
+        let pool = sqlx::SqlitePool::connect_with(
+            SqliteConnectOptions::new()
+                .filename(&db_path)
+                .create_if_missing(true),
+        )
+        .await
+        .unwrap();
+        sqlx::query(
+            r#"
+            CREATE TABLE thread_runtimes (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                working_dir TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL,
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            )
+        "#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            r#"
+            CREATE TABLE turn_runtimes (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                thread_id TEXT NOT NULL REFERENCES thread_runtimes(id) ON DELETE CASCADE,
+                status TEXT NOT NULL,
+                input_text TEXT,
+                error_message TEXT,
+                context_override_json TEXT,
+                created_at TIMESTAMP NOT NULL,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL
+            )
+        "#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool.close().await;
+
+        let store = SqliteThreadRuntimeStore::new(db_path);
+        let thread = ThreadRuntime::new("thread-1", "session-1", PathBuf::from("/tmp"));
+        let turn = TurnRuntime::new(
+            "turn-1",
+            "session-1",
+            "thread-1",
+            Some("hello".to_string()),
+            None,
+        )
+        .with_output_schema_runtime(Some(TurnOutputSchemaRuntime {
+            source: TurnOutputSchemaSource::Session,
+            strategy: TurnOutputSchemaStrategy::FinalOutputTool,
+            provider_name: Some("openai".to_string()),
+            model_name: Some("gpt-5.3-codex".to_string()),
+        }));
+
+        store.upsert_thread(thread).await.unwrap();
+        store.create_turn(turn.clone()).await.unwrap();
+
+        let stored_turn = store.get_turn("turn-1").await.unwrap().unwrap();
+        assert_eq!(
+            stored_turn.output_schema_runtime,
+            turn.output_schema_runtime
+        );
     }
 
     #[tokio::test]

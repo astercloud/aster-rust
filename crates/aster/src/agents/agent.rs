@@ -38,6 +38,7 @@ use crate::conversation::message::{
 };
 use crate::conversation::{debug_conversation_fix, fix_conversation, Conversation};
 use crate::mcp_utils::ToolResult;
+use crate::model::ModelConfig;
 use crate::permission::permission_inspector::PermissionInspector;
 use crate::permission::permission_judge::PermissionCheckResult;
 use crate::permission::PermissionConfirmation;
@@ -51,7 +52,8 @@ use crate::session::{
     load_session_runtime_snapshot, require_shared_thread_runtime_store, save_summary,
     InMemoryThreadRuntimeStore, ItemRuntime, ItemRuntimePayload, ItemStatus, Session,
     SessionManager, SessionRuntimeSnapshot, SessionStore, SessionType, ThreadRuntime,
-    ThreadRuntimeStore, TurnRuntime, TurnStatus,
+    ThreadRuntimeStore, TurnContextOverride, TurnOutputSchemaRuntime, TurnOutputSchemaSource,
+    TurnOutputSchemaStrategy, TurnRuntime, TurnStatus,
 };
 use crate::tool_inspection::ToolInspectionManager;
 use crate::tool_monitor::RepetitionInspector;
@@ -86,6 +88,12 @@ const FILE_ARTIFACT_METADATA_KEYS: [&str; 9] = [
     "artifact_paths",
     "absolute_path",
 ];
+
+#[derive(Debug, Clone)]
+struct ResolvedOutputSchema {
+    schema: Value,
+    source: TurnOutputSchemaSource,
+}
 
 fn extract_proposed_plan_block(text: &str) -> Option<String> {
     let start = text.find(PROPOSED_PLAN_OPEN)?;
@@ -252,6 +260,7 @@ pub struct ReplyContext {
     pub tools: Vec<Tool>,
     pub toolshim_tools: Vec<Tool>,
     pub system_prompt: String,
+    pub model_config: ModelConfig,
     pub aster_mode: AsterMode,
     pub initial_messages: Vec<Message>,
     pub context_trace: Vec<ContextTraceStep>,
@@ -270,6 +279,7 @@ pub struct Agent {
 
     pub extension_manager: Arc<ExtensionManager>,
     pub(super) sub_recipes: Mutex<HashMap<String, SubRecipe>>,
+    pub(super) session_output_schema: Arc<Mutex<Option<Value>>>,
     pub(super) final_output_tool: Arc<Mutex<Option<FinalOutputTool>>>,
     pub(super) frontend_tools: Mutex<HashMap<String, FrontendTool>>,
     pub(super) frontend_instructions: Mutex<Option<String>>,
@@ -805,6 +815,7 @@ impl Agent {
             provider: provider.clone(),
             extension_manager: Arc::new(ExtensionManager::new(provider.clone())),
             sub_recipes: Mutex::new(HashMap::new()),
+            session_output_schema: Arc::new(Mutex::new(None)),
             final_output_tool: Arc::new(Mutex::new(None)),
             frontend_tools: Mutex::new(HashMap::new()),
             frontend_instructions: Mutex::new(None),
@@ -912,6 +923,7 @@ impl Agent {
             provider: provider.clone(),
             extension_manager: Arc::new(ExtensionManager::new(provider.clone())),
             sub_recipes: Mutex::new(HashMap::new()),
+            session_output_schema: Arc::new(Mutex::new(None)),
             final_output_tool: Arc::new(Mutex::new(None)),
             frontend_tools: Mutex::new(HashMap::new()),
             frontend_instructions: Mutex::new(None),
@@ -1120,6 +1132,15 @@ impl Agent {
                 existing.context_override = session_config.turn_context.clone();
                 changed = true;
             }
+            if existing.output_schema_runtime.is_none() {
+                let output_schema_runtime = self
+                    .resolve_turn_output_schema_runtime(session_config.turn_context.as_ref())
+                    .await;
+                if output_schema_runtime.is_some() {
+                    existing.output_schema_runtime = output_schema_runtime;
+                    changed = true;
+                }
+            }
 
             if changed {
                 existing.updated_at = Utc::now();
@@ -1136,6 +1157,10 @@ impl Agent {
             thread_id,
             input_text,
             session_config.turn_context.clone(),
+        )
+        .with_output_schema_runtime(
+            self.resolve_turn_output_schema_runtime(session_config.turn_context.as_ref())
+                .await,
         );
         let turn = self.thread_runtime_store.create_turn(turn).await?;
         Ok(turn)
@@ -1549,8 +1574,12 @@ impl Agent {
         let config = Config::global();
 
         let session_prompt = session_config.system_prompt.as_deref();
+        let model_config = self
+            .resolve_effective_model_config(session_config.turn_context.as_ref())
+            .await
+            .ok_or_else(|| anyhow!("Provider not set"))?;
         let (tools, toolshim_tools, system_prompt) = self
-            .prepare_tools_and_prompt(working_dir, session_prompt)
+            .prepare_tools_and_prompt(working_dir, session_prompt, &model_config)
             .await?;
         let mut system_prompt = system_prompt;
         push_trace(
@@ -1645,6 +1674,7 @@ impl Agent {
             tools,
             toolshim_tools,
             system_prompt,
+            model_config,
             aster_mode,
             initial_messages,
             context_trace,
@@ -1754,12 +1784,186 @@ impl Agent {
         self.frontend_tools.lock().await.get(name).cloned()
     }
 
-    pub async fn add_final_output_tool(&self, response: Response) {
+    pub async fn add_final_output_tool(&self, output_schema: Value) -> Result<()> {
         let mut final_output_tool = self.final_output_tool.lock().await;
-        let created_final_output_tool = FinalOutputTool::new(response);
-        let final_output_system_prompt = created_final_output_tool.system_prompt();
-        *final_output_tool = Some(created_final_output_tool);
-        self.extend_system_prompt(final_output_system_prompt).await;
+        *final_output_tool = Some(
+            FinalOutputTool::new(output_schema)
+                .map_err(|error| anyhow!("Failed to configure final output tool: {error}"))?,
+        );
+        Ok(())
+    }
+
+    pub async fn clear_final_output_tool(&self) {
+        let mut final_output_tool = self.final_output_tool.lock().await;
+        *final_output_tool = None;
+    }
+
+    pub async fn set_session_output_schema(&self, output_schema: Option<Value>) -> Result<()> {
+        if let Some(schema) = output_schema.as_ref() {
+            FinalOutputTool::validate_output_schema(schema)
+                .map_err(|error| anyhow!("Invalid session output schema: {error}"))?;
+        }
+
+        let mut session_output_schema = self.session_output_schema.lock().await;
+        *session_output_schema = output_schema;
+        Ok(())
+    }
+
+    async fn resolve_effective_output_schema(
+        &self,
+        turn_context: Option<&TurnContextOverride>,
+    ) -> Option<ResolvedOutputSchema> {
+        if let Some(context) = turn_context {
+            if let Some(output_schema) = context.output_schema.clone() {
+                return Some(ResolvedOutputSchema {
+                    schema: output_schema,
+                    source: context
+                        .output_schema_source
+                        .unwrap_or(TurnOutputSchemaSource::Turn),
+                });
+            }
+        }
+
+        self.session_output_schema
+            .lock()
+            .await
+            .clone()
+            .map(|schema| ResolvedOutputSchema {
+                schema,
+                source: TurnOutputSchemaSource::Session,
+            })
+    }
+
+    async fn resolve_effective_model_config(
+        &self,
+        turn_context: Option<&TurnContextOverride>,
+    ) -> Option<ModelConfig> {
+        let provider = self.provider.lock().await.as_ref()?.clone();
+        let mut model_config = provider.get_model_config();
+        if let Some(model) = turn_context
+            .and_then(|context| context.model.as_deref())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            model_config = match model_config.rebuild_with_model_name(model) {
+                Ok(rebuilt) => rebuilt,
+                Err(error) => {
+                    warn!(
+                        "Failed to rebuild model config for turn model override '{}': {}",
+                        model, error
+                    );
+                    model_config.with_model_name(model.to_string())
+                }
+            };
+        }
+        Some(model_config)
+    }
+
+    async fn provider_supports_native_output_schema(&self, model_config: &ModelConfig) -> bool {
+        self.provider
+            .lock()
+            .await
+            .as_ref()
+            .map(|provider| provider.supports_native_output_schema_with_model(model_config))
+            .unwrap_or(false)
+    }
+
+    fn merge_turn_context_output_schema(
+        turn_context: Option<TurnContextOverride>,
+        resolved_output_schema: Option<&ResolvedOutputSchema>,
+    ) -> Option<TurnContextOverride> {
+        match (turn_context, resolved_output_schema) {
+            (Some(mut turn_context), Some(resolved_output_schema)) => {
+                if turn_context.output_schema.is_none() {
+                    turn_context.output_schema = Some(resolved_output_schema.schema.clone());
+                }
+                turn_context.output_schema_source = Some(resolved_output_schema.source);
+                Some(turn_context)
+            }
+            (Some(turn_context), None) => Some(turn_context),
+            (None, Some(resolved_output_schema)) => Some(TurnContextOverride {
+                output_schema: Some(resolved_output_schema.schema.clone()),
+                output_schema_source: Some(resolved_output_schema.source),
+                ..TurnContextOverride::default()
+            }),
+            (None, None) => None,
+        }
+    }
+
+    async fn resolve_turn_output_schema_runtime(
+        &self,
+        turn_context: Option<&TurnContextOverride>,
+    ) -> Option<TurnOutputSchemaRuntime> {
+        turn_context.and_then(|context| context.output_schema.as_ref())?;
+
+        let model_config = self.resolve_effective_model_config(turn_context).await;
+        let uses_final_output_tool = self.final_output_tool.lock().await.is_some();
+        let strategy = if uses_final_output_tool {
+            TurnOutputSchemaStrategy::FinalOutputTool
+        } else if let Some(model_config) = model_config.as_ref() {
+            if self
+                .provider_supports_native_output_schema(model_config)
+                .await
+            {
+                TurnOutputSchemaStrategy::Native
+            } else {
+                TurnOutputSchemaStrategy::FinalOutputTool
+            }
+        } else {
+            TurnOutputSchemaStrategy::FinalOutputTool
+        };
+        let provider_name = self
+            .provider
+            .lock()
+            .await
+            .as_ref()
+            .map(|provider| provider.get_name().to_string());
+
+        Some(TurnOutputSchemaRuntime {
+            source: turn_context
+                .and_then(|context| context.output_schema_source)
+                .unwrap_or(TurnOutputSchemaSource::Turn),
+            strategy,
+            provider_name,
+            model_name: model_config.map(|config| config.model_name),
+        })
+    }
+
+    async fn prepare_session_config_for_reply(
+        &self,
+        session_config: SessionConfig,
+    ) -> Result<SessionConfig> {
+        let mut session_config = session_config.with_runtime_defaults();
+        let effective_output_schema = self
+            .resolve_effective_output_schema(session_config.turn_context.as_ref())
+            .await;
+
+        session_config.turn_context = Self::merge_turn_context_output_schema(
+            session_config.turn_context.take(),
+            effective_output_schema.as_ref(),
+        );
+
+        if let Some(output_schema) = effective_output_schema {
+            let use_native_output_schema = if let Some(model_config) = self
+                .resolve_effective_model_config(session_config.turn_context.as_ref())
+                .await
+            {
+                self.provider_supports_native_output_schema(&model_config)
+                    .await
+            } else {
+                false
+            };
+
+            if use_native_output_schema {
+                self.clear_final_output_tool().await;
+            } else {
+                self.add_final_output_tool(output_schema.schema).await?;
+            }
+        } else {
+            self.clear_final_output_tool().await;
+        }
+
+        Ok(session_config)
     }
 
     pub async fn add_sub_recipes(&self, sub_recipes_to_add: Vec<SubRecipe>) {
@@ -1774,16 +1978,19 @@ impl Agent {
         sub_recipes: Option<Vec<SubRecipe>>,
         response: Option<Response>,
         include_final_output: bool,
-    ) {
+    ) -> Result<()> {
         if let Some(sub_recipes) = sub_recipes {
             self.add_sub_recipes(sub_recipes).await;
         }
 
-        if include_final_output {
-            if let Some(response) = response {
-                self.add_final_output_tool(response).await;
-            }
-        }
+        let output_schema = if include_final_output {
+            response.and_then(|response| response.json_schema)
+        } else {
+            None
+        };
+
+        self.set_session_output_schema(output_schema).await?;
+        Ok(())
     }
 
     /// Dispatch a single tool call to the appropriate client
@@ -2132,7 +2339,9 @@ impl Agent {
         session_config: SessionConfig,
         cancel_token: Option<CancellationToken>,
     ) -> Result<BoxStream<'_, Result<AgentEvent>>> {
-        let session_config = session_config.with_runtime_defaults();
+        let session_config = self
+            .prepare_session_config_for_reply(session_config)
+            .await?;
 
         for content in &user_message.content {
             if let MessageContent::ActionRequired(action_required) = content {
@@ -2464,6 +2673,7 @@ impl Agent {
             mut tools,
             mut toolshim_tools,
             mut system_prompt,
+            model_config,
             aster_mode,
             initial_messages,
             context_trace,
@@ -2522,6 +2732,7 @@ impl Agent {
 
                 let mut stream = Self::stream_response_from_provider(
                     self.provider().await?,
+                    &model_config,
                     &system_prompt,
                     conversation_with_moim.messages(),
                     &tools,
@@ -2862,7 +3073,7 @@ impl Agent {
                 if tools_updated {
                     let session_prompt = session_config.system_prompt.as_deref();
                     (tools, toolshim_tools, system_prompt) =
-                        self.prepare_tools_and_prompt(&working_dir, session_prompt).await?;
+                        self.prepare_tools_and_prompt(&working_dir, session_prompt, &model_config).await?;
                 }
                 let mut exit_chat = false;
                 if no_tools_called {
@@ -3212,9 +3423,87 @@ impl Agent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::recipe::Response;
+    use crate::providers::base::{Provider, ProviderMetadata, ProviderUsage};
+    use crate::providers::errors::ProviderError;
     use crate::session::{initialize_shared_thread_runtime_store, InMemoryThreadRuntimeStore};
+    use async_trait::async_trait;
+    use rmcp::model::Tool;
     use std::sync::Arc;
+
+    struct NativeOutputSchemaProvider;
+
+    struct ModelAwareNativeOutputSchemaProvider;
+
+    #[async_trait]
+    impl Provider for NativeOutputSchemaProvider {
+        fn metadata() -> ProviderMetadata
+        where
+            Self: Sized,
+        {
+            ProviderMetadata::empty()
+        }
+
+        fn get_name(&self) -> &str {
+            "native-output-schema-provider"
+        }
+
+        async fn complete_with_model(
+            &self,
+            _model_config: &crate::model::ModelConfig,
+            _system: &str,
+            _messages: &[Message],
+            _tools: &[Tool],
+        ) -> Result<(Message, ProviderUsage), ProviderError> {
+            Err(ProviderError::NotImplemented(
+                "test provider should not execute completions".to_string(),
+            ))
+        }
+
+        fn get_model_config(&self) -> crate::model::ModelConfig {
+            crate::model::ModelConfig::new("gpt-5.3-codex").expect("test model config")
+        }
+
+        fn supports_native_output_schema(&self) -> bool {
+            true
+        }
+    }
+
+    #[async_trait]
+    impl Provider for ModelAwareNativeOutputSchemaProvider {
+        fn metadata() -> ProviderMetadata
+        where
+            Self: Sized,
+        {
+            ProviderMetadata::empty()
+        }
+
+        fn get_name(&self) -> &str {
+            "model-aware-native-output-schema-provider"
+        }
+
+        async fn complete_with_model(
+            &self,
+            _model_config: &crate::model::ModelConfig,
+            _system: &str,
+            _messages: &[Message],
+            _tools: &[Tool],
+        ) -> Result<(Message, ProviderUsage), ProviderError> {
+            Err(ProviderError::NotImplemented(
+                "test provider should not execute completions".to_string(),
+            ))
+        }
+
+        fn get_model_config(&self) -> crate::model::ModelConfig {
+            crate::model::ModelConfig::new("fallback-model").expect("test model config")
+        }
+
+        fn supports_native_output_schema_with_model(
+            &self,
+            model_config: &crate::model::ModelConfig,
+        ) -> bool {
+            model_config.model_name == "native-model"
+        }
+    }
 
     #[test]
     fn test_new_with_required_shared_thread_runtime_store_uses_initialized_store() {
@@ -3313,16 +3602,14 @@ mod tests {
     async fn test_add_final_output_tool() -> Result<()> {
         let agent = Agent::new();
 
-        let response = Response {
-            json_schema: Some(serde_json::json!({
+        agent
+            .add_final_output_tool(serde_json::json!({
                 "type": "object",
                 "properties": {
                     "result": {"type": "string"}
                 }
-            })),
-        };
-
-        agent.add_final_output_tool(response).await;
+            }))
+            .await?;
 
         let tools = agent.list_tools(None).await;
         let final_output_tool = tools
@@ -3333,14 +3620,219 @@ mod tests {
             final_output_tool.is_some(),
             "Final output tool should be present after adding"
         );
+        Ok(())
+    }
 
-        let prompt_manager = agent.prompt_manager.lock().await;
-        let system_prompt = prompt_manager.builder().build();
+    #[tokio::test]
+    async fn test_prepare_session_config_for_reply_merges_session_output_schema() -> Result<()> {
+        let agent = Agent::new();
+        let output_schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string"}
+            }
+        });
 
-        let final_output_tool_ref = agent.final_output_tool.lock().await;
-        let final_output_tool_system_prompt =
-            final_output_tool_ref.as_ref().unwrap().system_prompt();
-        assert!(system_prompt.contains(&final_output_tool_system_prompt));
+        agent
+            .set_session_output_schema(Some(output_schema.clone()))
+            .await?;
+
+        let session_config = SessionConfig {
+            id: "session-1".to_string(),
+            thread_id: None,
+            turn_id: None,
+            schedule_id: None,
+            max_turns: None,
+            retry_config: None,
+            system_prompt: None,
+            include_context_trace: None,
+            turn_context: None,
+        };
+
+        let prepared = agent
+            .prepare_session_config_for_reply(session_config)
+            .await?;
+        assert_eq!(
+            prepared
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.output_schema.as_ref()),
+            Some(&output_schema)
+        );
+        assert_eq!(
+            prepared
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.output_schema_source),
+            Some(TurnOutputSchemaSource::Session)
+        );
+
+        let final_output_tool = agent.final_output_tool.lock().await;
+        assert!(final_output_tool.is_some());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_prepare_session_config_for_reply_skips_final_output_tool_for_native_provider(
+    ) -> Result<()> {
+        let agent = Agent::new();
+        {
+            let mut provider = agent.provider.lock().await;
+            *provider = Some(Arc::new(NativeOutputSchemaProvider));
+        }
+
+        let output_schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string"}
+            }
+        });
+
+        agent
+            .set_session_output_schema(Some(output_schema.clone()))
+            .await?;
+
+        let session_config = SessionConfig {
+            id: "session-native-1".to_string(),
+            thread_id: None,
+            turn_id: None,
+            schedule_id: None,
+            max_turns: None,
+            retry_config: None,
+            system_prompt: None,
+            include_context_trace: None,
+            turn_context: None,
+        };
+
+        let prepared = agent
+            .prepare_session_config_for_reply(session_config)
+            .await?;
+        assert_eq!(
+            prepared
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.output_schema.as_ref()),
+            Some(&output_schema)
+        );
+        assert_eq!(
+            prepared
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.output_schema_source),
+            Some(TurnOutputSchemaSource::Session)
+        );
+
+        let final_output_tool = agent.final_output_tool.lock().await;
+        assert!(final_output_tool.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_prepare_session_config_for_reply_uses_turn_model_for_native_schema_detection(
+    ) -> Result<()> {
+        let agent = Agent::new();
+        {
+            let mut provider = agent.provider.lock().await;
+            *provider = Some(Arc::new(ModelAwareNativeOutputSchemaProvider));
+        }
+
+        let output_schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string"}
+            }
+        });
+
+        agent
+            .set_session_output_schema(Some(output_schema.clone()))
+            .await?;
+
+        let session_config = SessionConfig {
+            id: "session-native-2".to_string(),
+            thread_id: None,
+            turn_id: None,
+            schedule_id: None,
+            max_turns: None,
+            retry_config: None,
+            system_prompt: None,
+            include_context_trace: None,
+            turn_context: Some(TurnContextOverride {
+                model: Some("native-model".to_string()),
+                ..TurnContextOverride::default()
+            }),
+        };
+
+        let prepared = agent
+            .prepare_session_config_for_reply(session_config)
+            .await?;
+        assert_eq!(
+            prepared
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.output_schema.as_ref()),
+            Some(&output_schema)
+        );
+        assert_eq!(
+            prepared
+                .turn_context
+                .as_ref()
+                .and_then(|context| context.output_schema_source),
+            Some(TurnOutputSchemaSource::Session)
+        );
+
+        let final_output_tool = agent.final_output_tool.lock().await;
+        assert!(final_output_tool.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_resolve_turn_output_schema_runtime_tracks_native_strategy_and_model() -> Result<()>
+    {
+        let agent = Agent::new();
+        {
+            let mut provider = agent.provider.lock().await;
+            *provider = Some(Arc::new(ModelAwareNativeOutputSchemaProvider));
+        }
+
+        agent
+            .set_session_output_schema(Some(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "answer": {"type": "string"}
+                }
+            })))
+            .await?;
+
+        let prepared = agent
+            .prepare_session_config_for_reply(SessionConfig {
+                id: "session-native-runtime".to_string(),
+                thread_id: None,
+                turn_id: None,
+                schedule_id: None,
+                max_turns: None,
+                retry_config: None,
+                system_prompt: None,
+                include_context_trace: None,
+                turn_context: Some(TurnContextOverride {
+                    model: Some("native-model".to_string()),
+                    ..TurnContextOverride::default()
+                }),
+            })
+            .await?;
+
+        let runtime = agent
+            .resolve_turn_output_schema_runtime(prepared.turn_context.as_ref())
+            .await;
+
+        assert_eq!(
+            runtime,
+            Some(TurnOutputSchemaRuntime {
+                source: TurnOutputSchemaSource::Session,
+                strategy: TurnOutputSchemaStrategy::Native,
+                provider_name: Some("model-aware-native-output-schema-provider".to_string()),
+                model_name: Some("native-model".to_string()),
+            })
+        );
         Ok(())
     }
 

@@ -209,3 +209,39 @@ Make sure your last message provides a comprehensive summary of:
 // 只使用指定扩展
 {"instructions": "...", "extensions": ["developer"]}
 ```
+
+## 运行时继承与覆盖
+
+子 Agent 会从父 turn 继承执行语义相关的运行时上下文：
+
+- `cwd`
+- `model`
+- `effort`
+- `approval_policy`
+- `sandbox_policy`
+- `collaboration_mode`
+
+以下字段不会默认继承：
+
+- `output_schema`
+- `output_schema_source`
+- `metadata`
+
+原因：
+
+- `output_schema` 是当前 agent 的最终输出契约，不能默认泄漏到子 agent
+- `metadata` 可能包含 provider continuation 等仅对当前 turn 有效的运行时状态
+
+`settings` 的覆盖规则遵循单一事实源原则：
+
+- `settings.provider` 单独出现时，会切到该 provider 的默认模型
+- `settings.model` 不仅会重建 provider 的 `ModelConfig`
+- 还会同步写回子 agent 的 `turn_context.model`
+
+这样 `provider` 配置与 `turn` 级执行 override 始终保持一致，避免 reply 阶段再次被旧继承模型覆盖。
+
+模型切换不是简单改字符串：
+
+- 框架会按新模型重新构建 `ModelConfig`
+- 会同步刷新该模型对应的 `context_limit`
+- 已存在的通用调优项（如 `temperature` / `max_tokens` / `toolshim`）继续保留
