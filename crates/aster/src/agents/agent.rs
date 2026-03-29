@@ -107,6 +107,21 @@ fn extract_proposed_plan_block(text: &str) -> Option<String> {
     }
 }
 
+fn build_reasoning_summary_sections(text: &str) -> Option<Vec<String>> {
+    let sections = text
+        .split("\n\n")
+        .map(str::trim)
+        .filter(|section| !section.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+
+    if sections.is_empty() {
+        None
+    } else {
+        Some(sections)
+    }
+}
+
 fn collect_string_values(value: &Value) -> Vec<String> {
     match value {
         Value::String(text) => {
@@ -511,8 +526,15 @@ impl TurnItemRuntimeProjector {
 
         let item_id = self.message_item_id(message, "reasoning");
         let next_text = self.append_reasoning_text(&item_id, &thinking_content.thinking);
+        let summary = build_reasoning_summary_sections(&next_text);
 
-        Some(self.upsert_in_progress(item_id, ItemRuntimePayload::Reasoning { text: next_text }))
+        Some(self.upsert_in_progress(
+            item_id,
+            ItemRuntimePayload::Reasoning {
+                text: next_text,
+                summary,
+            },
+        ))
     }
 
     fn project_tool_request(&mut self, tool_request: &ToolRequest) -> Option<AgentEvent> {
@@ -665,7 +687,7 @@ impl TurnItemRuntimeProjector {
         self.items
             .get(item_id)
             .and_then(|item| match &item.payload {
-                ItemRuntimePayload::Reasoning { text } => Some(format!("{text}{text_chunk}")),
+                ItemRuntimePayload::Reasoning { text, .. } => Some(format!("{text}{text_chunk}")),
                 _ => None,
             })
             .unwrap_or_else(|| text_chunk.to_string())
@@ -3521,6 +3543,18 @@ mod tests {
     }
 
     #[test]
+    fn test_build_reasoning_summary_sections_splits_blank_line_boundaries() {
+        assert_eq!(
+            build_reasoning_summary_sections("先判断任务类型\n\n再决定是否联网"),
+            Some(vec![
+                "先判断任务类型".to_string(),
+                "再决定是否联网".to_string()
+            ])
+        );
+        assert_eq!(build_reasoning_summary_sections("   "), None);
+    }
+
+    #[test]
     fn test_project_message_emits_plan_runtime_item() {
         let turn = TurnRuntime::new(
             "turn-1",
@@ -3542,6 +3576,42 @@ mod tests {
                     if matches!(&item.payload, ItemRuntimePayload::Plan { text } if text == "- 调研\n- 实现")
             )),
             "应生成显式的 plan runtime item"
+        );
+    }
+
+    #[test]
+    fn test_project_message_emits_reasoning_summary_runtime_item() {
+        let turn = TurnRuntime::new(
+            "turn-2",
+            "session-1",
+            "thread-1",
+            Some("推理摘要".to_string()),
+            None,
+        );
+        let mut projector = TurnItemRuntimeProjector::new(&turn);
+        let message = Message::assistant()
+            .with_id("assistant-msg-1")
+            .with_thinking("先判断任务类型\n\n再决定是否联网", "");
+
+        let events = projector.project_agent_event(&AgentEvent::Message(message));
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                AgentEvent::ItemStarted { item } | AgentEvent::ItemUpdated { item }
+                    if item.id == "reasoning:assistant-msg-1"
+                        && matches!(
+                            &item.payload,
+                            ItemRuntimePayload::Reasoning { text, summary }
+                                if text == "先判断任务类型\n\n再决定是否联网"
+                                    && summary.as_ref()
+                                        == Some(&vec![
+                                            "先判断任务类型".to_string(),
+                                            "再决定是否联网".to_string(),
+                                        ])
+                        )
+            )),
+            "应保留 reasoning summary 分段"
         );
     }
 

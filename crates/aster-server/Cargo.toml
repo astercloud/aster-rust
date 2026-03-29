@@ -11,8 +11,8 @@ description.workspace = true
 workspace = true
 
 [dependencies]
-aster = { package = "aster-core", path = "../aster", version = "0.22.0" }
-aster-mcp = { path = "../aster-mcp", version = "0.22.0" }
+aster = { package = "aster-core", path = "../aster", version = "0.23.0" }
+aster-mcp = { path = "../aster-mcp", version = "0.23.0" }
 rmcp = { workspace = true }
 schemars = "1.0"
 axum = { version = "0.8.1", features = ["ws", "macros"] }

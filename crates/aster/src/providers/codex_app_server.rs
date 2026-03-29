@@ -28,23 +28,55 @@ fn next_request_id() -> u64 {
     REQUEST_ID.fetch_add(1, Ordering::SeqCst)
 }
 
+fn normalize_thread_start_sandbox_mode(sandbox_policy: &str) -> Option<&'static str> {
+    match sandbox_policy.trim() {
+        "read-only" => Some("readOnly"),
+        "workspace-write" => Some("workspaceWrite"),
+        "danger-full-access" => Some("dangerFullAccess"),
+        _ => None,
+    }
+}
+
+fn build_turn_start_sandbox_policy(sandbox_policy: &str) -> Option<Value> {
+    normalize_thread_start_sandbox_mode(sandbox_policy).map(|policy_type| {
+        json!({
+            "type": policy_type
+        })
+    })
+}
+
+fn resolve_codex_runtime_policies() -> (String, String) {
+    let turn_context = crate::session_context::current_turn_context();
+    let approval_policy = turn_context
+        .as_ref()
+        .and_then(|context| context.approval_policy.clone())
+        .unwrap_or_else(|| "never".to_string());
+    let sandbox_policy = turn_context
+        .as_ref()
+        .and_then(|context| context.sandbox_policy.clone())
+        .unwrap_or_else(|| "workspace-write".to_string());
+
+    (approval_policy, sandbox_policy)
+}
+
 fn build_turn_start_params(
     thread_id: &str,
     input_text: &str,
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Value {
+    let (approval_policy, sandbox_policy) = resolve_codex_runtime_policies();
     let mut params = json!({
         "threadId": thread_id,
         "input": [
             { "type": "text", "text": input_text }
         ],
-        // 恢复旧 thread 后仍要强制覆盖审批策略，避免沿用历史 on-request 配置。
-        "approvalPolicy": "never",
-        "sandboxPolicy": {
-            "type": "workspaceWrite"
-        }
+        "approvalPolicy": approval_policy
     });
+
+    if let Some(sandbox_policy) = build_turn_start_sandbox_policy(&sandbox_policy) {
+        params["sandboxPolicy"] = sandbox_policy;
+    }
 
     if let Some(m) = model {
         params["model"] = json!(m);
@@ -95,7 +127,10 @@ pub enum TurnItem {
     #[serde(rename = "reasoning")]
     Reasoning {
         id: String,
-        text: Option<String>,
+        #[serde(default)]
+        summary: Vec<String>,
+        #[serde(default)]
+        content: Vec<String>,
         #[serde(default)]
         complete: bool,
     },
@@ -121,8 +156,20 @@ pub enum AppServerEvent {
     ItemStarted { item_id: String, item_type: String },
     /// Agent 消息增量
     AgentMessageDelta { item_id: String, text: String },
-    /// Reasoning 增量
-    ReasoningDelta { item_id: String, text: String },
+    /// Reasoning 摘要分段开始
+    ReasoningSummaryPartAdded { item_id: String, summary_index: i64 },
+    /// Reasoning 可读摘要增量
+    ReasoningSummaryTextDelta {
+        item_id: String,
+        text: String,
+        summary_index: i64,
+    },
+    /// Reasoning 原始内容增量
+    ReasoningTextDelta {
+        item_id: String,
+        text: String,
+        content_index: i64,
+    },
     /// Item 完成
     ItemCompleted { item_id: String },
     /// Turn 完成
@@ -311,7 +358,9 @@ impl CodexAppServerConnection {
             params["approvalPolicy"] = json!(policy);
         }
         if let Some(sb) = sandbox {
-            params["sandbox"] = json!(sb);
+            if let Some(sandbox_mode) = normalize_thread_start_sandbox_mode(sb) {
+                params["sandbox"] = json!(sandbox_mode);
+            }
         }
 
         let id = self.send_request("thread/start", params)?;
@@ -440,7 +489,7 @@ impl CodexAppServerConnection {
             // 处理通知事件
             if let Some(method) = msg.get("method").and_then(|v| v.as_str()) {
                 let params = msg.get("params").cloned().unwrap_or(json!({}));
-                let event = self.parse_event(method, &params, &mut accumulated_text);
+                let event = Self::parse_event(method, &params, &mut accumulated_text);
 
                 match &event {
                     AppServerEvent::TurnCompleted(_) => {
@@ -460,12 +509,7 @@ impl CodexAppServerConnection {
     }
 
     /// 解析事件
-    fn parse_event(
-        &self,
-        method: &str,
-        params: &Value,
-        accumulated_text: &mut String,
-    ) -> AppServerEvent {
+    fn parse_event(method: &str, params: &Value, accumulated_text: &mut String) -> AppServerEvent {
         match method {
             "thread/started" => {
                 let thread: ThreadInfo =
@@ -525,7 +569,23 @@ impl CodexAppServerConnection {
                 AppServerEvent::AgentMessageDelta { item_id, text }
             }
 
-            "item/reasoning/delta" => {
+            "item/reasoning/summaryPartAdded" => {
+                let item_id = params
+                    .get("itemId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let summary_index = params
+                    .get("summaryIndex")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                AppServerEvent::ReasoningSummaryPartAdded {
+                    item_id,
+                    summary_index,
+                }
+            }
+
+            "item/reasoning/summaryTextDelta" | "item/reasoning/delta" => {
                 let item_id = params
                     .get("itemId")
                     .and_then(|v| v.as_str())
@@ -536,7 +596,37 @@ impl CodexAppServerConnection {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                AppServerEvent::ReasoningDelta { item_id, text }
+                let summary_index = params
+                    .get("summaryIndex")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                AppServerEvent::ReasoningSummaryTextDelta {
+                    item_id,
+                    text,
+                    summary_index,
+                }
+            }
+
+            "item/reasoning/textDelta" => {
+                let item_id = params
+                    .get("itemId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let text = params
+                    .get("delta")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let content_index = params
+                    .get("contentIndex")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                AppServerEvent::ReasoningTextDelta {
+                    item_id,
+                    text,
+                    content_index,
+                }
             }
 
             "item/completed" => {
@@ -675,8 +765,13 @@ impl CodexSessionManager {
                 Err(e) => {
                     tracing::warn!("恢复会话失败，创建新会话: {}", e);
                     drop(session_map);
-                    let thread =
-                        conn.thread_start(model, cwd, Some("never"), Some("workspaceWrite"))?;
+                    let (approval_policy, sandbox_policy) = resolve_codex_runtime_policies();
+                    let thread = conn.thread_start(
+                        model,
+                        cwd,
+                        Some(&approval_policy),
+                        Some(&sandbox_policy),
+                    )?;
                     let mut session_map = self.session_map.lock().map_err(|e| {
                         ProviderError::RequestFailed(format!("获取会话映射锁失败: {}", e))
                     })?;
@@ -686,7 +781,9 @@ impl CodexSessionManager {
         } else {
             drop(session_map);
             // 创建新会话
-            let thread = conn.thread_start(model, cwd, Some("never"), Some("workspaceWrite"))?;
+            let (approval_policy, sandbox_policy) = resolve_codex_runtime_policies();
+            let thread =
+                conn.thread_start(model, cwd, Some(&approval_policy), Some(&sandbox_policy))?;
             let mut session_map = self
                 .session_map
                 .lock()
@@ -810,7 +907,125 @@ mod tests {
     }
 
     #[test]
-    fn test_build_turn_start_params_overrides_approval_policy() {
+    fn test_turn_info_deserialize_reasoning_item_with_summary_and_content() {
+        let json = r#"{
+            "id": "turn_789",
+            "status": "completed",
+            "items": [
+                {
+                    "type": "reasoning",
+                    "id": "reasoning-1",
+                    "summary": ["先判断任务类型", "再决定是否联网"],
+                    "content": ["raw reasoning block"],
+                    "complete": true
+                }
+            ],
+            "error": null
+        }"#;
+
+        let turn: TurnInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(turn.items.len(), 1);
+        assert!(matches!(
+            &turn.items[0],
+            TurnItem::Reasoning {
+                id,
+                summary,
+                content,
+                complete
+            } if id == "reasoning-1"
+                && summary == &vec!["先判断任务类型".to_string(), "再决定是否联网".to_string()]
+                && content == &vec!["raw reasoning block".to_string()]
+                && *complete
+        ));
+    }
+
+    #[test]
+    fn test_parse_event_supports_reasoning_summary_and_raw_deltas() {
+        let mut accumulated_text = String::new();
+
+        let summary_part_added = CodexAppServerConnection::parse_event(
+            "item/reasoning/summaryPartAdded",
+            &json!({
+                "itemId": "reasoning-1",
+                "summaryIndex": 2
+            }),
+            &mut accumulated_text,
+        );
+        assert!(matches!(
+            summary_part_added,
+            AppServerEvent::ReasoningSummaryPartAdded {
+                item_id,
+                summary_index
+            } if item_id == "reasoning-1" && summary_index == 2
+        ));
+
+        let summary_delta = CodexAppServerConnection::parse_event(
+            "item/reasoning/summaryTextDelta",
+            &json!({
+                "itemId": "reasoning-1",
+                "summaryIndex": 2,
+                "delta": "先判断任务类型"
+            }),
+            &mut accumulated_text,
+        );
+        assert!(matches!(
+            summary_delta,
+            AppServerEvent::ReasoningSummaryTextDelta {
+                item_id,
+                text,
+                summary_index
+            } if item_id == "reasoning-1"
+                && text == "先判断任务类型"
+                && summary_index == 2
+        ));
+
+        let raw_delta = CodexAppServerConnection::parse_event(
+            "item/reasoning/textDelta",
+            &json!({
+                "itemId": "reasoning-1",
+                "contentIndex": 1,
+                "delta": "raw reasoning block"
+            }),
+            &mut accumulated_text,
+        );
+        assert!(matches!(
+            raw_delta,
+            AppServerEvent::ReasoningTextDelta {
+                item_id,
+                text,
+                content_index
+            } if item_id == "reasoning-1"
+                && text == "raw reasoning block"
+                && content_index == 1
+        ));
+    }
+
+    #[test]
+    fn test_parse_event_keeps_legacy_reasoning_delta_compatible() {
+        let mut accumulated_text = String::new();
+        let event = CodexAppServerConnection::parse_event(
+            "item/reasoning/delta",
+            &json!({
+                "itemId": "reasoning-legacy",
+                "delta": "旧版摘要事件"
+            }),
+            &mut accumulated_text,
+        );
+
+        assert!(matches!(
+            event,
+            AppServerEvent::ReasoningSummaryTextDelta {
+                item_id,
+                text,
+                summary_index
+            } if item_id == "reasoning-legacy"
+                && text == "旧版摘要事件"
+                && summary_index == 0
+        ));
+    }
+
+    #[test]
+    fn test_build_turn_start_params_uses_default_runtime_policies() {
         let params =
             build_turn_start_params("thread-1", "hello", Some("gpt-5.3-codex"), Some("high"));
 
@@ -844,6 +1059,24 @@ mod tests {
                 params["outputSchema"]["properties"]["answer"]["type"],
                 json!("string")
             );
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_build_turn_start_params_reads_runtime_access_policies_from_turn_context() {
+        let turn_context = TurnContextOverride {
+            approval_policy: Some("on-request".to_string()),
+            sandbox_policy: Some("read-only".to_string()),
+            ..TurnContextOverride::default()
+        };
+
+        crate::session_context::with_turn_context(Some(turn_context), async {
+            let params =
+                build_turn_start_params("thread-1", "hello", Some("gpt-5.3-codex"), Some("high"));
+
+            assert_eq!(params["approvalPolicy"], json!("on-request"));
+            assert_eq!(params["sandboxPolicy"]["type"], json!("readOnly"));
         })
         .await;
     }

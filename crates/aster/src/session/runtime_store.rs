@@ -133,6 +133,8 @@ pub enum ItemRuntimePayload {
     },
     Reasoning {
         text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        summary: Option<Vec<String>>,
     },
     ToolCall {
         tool_name: String,
