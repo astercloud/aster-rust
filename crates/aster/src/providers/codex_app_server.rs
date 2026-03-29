@@ -509,157 +509,125 @@ impl CodexAppServerConnection {
     }
 
     /// 解析事件
+    fn parse_param_string(params: &Value, key: &str, default: &str) -> String {
+        params
+            .get(key)
+            .and_then(|value| value.as_str())
+            .unwrap_or(default)
+            .to_string()
+    }
+
+    fn parse_param_i64(params: &Value, key: &str, default: i64) -> i64 {
+        params
+            .get(key)
+            .and_then(|value| value.as_i64())
+            .unwrap_or(default)
+    }
+
+    fn parse_item_field(params: &Value, key: &str, default: &str) -> String {
+        params
+            .get("item")
+            .and_then(|item| item.get(key))
+            .and_then(|value| value.as_str())
+            .unwrap_or(default)
+            .to_string()
+    }
+
+    fn parse_thread_info(params: &Value) -> ThreadInfo {
+        serde_json::from_value(params.get("thread").cloned().unwrap_or(json!({}))).unwrap_or(
+            ThreadInfo {
+                id: "unknown".to_string(),
+                preview: None,
+                model_provider: None,
+                created_at: None,
+            },
+        )
+    }
+
+    fn parse_turn_info(params: &Value, default_status: &str) -> TurnInfo {
+        serde_json::from_value(params.get("turn").cloned().unwrap_or(json!({}))).unwrap_or(
+            TurnInfo {
+                id: "unknown".to_string(),
+                status: default_status.to_string(),
+                items: vec![],
+                error: None,
+            },
+        )
+    }
+
+    fn parse_thread_started(params: &Value) -> AppServerEvent {
+        AppServerEvent::ThreadStarted(Self::parse_thread_info(params))
+    }
+
+    fn parse_turn_started(params: &Value) -> AppServerEvent {
+        AppServerEvent::TurnStarted(Self::parse_turn_info(params, "unknown"))
+    }
+
+    fn parse_item_started(params: &Value) -> AppServerEvent {
+        AppServerEvent::ItemStarted {
+            item_id: Self::parse_item_field(params, "id", "unknown"),
+            item_type: Self::parse_item_field(params, "type", "unknown"),
+        }
+    }
+
+    fn parse_agent_message_delta(params: &Value, accumulated_text: &mut String) -> AppServerEvent {
+        let item_id = Self::parse_param_string(params, "itemId", "unknown");
+        let text = Self::parse_param_string(params, "delta", "");
+        accumulated_text.push_str(&text);
+        AppServerEvent::AgentMessageDelta { item_id, text }
+    }
+
+    fn parse_reasoning_summary_part_added(params: &Value) -> AppServerEvent {
+        AppServerEvent::ReasoningSummaryPartAdded {
+            item_id: Self::parse_param_string(params, "itemId", "unknown"),
+            summary_index: Self::parse_param_i64(params, "summaryIndex", 0),
+        }
+    }
+
+    fn parse_reasoning_summary_text_delta(params: &Value) -> AppServerEvent {
+        AppServerEvent::ReasoningSummaryTextDelta {
+            item_id: Self::parse_param_string(params, "itemId", "unknown"),
+            text: Self::parse_param_string(params, "delta", ""),
+            summary_index: Self::parse_param_i64(params, "summaryIndex", 0),
+        }
+    }
+
+    fn parse_reasoning_text_delta(params: &Value) -> AppServerEvent {
+        AppServerEvent::ReasoningTextDelta {
+            item_id: Self::parse_param_string(params, "itemId", "unknown"),
+            text: Self::parse_param_string(params, "delta", ""),
+            content_index: Self::parse_param_i64(params, "contentIndex", 0),
+        }
+    }
+
+    fn parse_item_completed(params: &Value) -> AppServerEvent {
+        AppServerEvent::ItemCompleted {
+            item_id: Self::parse_item_field(params, "id", "unknown"),
+        }
+    }
+
+    fn parse_turn_completed(params: &Value) -> AppServerEvent {
+        AppServerEvent::TurnCompleted(Self::parse_turn_info(params, "completed"))
+    }
+
+    fn parse_error(params: &Value) -> AppServerEvent {
+        AppServerEvent::Error(Self::parse_param_string(params, "message", "未知错误"))
+    }
+
     fn parse_event(method: &str, params: &Value, accumulated_text: &mut String) -> AppServerEvent {
         match method {
-            "thread/started" => {
-                let thread: ThreadInfo =
-                    serde_json::from_value(params.get("thread").cloned().unwrap_or(json!({})))
-                        .unwrap_or(ThreadInfo {
-                            id: "unknown".to_string(),
-                            preview: None,
-                            model_provider: None,
-                            created_at: None,
-                        });
-                AppServerEvent::ThreadStarted(thread)
-            }
-
-            "turn/started" => {
-                let turn: TurnInfo =
-                    serde_json::from_value(params.get("turn").cloned().unwrap_or(json!({})))
-                        .unwrap_or(TurnInfo {
-                            id: "unknown".to_string(),
-                            status: "unknown".to_string(),
-                            items: vec![],
-                            error: None,
-                        });
-                AppServerEvent::TurnStarted(turn)
-            }
-
-            "item/started" => {
-                let item_id = params
-                    .get("item")
-                    .and_then(|i| i.get("id"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                let item_type = params
-                    .get("item")
-                    .and_then(|i| i.get("type"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                AppServerEvent::ItemStarted { item_id, item_type }
-            }
-
-            "item/agentMessage/delta" => {
-                let item_id = params
-                    .get("itemId")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                let text = params
-                    .get("delta")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-
-                // 累积文本
-                accumulated_text.push_str(&text);
-
-                AppServerEvent::AgentMessageDelta { item_id, text }
-            }
-
-            "item/reasoning/summaryPartAdded" => {
-                let item_id = params
-                    .get("itemId")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                let summary_index = params
-                    .get("summaryIndex")
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(0);
-                AppServerEvent::ReasoningSummaryPartAdded {
-                    item_id,
-                    summary_index,
-                }
-            }
-
+            "thread/started" => Self::parse_thread_started(params),
+            "turn/started" => Self::parse_turn_started(params),
+            "item/started" => Self::parse_item_started(params),
+            "item/agentMessage/delta" => Self::parse_agent_message_delta(params, accumulated_text),
+            "item/reasoning/summaryPartAdded" => Self::parse_reasoning_summary_part_added(params),
             "item/reasoning/summaryTextDelta" | "item/reasoning/delta" => {
-                let item_id = params
-                    .get("itemId")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                let text = params
-                    .get("delta")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let summary_index = params
-                    .get("summaryIndex")
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(0);
-                AppServerEvent::ReasoningSummaryTextDelta {
-                    item_id,
-                    text,
-                    summary_index,
-                }
+                Self::parse_reasoning_summary_text_delta(params)
             }
-
-            "item/reasoning/textDelta" => {
-                let item_id = params
-                    .get("itemId")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                let text = params
-                    .get("delta")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let content_index = params
-                    .get("contentIndex")
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(0);
-                AppServerEvent::ReasoningTextDelta {
-                    item_id,
-                    text,
-                    content_index,
-                }
-            }
-
-            "item/completed" => {
-                let item_id = params
-                    .get("item")
-                    .and_then(|i| i.get("id"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                AppServerEvent::ItemCompleted { item_id }
-            }
-
-            "turn/completed" => {
-                let turn: TurnInfo =
-                    serde_json::from_value(params.get("turn").cloned().unwrap_or(json!({})))
-                        .unwrap_or(TurnInfo {
-                            id: "unknown".to_string(),
-                            status: "completed".to_string(),
-                            items: vec![],
-                            error: None,
-                        });
-                AppServerEvent::TurnCompleted(turn)
-            }
-
-            "error" => {
-                let message = params
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("未知错误")
-                    .to_string();
-                AppServerEvent::Error(message)
-            }
-
+            "item/reasoning/textDelta" => Self::parse_reasoning_text_delta(params),
+            "item/completed" => Self::parse_item_completed(params),
+            "turn/completed" => Self::parse_turn_completed(params),
+            "error" => Self::parse_error(params),
             _ => AppServerEvent::Unknown(params.clone()),
         }
     }
