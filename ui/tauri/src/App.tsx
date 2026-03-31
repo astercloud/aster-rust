@@ -52,6 +52,20 @@ function App() {
     }
   }
 
+  async function toggleServer() {
+    try {
+      if (serverStatus === "Running") {
+        await invoke("stop_server");
+      } else {
+        await invoke("start_server");
+      }
+      await checkServerStatus();
+    } catch (error) {
+      console.error("Failed to toggle server:", error);
+      await checkServerStatus();
+    }
+  }
+
   return (
     <div className="flex h-screen bg-gray-900 text-white">
       <Sidebar
@@ -60,6 +74,7 @@ function App() {
         onSelectSession={setCurrentSession}
         onNewSession={createSession}
         serverStatus={serverStatus}
+        onToggleServer={toggleServer}
       />
       <main className="flex-1 flex flex-col">
         {currentSession ? (

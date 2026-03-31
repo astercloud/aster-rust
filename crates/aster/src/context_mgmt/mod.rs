@@ -8,9 +8,12 @@ use crate::{config::Config, token_counter::create_token_counter};
 use anyhow::Result;
 use rmcp::model::Role;
 use serde::Serialize;
+use serde_json::Value;
 use tracing::{debug, info};
 
 pub const DEFAULT_COMPACTION_THRESHOLD: f64 = 0.8;
+const LIME_RUNTIME_METADATA_KEY: &str = "lime_runtime";
+const LIME_RUNTIME_AUTO_COMPACT_KEY: &str = "auto_compact";
 
 const CONVERSATION_CONTINUATION_TEXT: &str =
     "The previous message contains a summary that was prepared because a context limit was reached.
@@ -186,11 +189,15 @@ pub async fn check_if_compaction_needed(
 ) -> Result<bool> {
     let messages = conversation.messages();
     let config = Config::global();
-    let threshold = threshold_override.unwrap_or_else(|| {
-        config
-            .get_param::<f64>("ASTER_AUTO_COMPACT_THRESHOLD")
-            .unwrap_or(DEFAULT_COMPACTION_THRESHOLD)
-    });
+    let threshold = if automatic_compaction_enabled_for_current_turn() {
+        threshold_override.unwrap_or_else(|| {
+            config
+                .get_param::<f64>("ASTER_AUTO_COMPACT_THRESHOLD")
+                .unwrap_or(DEFAULT_COMPACTION_THRESHOLD)
+        })
+    } else {
+        0.0
+    };
 
     let context_limit = provider.get_model_config().context_limit();
 
@@ -230,6 +237,19 @@ pub async fn check_if_compaction_needed(
     );
 
     Ok(needs_compaction)
+}
+
+pub fn automatic_compaction_enabled_for_current_turn() -> bool {
+    crate::session_context::current_turn_context()
+        .and_then(|turn_context| {
+            turn_context
+                .metadata
+                .get(LIME_RUNTIME_METADATA_KEY)
+                .and_then(Value::as_object)
+                .and_then(|metadata| metadata.get(LIME_RUNTIME_AUTO_COMPACT_KEY))
+                .and_then(Value::as_bool)
+        })
+        .unwrap_or(true)
 }
 
 fn filter_tool_responses<'a>(messages: &[&'a Message], remove_percent: u32) -> Vec<&'a Message> {
@@ -435,9 +455,11 @@ mod tests {
             base::{ProviderMetadata, Usage},
             errors::ProviderError,
         },
+        session::TurnContextOverride,
     };
     use async_trait::async_trait;
     use rmcp::model::{AnnotateAble, CallToolRequestParam, RawContent, Tool};
+    use std::collections::HashMap;
 
     struct MockProvider {
         message: Message,
@@ -465,6 +487,20 @@ mod tests {
         fn with_max_tool_responses(mut self, max: usize) -> Self {
             self.max_tool_responses = Some(max);
             self
+        }
+    }
+
+    fn build_auto_compaction_turn_context(enabled: bool) -> TurnContextOverride {
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            LIME_RUNTIME_METADATA_KEY.to_string(),
+            serde_json::json!({
+                LIME_RUNTIME_AUTO_COMPACT_KEY: enabled,
+            }),
+        );
+        TurnContextOverride {
+            metadata,
+            ..TurnContextOverride::default()
         }
     }
 
@@ -586,5 +622,32 @@ mod tests {
             "Should succeed with progressive removal: {:?}",
             result.err()
         );
+    }
+
+    #[tokio::test]
+    async fn test_check_if_compaction_needed_respects_turn_context_auto_compaction_disable() {
+        let provider = MockProvider::new(Message::assistant().with_text("<mock summary>"), 1_000);
+        let conversation = Conversation::new_unvalidated(vec![
+            Message::user().with_text("第一条用户消息"),
+            Message::assistant().with_text("第一条助手回复"),
+        ]);
+        let session = crate::session::Session {
+            conversation: Some(conversation.clone()),
+            message_count: 2,
+            total_tokens: Some(900),
+            ..crate::session::Session::default()
+        };
+
+        crate::session_context::with_turn_context(
+            Some(build_auto_compaction_turn_context(false)),
+            async {
+                assert!(
+                    !check_if_compaction_needed(&provider, &conversation, Some(0.8), &session)
+                        .await
+                        .expect("禁用自动压缩后不应再触发自动压缩阈值"),
+                );
+            },
+        )
+        .await;
     }
 }

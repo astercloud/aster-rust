@@ -2,7 +2,7 @@
 
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::{TrayIcon, TrayIconBuilder},
+    tray::TrayIconBuilder,
     App, Manager, Runtime,
 };
 
@@ -11,9 +11,9 @@ pub fn setup_tray<R: Runtime>(app: &App<R>) -> Result<(), Box<dyn std::error::Er
     let quit = MenuItem::with_id(app, "quit", "Quit Aster", true, None::<&str>)?;
     let show = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
     let hide = MenuItem::with_id(app, "hide", "Hide Window", true, None::<&str>)?;
-    
+
     let menu = Menu::with_items(app, &[&show, &hide, &quit])?;
-    
+
     let _tray = TrayIconBuilder::new()
         .menu(&menu)
         .tooltip("Aster")
@@ -35,6 +35,6 @@ pub fn setup_tray<R: Runtime>(app: &App<R>) -> Result<(), Box<dyn std::error::Er
             _ => {}
         })
         .build(app)?;
-    
+
     Ok(())
 }

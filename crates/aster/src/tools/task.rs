@@ -551,6 +551,13 @@ impl TaskManager {
         None
     }
 
+    /// Get the output file path of a task
+    pub async fn get_output_file_path(&self, task_id: &str) -> Option<PathBuf> {
+        self.get_status(task_id)
+            .await
+            .map(|state| state.output_file)
+    }
+
     /// Get the output of a task
     ///
     /// Returns the output from the task's output file.

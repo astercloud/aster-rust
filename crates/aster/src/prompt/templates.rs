@@ -12,11 +12,12 @@ IMPORTANT: You must NEVER generate or guess URLs for the user unless you are con
 
 /// 工具使用指南
 pub const TOOL_GUIDELINES: &str = r#"# Tool usage policy
-- When doing file search, prefer to use the Task tool in order to reduce context usage.
-- You should proactively use the Task tool with specialized agents when the task at hand matches the agent's description.
+- When doing file search or codebase exploration, prefer Glob, Grep, and Read before falling back to bash.
 - Use specialized tools instead of bash commands when possible, as this provides a better user experience.
 - NEVER use bash echo or other command-line tools to communicate thoughts, explanations, or instructions to the user.
-- When exploring the codebase to gather context, use the Task tool with subagent_type=Explore instead of running search commands directly."#;
+- Use TaskCreate, TaskList, TaskGet, and TaskUpdate to track progress on multi-step work.
+- Use ListMcpResourcesTool and ReadMcpResourceTool for MCP resource discovery and inspection instead of legacy extension-manager resource helpers.
+- Only use host-injected delegation tools when the tool schema explicitly exposes them."#;
 
 /// 权限模式说明
 pub mod permission_modes {
@@ -74,21 +75,20 @@ pub const GIT_GUIDELINES: &str = r#"# Git Operations
 
 /// 任务管理指南
 pub const TASK_MANAGEMENT: &str = r#"# Task Management
-You have access to the TodoWrite tools to help you manage and plan tasks. Use these tools VERY frequently to ensure that you are tracking your tasks and giving the user visibility into your progress.
-These tools are also EXTREMELY helpful for planning tasks, and for breaking down larger complex tasks into smaller steps."#;
+You have access to TaskCreate, TaskList, TaskGet, and TaskUpdate to manage the current structured task board.
+Use these tools proactively for multi-step work so progress stays explicit and visible to the user."#;
 
 /// 代码编写指南
 pub const CODING_GUIDELINES: &str = r#"# Doing tasks
 - NEVER propose changes to code you haven't read. If a user asks about or wants you to modify a file, read it first.
-- Use the TodoWrite tool to plan the task if required
+- Use the Task* tools to plan and update the task board when the work is non-trivial
 - Be careful not to introduce security vulnerabilities such as command injection, XSS, SQL injection.
 - Avoid over-engineering. Only make changes that are directly requested or clearly necessary."#;
 
 /// 子代理系统说明
 pub const SUBAGENT_SYSTEM: &str = r#"# Subagent System
-When exploring the codebase to gather context or answer questions that may require multiple rounds of searching:
-- Use the Task tool with subagent_type=Explore for codebase exploration
-- Use the Task tool with subagent_type=Plan for implementation planning"#;
+Only use delegation or subagent flows when the currently available tool schemas explicitly expose them.
+Do not assume background execution or task-board tools support specialized agent routing unless that field is present in the tool schema."#;
 
 /// 获取权限模式描述
 pub fn get_permission_mode_description(mode: &str) -> &'static str {

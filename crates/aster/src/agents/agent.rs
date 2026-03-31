@@ -30,7 +30,8 @@ use crate::agents::types::{FrontendTool, SharedProvider, ToolResultReceiver};
 use crate::config::{get_enabled_extensions, AsterMode, Config};
 use crate::context::ContextTraceStep;
 use crate::context_mgmt::{
-    check_if_compaction_needed, compact_messages_with_summary, DEFAULT_COMPACTION_THRESHOLD,
+    automatic_compaction_enabled_for_current_turn, check_if_compaction_needed,
+    compact_messages_with_summary, DEFAULT_COMPACTION_THRESHOLD,
 };
 use crate::conversation::message::{
     ActionRequired, ActionRequiredData, Message, MessageContent, ProviderMetadata,
@@ -58,7 +59,8 @@ use crate::session::{
 use crate::tool_inspection::ToolInspectionManager;
 use crate::tool_monitor::RepetitionInspector;
 use crate::tools::{
-    register_default_tools, SharedFileReadHistory, ToolRegistrationConfig, ToolRegistry,
+    register_default_tools, register_extension_resource_tools, SharedFileReadHistory,
+    ToolRegistrationConfig, ToolRegistry,
 };
 use crate::utils::is_token_cancelled;
 use regex::Regex;
@@ -75,6 +77,8 @@ const DEFAULT_MAX_TURNS: u32 = 1000;
 const COMPACTION_THINKING_TEXT: &str = "aster is compacting the conversation...";
 const CONTEXT_COMPACTION_WARNING_TEXT: &str =
     "长对话和多次上下文压缩会降低模型准确性；如果后续结果开始漂移，建议新开会话。";
+const AUTO_COMPACTION_DISABLED_CONTEXT_LIMIT_TEXT: &str =
+    "Automatic compaction is disabled for this turn. The conversation reached the context limit. Compact the session manually or start a new session before retrying.";
 const PROPOSED_PLAN_OPEN: &str = "<proposed_plan>";
 const PROPOSED_PLAN_CLOSE: &str = "</proposed_plan>";
 const FILE_ARTIFACT_METADATA_KEYS: [&str; 9] = [
@@ -828,14 +832,16 @@ impl Agent {
         let (confirm_tx, confirm_rx) = mpsc::channel(32);
         let (tool_tx, tool_rx) = mpsc::channel(32);
         let provider = Arc::new(Mutex::new(None));
+        let extension_manager = Arc::new(ExtensionManager::new(provider.clone()));
 
         // Initialize ToolRegistry with all native tools (Requirements: 11.3, 11.4)
         let mut tool_registry = ToolRegistry::new();
         let (file_read_history, _hook_manager) = register_default_tools(&mut tool_registry);
+        register_extension_resource_tools(&mut tool_registry, Arc::downgrade(&extension_manager));
 
         Self {
             provider: provider.clone(),
-            extension_manager: Arc::new(ExtensionManager::new(provider.clone())),
+            extension_manager,
             sub_recipes: Mutex::new(HashMap::new()),
             session_output_schema: Arc::new(Mutex::new(None)),
             final_output_tool: Arc::new(Mutex::new(None)),
@@ -935,15 +941,17 @@ impl Agent {
         let (confirm_tx, confirm_rx) = mpsc::channel(32);
         let (tool_tx, tool_rx) = mpsc::channel(32);
         let provider = Arc::new(Mutex::new(None));
+        let extension_manager = Arc::new(ExtensionManager::new(provider.clone()));
 
         // Initialize ToolRegistry with configured tools
         let mut tool_registry = ToolRegistry::new();
         let (file_read_history, _hook_manager) =
             crate::tools::register_all_tools(&mut tool_registry, config);
+        register_extension_resource_tools(&mut tool_registry, Arc::downgrade(&extension_manager));
 
         Self {
             provider: provider.clone(),
-            extension_manager: Arc::new(ExtensionManager::new(provider.clone())),
+            extension_manager,
             sub_recipes: Mutex::new(HashMap::new()),
             session_output_schema: Arc::new(Mutex::new(None)),
             final_output_tool: Arc::new(Mutex::new(None)),
@@ -3001,6 +3009,16 @@ impl Agent {
                                 break;
                             }
 
+                            if !automatic_compaction_enabled_for_current_turn() {
+                                yield AgentEvent::Message(
+                                    Message::assistant().with_system_notification(
+                                        SystemNotificationType::InlineMessage,
+                                        AUTO_COMPACTION_DISABLED_CONTEXT_LIMIT_TEXT,
+                                    )
+                                );
+                                break;
+                            }
+
                             yield AgentEvent::Message(
                                 Message::assistant().with_system_notification(
                                     SystemNotificationType::InlineMessage,
@@ -3447,14 +3465,21 @@ mod tests {
     use super::*;
     use crate::providers::base::{Provider, ProviderMetadata, ProviderUsage};
     use crate::providers::errors::ProviderError;
-    use crate::session::{initialize_shared_thread_runtime_store, InMemoryThreadRuntimeStore};
+    use crate::session::{
+        initialize_shared_thread_runtime_store, InMemoryThreadRuntimeStore, SessionManager,
+        SessionType, TurnContextOverride,
+    };
     use async_trait::async_trait;
+    use futures::StreamExt;
     use rmcp::model::Tool;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     struct NativeOutputSchemaProvider;
 
     struct ModelAwareNativeOutputSchemaProvider;
+    struct ContextLengthExceededProvider;
 
     #[async_trait]
     impl Provider for NativeOutputSchemaProvider {
@@ -3524,6 +3549,50 @@ mod tests {
             model_config: &crate::model::ModelConfig,
         ) -> bool {
             model_config.model_name == "native-model"
+        }
+    }
+
+    #[async_trait]
+    impl Provider for ContextLengthExceededProvider {
+        fn metadata() -> ProviderMetadata
+        where
+            Self: Sized,
+        {
+            ProviderMetadata::empty()
+        }
+
+        fn get_name(&self) -> &str {
+            "context-length-exceeded-provider"
+        }
+
+        async fn complete_with_model(
+            &self,
+            _model_config: &crate::model::ModelConfig,
+            _system: &str,
+            _messages: &[Message],
+            _tools: &[Tool],
+        ) -> Result<(Message, ProviderUsage), ProviderError> {
+            Err(ProviderError::ContextLengthExceeded(
+                "mock context overflow".to_string(),
+            ))
+        }
+
+        fn get_model_config(&self) -> crate::model::ModelConfig {
+            crate::model::ModelConfig::new("gpt-5.3-codex").expect("test model config")
+        }
+    }
+
+    fn build_auto_compaction_disabled_turn_context() -> TurnContextOverride {
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            "lime_runtime".to_string(),
+            serde_json::json!({
+                "auto_compact": false,
+            }),
+        );
+        TurnContextOverride {
+            metadata,
+            ..TurnContextOverride::default()
         }
     }
 
@@ -3907,6 +3976,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_reply_surfaces_manual_compaction_hint_when_overflow_auto_compaction_disabled(
+    ) -> Result<()> {
+        let agent = Agent::new();
+        let session = SessionManager::create_session(
+            PathBuf::default(),
+            "overflow-auto-compact-disabled".to_string(),
+            SessionType::Hidden,
+        )
+        .await?;
+
+        agent
+            .update_provider(Arc::new(ContextLengthExceededProvider), &session.id)
+            .await?;
+
+        let session_config = SessionConfig {
+            id: session.id.clone(),
+            thread_id: None,
+            turn_id: Some("turn-overflow-auto-compact-disabled".to_string()),
+            schedule_id: None,
+            max_turns: None,
+            retry_config: None,
+            system_prompt: None,
+            include_context_trace: None,
+            turn_context: Some(build_auto_compaction_disabled_turn_context()),
+        };
+
+        let mut stream = agent
+            .reply(Message::user().with_text("继续处理"), session_config, None)
+            .await?;
+
+        let mut saw_disabled_notification = false;
+        let mut saw_context_compaction_started = false;
+        let mut saw_history_replaced = false;
+
+        while let Some(event) = stream.next().await {
+            match event? {
+                AgentEvent::Message(message) => {
+                    if let Some(MessageContent::SystemNotification(notification)) =
+                        message.content.first()
+                    {
+                        if notification.msg == AUTO_COMPACTION_DISABLED_CONTEXT_LIMIT_TEXT {
+                            saw_disabled_notification = true;
+                        }
+                    }
+                }
+                AgentEvent::ContextCompactionStarted { .. } => {
+                    saw_context_compaction_started = true;
+                }
+                AgentEvent::HistoryReplaced(_) => {
+                    saw_history_replaced = true;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(
+            saw_disabled_notification,
+            "禁用自动压缩后，overflow 应提示手动压缩而不是静默失败"
+        );
+        assert!(
+            !saw_context_compaction_started,
+            "禁用自动压缩后，不应再启动 overflow recovery compaction"
+        );
+        assert!(!saw_history_replaced, "禁用自动压缩后，不应发生历史替换");
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_tool_inspection_manager_has_all_inspectors() -> Result<()> {
         let agent = Agent::new();
 
@@ -3962,11 +4100,19 @@ mod tests {
             registry_guard.contains("grep"),
             "grep tool should be registered"
         );
+        assert!(
+            registry_guard.contains("ListMcpResourcesTool"),
+            "ListMcpResourcesTool should be registered"
+        );
+        assert!(
+            registry_guard.contains("ReadMcpResourceTool"),
+            "ReadMcpResourceTool should be registered"
+        );
 
         // Verify tool count
         assert!(
-            registry_guard.native_tool_count() >= 6,
-            "Should have at least 6 native tools"
+            registry_guard.native_tool_count() >= 8,
+            "Should have at least 8 native tools"
         );
 
         Ok(())
@@ -3989,6 +4135,14 @@ mod tests {
         assert!(
             registry_guard.contains("read"),
             "read tool should be registered"
+        );
+        assert!(
+            registry_guard.contains("ListMcpResourcesTool"),
+            "ListMcpResourcesTool should be registered"
+        );
+        assert!(
+            registry_guard.contains("ReadMcpResourceTool"),
+            "ReadMcpResourceTool should be registered"
         );
 
         Ok(())

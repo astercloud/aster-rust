@@ -518,12 +518,23 @@ impl BashTool {
 
         // Delegate to task manager
         let task_id = self.task_manager.start(command, context).await?;
+        let output_file = self.task_manager.get_output_file_path(&task_id).await;
+        let output_file_text = output_file.as_ref().map(|path| path.display().to_string());
 
-        Ok(
-            ToolResult::success(format!("Background task started with ID: {}", task_id))
-                .with_metadata("task_id", serde_json::json!(task_id))
-                .with_metadata("background", serde_json::json!(true)),
-        )
+        let mut result = ToolResult::success(match output_file_text.as_deref() {
+            Some(path) => format!(
+                "Background task started with ID: {task_id}\nOutput file: {path}\nPrefer using the read tool on the output file path for logs; keep TaskOutput only as a compatibility fallback."
+            ),
+            None => format!("Background task started with ID: {task_id}"),
+        })
+        .with_metadata("task_id", serde_json::json!(task_id))
+        .with_metadata("background", serde_json::json!(true));
+
+        if let Some(path) = output_file_text {
+            result = result.with_metadata("output_file", serde_json::json!(path));
+        }
+
+        Ok(result)
     }
 }
 
@@ -980,6 +991,7 @@ mod tests {
         assert!(tool_result.is_success());
         assert!(tool_result.metadata.contains_key("task_id"));
         assert!(tool_result.metadata.contains_key("background"));
+        assert!(tool_result.metadata.contains_key("output_file"));
 
         // Clean up
         let _ = task_manager.kill_all().await;

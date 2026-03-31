@@ -63,20 +63,15 @@ impl Tool for TaskOutputTool {
     fn description(&self) -> &str {
         r#"获取后台任务的输出和状态
 
-用于查询通过 Task 工具启动的后台任务的执行状态和输出结果。
+优先推荐直接使用 read 工具读取任务输出文件。`bash` 的后台执行结果会返回 `output_file`，
+TaskOutput 用于按 `task_id` 查询后台执行状态与日志。
 
 参数：
 - task_id: 任务 ID（必需）
-- block: 是否等待任务完成（默认 false）
-- timeout: 等待超时时间（毫秒，默认 5000）
+- block: 是否等待任务完成（默认 true）
+- timeout: 等待超时时间（毫秒，默认 30000）
 - show_history: 显示详细执行历史（默认 false）
-- lines: 限制输出行数（可选）
-
-功能：
-- 查询任务状态（运行中/已完成/失败/超时/已终止）
-- 获取任务输出内容
-- 支持阻塞等待任务完成
-- 显示任务执行时间和统计信息"#
+- lines: 限制输出行数（可选）"#
     }
 
     fn input_schema(&self) -> serde_json::Value {
@@ -89,11 +84,11 @@ impl Tool for TaskOutputTool {
                 },
                 "block": {
                     "type": "boolean",
-                    "description": "是否等待任务完成（默认 false）"
+                    "description": "是否等待任务完成（默认 true）"
                 },
                 "timeout": {
                     "type": "number",
-                    "description": "等待超时时间（毫秒，默认 5000）"
+                    "description": "等待超时时间（毫秒，默认 30000）"
                 },
                 "show_history": {
                     "type": "boolean",
@@ -116,8 +111,8 @@ impl Tool for TaskOutputTool {
         let input: TaskOutputInput = serde_json::from_value(params)
             .map_err(|e| ToolError::invalid_params(format!("参数解析失败: {}", e)))?;
 
-        let block = input.block.unwrap_or(false);
-        let timeout_ms = input.timeout.unwrap_or(5000);
+        let block = input.block.unwrap_or(true);
+        let timeout_ms = input.timeout.unwrap_or(30000);
         let show_history = input.show_history.unwrap_or(false);
 
         // 检查任务是否存在
@@ -156,9 +151,21 @@ impl Tool for TaskOutputTool {
             .get_status(&input.task_id)
             .await
             .ok_or_else(|| ToolError::not_found(format!("任务状态未找到: {}", input.task_id)))?;
+        let retrieval_status = if block && !state.status.is_terminal() {
+            "timeout"
+        } else if !block && state.status.is_running() {
+            "not_ready"
+        } else {
+            "success"
+        };
+        let output_file = state.output_file.display().to_string();
 
         // 构建输出信息
         let mut output = Vec::new();
+        output.push(
+            "兼容提示: 新链路优先使用 read 工具读取任务输出文件，TaskOutput 仅作为旧 task_id 查询兜底。"
+                .to_string(),
+        );
         output.push(format!("=== 任务 {} ===", input.task_id));
         output.push(format!("命令: {}", state.command));
         output.push(format!("状态: {}", state.status));
@@ -177,7 +184,7 @@ impl Tool for TaskOutputTool {
         }
 
         output.push(format!("工作目录: {}", state.working_directory.display()));
-        output.push(format!("输出文件: {}", state.output_file.display()));
+        output.push(format!("输出文件: {}", output_file));
         output.push(format!("会话 ID: {}", state.session_id));
 
         // 显示详细历史（扩展功能）
@@ -218,7 +225,10 @@ impl Tool for TaskOutputTool {
         match state.status {
             super::task::TaskStatus::Running => {
                 output.push("\n=== 状态说明 ===".to_string());
-                output.push("任务仍在运行中。使用 block=true 参数等待任务完成。".to_string());
+                output.push(
+                    "任务仍在运行中。优先直接读取输出文件；如需继续等待，可使用 block=true。"
+                        .to_string(),
+                );
             }
             super::task::TaskStatus::Completed => {
                 output.push("\n=== 状态说明 ===".to_string());
@@ -242,7 +252,9 @@ impl Tool for TaskOutputTool {
             .with_metadata("task_id", serde_json::json!(input.task_id))
             .with_metadata("status", serde_json::json!(state.status.to_string()))
             .with_metadata("duration", serde_json::json!(duration.as_secs_f64()))
-            .with_metadata("exit_code", serde_json::json!(state.exit_code)))
+            .with_metadata("exit_code", serde_json::json!(state.exit_code))
+            .with_metadata("output_file", serde_json::json!(output_file))
+            .with_metadata("retrieval_status", serde_json::json!(retrieval_status)))
     }
 
     async fn check_permissions(
@@ -333,6 +345,11 @@ mod tests {
         assert!(tool_result.success);
         assert!(tool_result.output.as_ref().unwrap().contains(&task_id));
         assert!(tool_result.metadata.contains_key("status"));
+        assert_eq!(
+            tool_result.metadata.get("retrieval_status"),
+            Some(&serde_json::json!("success"))
+        );
+        assert!(tool_result.metadata.contains_key("output_file"));
     }
 
     #[tokio::test]

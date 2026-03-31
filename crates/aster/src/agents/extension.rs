@@ -2,7 +2,6 @@ use crate::agents::chatrecall_extension;
 use crate::agents::code_execution_extension;
 use crate::agents::extension_manager_extension;
 use crate::agents::skills_extension;
-use crate::agents::todo_extension;
 use std::collections::HashMap;
 
 use crate::agents::mcp_client::McpClientTrait;
@@ -42,17 +41,6 @@ impl ProcessExit {
 pub static PLATFORM_EXTENSIONS: Lazy<HashMap<&'static str, PlatformExtensionDef>> = Lazy::new(
     || {
         let mut map = HashMap::new();
-
-        map.insert(
-            todo_extension::EXTENSION_NAME,
-            PlatformExtensionDef {
-                name: todo_extension::EXTENSION_NAME,
-                description:
-                    "Enable a todo list for aster so it can keep track of what it is doing",
-                default_enabled: true,
-                client_factory: |ctx| Box::new(todo_extension::TodoClient::new(ctx).unwrap()),
-            },
-        );
 
         map.insert(
             chatrecall_extension::EXTENSION_NAME,

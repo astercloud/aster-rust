@@ -7,6 +7,8 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -19,23 +21,121 @@ use crate::tools::error::ToolError;
 /// Default timeout for user response (5 minutes)
 pub const DEFAULT_ASK_TIMEOUT_SECS: u64 = 300;
 
+/// A structured question payload aligned with modern ask_user style prompts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AskQuestion {
+    /// The complete question text shown to the user
+    pub question: String,
+    /// Optional short chip/header label
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header: Option<String>,
+    /// Optional predefined choices
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<AskOption>,
+    /// Whether multiple options can be selected
+    #[serde(default, alias = "multi_select")]
+    pub multi_select: bool,
+}
+
+impl AskQuestion {
+    /// Create a new free-form question
+    pub fn new(question: impl Into<String>) -> Self {
+        Self {
+            question: question.into(),
+            header: None,
+            options: Vec::new(),
+            multi_select: false,
+        }
+    }
+
+    /// Create a question with predefined choices
+    pub fn with_options(question: impl Into<String>, options: Vec<AskOption>) -> Self {
+        Self {
+            question: question.into(),
+            header: None,
+            options,
+            multi_select: false,
+        }
+    }
+
+    fn validate(&self) -> Result<(), ToolError> {
+        if self.question.trim().is_empty() {
+            return Err(ToolError::invalid_params(
+                "Question text cannot be empty".to_string(),
+            ));
+        }
+
+        if self.options.len() > 4 {
+            return Err(ToolError::invalid_params(
+                "Question options cannot exceed 4 choices".to_string(),
+            ));
+        }
+
+        for option in &self.options {
+            option.validate()?;
+        }
+
+        Ok(())
+    }
+}
+
+/// A modern ask request that may contain one or more related questions.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AskRequest {
+    pub questions: Vec<AskQuestion>,
+}
+
+impl AskRequest {
+    /// Build a legacy single-question request.
+    pub fn from_legacy(question: impl Into<String>, options: Vec<AskOption>) -> Self {
+        Self {
+            questions: vec![AskQuestion::with_options(question, options)],
+        }
+    }
+
+    fn validate(&self) -> Result<(), ToolError> {
+        if self.questions.is_empty() {
+            return Err(ToolError::invalid_params(
+                "At least one question is required".to_string(),
+            ));
+        }
+
+        if self.questions.len() > 4 {
+            return Err(ToolError::invalid_params(
+                "Questions cannot exceed 4 entries".to_string(),
+            ));
+        }
+
+        for question in &self.questions {
+            question.validate()?;
+        }
+
+        Ok(())
+    }
+}
+
 /// Callback type for handling user questions
 ///
-/// The callback receives the question and optional options, and returns
-/// the user's response as a future.
-pub type AskCallback = Arc<
-    dyn Fn(String, Option<Vec<String>>) -> Pin<Box<dyn Future<Output = Option<String>> + Send>>
-        + Send
-        + Sync,
->;
+/// The callback receives the normalized ask request and returns the user's
+/// structured response as JSON.
+pub type AskCallback =
+    Arc<dyn Fn(AskRequest) -> Pin<Box<dyn Future<Output = Option<Value>> + Send>> + Send + Sync>;
 
 /// A predefined option for the user to select
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AskOption {
     /// The value to return if this option is selected
     pub value: String,
     /// Optional display label (defaults to value if not provided)
     pub label: Option<String>,
+    /// Optional explanation for the option
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Optional preview payload for richer UIs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
 }
 
 impl AskOption {
@@ -44,6 +144,8 @@ impl AskOption {
         Self {
             value: value.into(),
             label: None,
+            description: None,
+            preview: None,
         }
     }
 
@@ -52,6 +154,8 @@ impl AskOption {
         Self {
             value: value.into(),
             label: Some(label.into()),
+            description: None,
+            preview: None,
         }
     }
 
@@ -59,13 +163,26 @@ impl AskOption {
     pub fn display(&self) -> &str {
         self.label.as_deref().unwrap_or(&self.value)
     }
+
+    fn validate(&self) -> Result<(), ToolError> {
+        if self.value.trim().is_empty() && self.display().trim().is_empty() {
+            return Err(ToolError::invalid_params(
+                "Option value/label cannot both be empty".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 /// Result of an ask operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AskResult {
-    /// The user's response
-    pub response: String,
+    /// Raw user data returned from the ask bridge
+    pub response: Value,
+    /// Normalized answers keyed by question text
+    pub answers: BTreeMap<String, String>,
     /// Whether the response was from a predefined option
     pub from_option: bool,
     /// The index of the selected option (if applicable)
@@ -73,22 +190,22 @@ pub struct AskResult {
 }
 
 impl AskResult {
-    /// Create a new AskResult from free-form input
-    pub fn from_input(response: String) -> Self {
+    fn new(
+        response: Value,
+        answers: BTreeMap<String, String>,
+        from_option: bool,
+        option_index: Option<usize>,
+    ) -> Self {
         Self {
             response,
-            from_option: false,
-            option_index: None,
+            answers,
+            from_option,
+            option_index,
         }
     }
 
-    /// Create a new AskResult from an option selection
-    pub fn from_option(response: String, index: usize) -> Self {
-        Self {
-            response,
-            from_option: true,
-            option_index: Some(index),
-        }
+    pub fn primary_response(&self) -> Option<&str> {
+        self.answers.values().next().map(String::as_str)
     }
 }
 
@@ -112,6 +229,93 @@ impl Default for AskTool {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum AskOptionInput {
+    String(String),
+    Object(AskOptionObject),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AskOptionObject {
+    value: Option<String>,
+    label: Option<String>,
+    description: Option<String>,
+    preview: Option<String>,
+}
+
+impl TryFrom<AskOptionInput> for AskOption {
+    type Error = ToolError;
+
+    fn try_from(value: AskOptionInput) -> Result<Self, Self::Error> {
+        match value {
+            AskOptionInput::String(value) => {
+                let option = AskOption::new(value);
+                option.validate()?;
+                Ok(option)
+            }
+            AskOptionInput::Object(object) => {
+                let value = object
+                    .value
+                    .or_else(|| object.label.clone())
+                    .unwrap_or_default();
+                let option = AskOption {
+                    value,
+                    label: object.label,
+                    description: object.description,
+                    preview: object.preview,
+                };
+                option.validate()?;
+                Ok(option)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AskQuestionInput {
+    question: String,
+    header: Option<String>,
+    options: Option<Vec<AskOptionInput>>,
+    #[serde(default, alias = "multi_select")]
+    multi_select: bool,
+}
+
+impl TryFrom<AskQuestionInput> for AskQuestion {
+    type Error = ToolError;
+
+    fn try_from(value: AskQuestionInput) -> Result<Self, Self::Error> {
+        let options = value
+            .options
+            .unwrap_or_default()
+            .into_iter()
+            .map(AskOption::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let question = AskQuestion {
+            question: value.question,
+            header: value.header,
+            options,
+            multi_select: value.multi_select,
+        };
+        question.validate()?;
+        Ok(question)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AskToolInput {
+    question: Option<String>,
+    header: Option<String>,
+    options: Option<Vec<AskOptionInput>>,
+    #[serde(default, alias = "multi_select")]
+    multi_select: bool,
+    questions: Option<Vec<AskQuestionInput>>,
 }
 
 impl AskTool {
@@ -148,53 +352,222 @@ impl AskTool {
         self.timeout
     }
 
-    /// Ask a question to the user
-    ///
-    /// This method invokes the callback with the question and optional options,
-    /// and waits for the user's response with timeout.
-    ///
-    /// # Arguments
-    /// * `question` - The question to ask
-    /// * `options` - Optional predefined options for the user to select from
-    ///
-    /// # Returns
-    /// * `Ok(AskResult)` - The user's response
-    /// * `Err(ToolError)` - If no callback is configured, timeout occurs, or user cancels
-    pub async fn ask(
+    fn parse_request(&self, params: Value) -> Result<AskRequest, ToolError> {
+        let input: AskToolInput = serde_json::from_value(params)
+            .map_err(|e| ToolError::invalid_params(format!("Failed to parse ask input: {e}")))?;
+
+        let request = if let Some(questions) = input.questions {
+            AskRequest {
+                questions: questions
+                    .into_iter()
+                    .map(AskQuestion::try_from)
+                    .collect::<Result<Vec<_>, _>>()?,
+            }
+        } else {
+            let question = input.question.ok_or_else(|| {
+                ToolError::invalid_params(
+                    "Missing required parameter: question or questions".to_string(),
+                )
+            })?;
+            let options = input
+                .options
+                .unwrap_or_default()
+                .into_iter()
+                .map(AskOption::try_from)
+                .collect::<Result<Vec<_>, _>>()?;
+
+            AskRequest {
+                questions: vec![AskQuestion {
+                    question,
+                    header: input.header,
+                    options,
+                    multi_select: input.multi_select,
+                }],
+            }
+        };
+
+        request.validate()?;
+        Ok(request)
+    }
+
+    fn normalize_answer_value(value: &Value) -> Option<String> {
+        match value {
+            Value::String(text) => {
+                let trimmed = text.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            }
+            Value::Array(items) => {
+                let parts = items
+                    .iter()
+                    .filter_map(Self::normalize_answer_value)
+                    .collect::<Vec<_>>();
+                if parts.is_empty() {
+                    None
+                } else {
+                    Some(parts.join(", "))
+                }
+            }
+            Value::Number(number) => Some(number.to_string()),
+            Value::Bool(value) => Some(value.to_string()),
+            _ => None,
+        }
+    }
+
+    fn question_field_key(question: &AskQuestion, index: usize, total: usize) -> String {
+        if total == 1 {
+            return "answer".to_string();
+        }
+
+        if let Some(header) = question.header.as_deref() {
+            let normalized = header
+                .trim()
+                .to_lowercase()
+                .chars()
+                .map(|ch| {
+                    if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                        ch
+                    } else {
+                        '_'
+                    }
+                })
+                .collect::<String>()
+                .trim_matches('_')
+                .to_string();
+
+            if !normalized.is_empty() {
+                return normalized;
+            }
+        }
+
+        format!("question_{}", index + 1)
+    }
+
+    fn resolve_answers(&self, request: &AskRequest, response: &Value) -> BTreeMap<String, String> {
+        let mut answers = BTreeMap::new();
+        let total = request.questions.len();
+
+        match response {
+            Value::String(_) | Value::Array(_) | Value::Number(_) | Value::Bool(_) => {
+                if let Some(first_question) = request.questions.first() {
+                    if let Some(answer) = Self::normalize_answer_value(response) {
+                        answers.insert(first_question.question.clone(), answer);
+                    }
+                }
+                return answers;
+            }
+            Value::Object(map) => {
+                if let Some(Value::Object(answer_map)) = map.get("answers") {
+                    for question in &request.questions {
+                        if let Some(value) = answer_map.get(&question.question) {
+                            if let Some(answer) = Self::normalize_answer_value(value) {
+                                answers.insert(question.question.clone(), answer);
+                            }
+                        }
+                    }
+                }
+
+                for (index, question) in request.questions.iter().enumerate() {
+                    if answers.contains_key(&question.question) {
+                        continue;
+                    }
+
+                    for key in [
+                        question.question.clone(),
+                        question.header.clone().unwrap_or_default(),
+                        Self::question_field_key(question, index, total),
+                    ] {
+                        if key.is_empty() {
+                            continue;
+                        }
+
+                        if let Some(value) = map.get(&key) {
+                            if let Some(answer) = Self::normalize_answer_value(value) {
+                                answers.insert(question.question.clone(), answer);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if answers.is_empty() && total == 1 {
+                    let candidate = map
+                        .get("other")
+                        .or_else(|| map.get("answer"))
+                        .and_then(Self::normalize_answer_value);
+                    if let (Some(question), Some(answer)) = (request.questions.first(), candidate) {
+                        answers.insert(question.question.clone(), answer);
+                    }
+                }
+
+                return answers;
+            }
+            _ => {}
+        }
+
+        answers
+    }
+
+    fn resolve_option_match(question: &AskQuestion, answer: Option<&str>) -> (bool, Option<usize>) {
+        let Some(answer) = answer.map(str::trim).filter(|value| !value.is_empty()) else {
+            return (false, None);
+        };
+
+        for (index, option) in question.options.iter().enumerate() {
+            if answer == option.value || answer == option.display() {
+                return (true, Some(index));
+            }
+        }
+
+        (false, None)
+    }
+
+    fn normalize_result(
         &self,
-        question: &str,
-        options: Option<&[AskOption]>,
+        request: &AskRequest,
+        response: Value,
     ) -> Result<AskResult, ToolError> {
+        let mut answers = self.resolve_answers(request, &response);
+        if answers.is_empty() {
+            return Err(ToolError::execution_failed(
+                "User response was empty or could not be normalized",
+            ));
+        }
+
+        let (from_option, option_index) = if request.questions.len() == 1 {
+            let question = &request.questions[0];
+            let answer = answers.get(&question.question).map(String::as_str);
+            let (from_option, option_index) = Self::resolve_option_match(question, answer);
+            if let Some(index) = option_index {
+                if let Some(option) = question.options.get(index) {
+                    answers.insert(question.question.clone(), option.value.clone());
+                }
+            }
+            (from_option, option_index)
+        } else {
+            (false, None)
+        };
+
+        Ok(AskResult::new(response, answers, from_option, option_index))
+    }
+
+    /// Ask one or more questions to the user and wait for their response.
+    pub async fn ask(&self, request: &AskRequest) -> Result<AskResult, ToolError> {
         let callback = self.callback.as_ref().ok_or_else(|| {
             ToolError::execution_failed("No callback configured for user interaction")
         })?;
 
-        // Convert options to string labels for the callback
-        let option_labels: Option<Vec<String>> =
-            options.map(|opts| opts.iter().map(|o| o.display().to_string()).collect());
-
         // Call the callback with timeout
-        let response = tokio::time::timeout(
-            self.timeout,
-            callback(question.to_string(), option_labels.clone()),
-        )
-        .await
-        .map_err(|_| ToolError::timeout(self.timeout))?;
+        let response = tokio::time::timeout(self.timeout, callback(request.clone()))
+            .await
+            .map_err(|_| ToolError::timeout(self.timeout))?;
 
         // Handle the response
         match response {
-            Some(response_text) => {
-                // Check if response matches an option
-                if let Some(opts) = options {
-                    for (idx, opt) in opts.iter().enumerate() {
-                        if response_text == opt.value || response_text == opt.display() {
-                            return Ok(AskResult::from_option(opt.value.clone(), idx));
-                        }
-                    }
-                }
-                // Free-form response
-                Ok(AskResult::from_input(response_text))
-            }
+            Some(response_data) => self.normalize_result(request, response_data),
             None => Err(ToolError::execution_failed(
                 "User cancelled the interaction",
             )),
@@ -209,10 +582,11 @@ impl Tool for AskTool {
     }
 
     fn description(&self) -> &str {
-        "Ask a question to the user and wait for their response. \
-         Supports free-form text input or selection from predefined options. \
-         Use this tool when you need clarification, confirmation, or user input \
-         to proceed with a task."
+        "Ask one or more focused questions to the user and wait for their response. \
+         Supports both the legacy `question/options` format and the modern \
+         `questions` array format with headers, descriptions, and multi-select \
+         choices. Use this tool when you need clarification, confirmation, or \
+         user input to proceed with a task."
     }
 
     fn input_schema(&self) -> serde_json::Value {
@@ -221,28 +595,102 @@ impl Tool for AskTool {
             "properties": {
                 "question": {
                     "type": "string",
-                    "description": "The question to ask the user"
+                    "description": "Legacy single-question field. Use `questions` for the richer modern protocol."
+                },
+                "header": {
+                    "type": "string",
+                    "description": "Optional short chip/header for the legacy single-question format"
                 },
                 "options": {
                     "type": "array",
-                    "description": "Optional predefined options for the user to select from",
+                    "description": "Optional predefined options for the legacy single-question format",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "value": {
+                                        "type": "string",
+                                        "description": "The value to return if this option is selected"
+                                    },
+                                    "label": {
+                                        "type": "string",
+                                        "description": "Optional display label (defaults to value)"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Optional explanation of this choice"
+                                    },
+                                    "preview": {
+                                        "type": "string",
+                                        "description": "Optional preview payload for richer UIs"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "multiSelect": {
+                    "type": "boolean",
+                    "description": "Whether the legacy single-question format allows selecting multiple options"
+                },
+                "questions": {
+                    "type": "array",
+                    "description": "Modern ask protocol. Prefer this over the legacy single-question fields.",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "value": {
+                            "question": {
                                 "type": "string",
-                                "description": "The value to return if this option is selected"
+                                "description": "The full question text shown to the user"
                             },
-                            "label": {
+                            "header": {
                                 "type": "string",
-                                "description": "Optional display label (defaults to value)"
+                                "description": "Optional short chip/header label"
+                            },
+                            "options": {
+                                "type": "array",
+                                "items": {
+                                    "oneOf": [
+                                        {
+                                            "type": "string"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "value": {
+                                                    "type": "string"
+                                                },
+                                                "label": {
+                                                    "type": "string"
+                                                },
+                                                "description": {
+                                                    "type": "string"
+                                                },
+                                                "preview": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            "multiSelect": {
+                                "type": "boolean",
+                                "description": "Whether multiple options can be selected"
                             }
                         },
-                        "required": ["value"]
+                        "required": ["question"]
                     }
                 }
             },
-            "required": ["question"]
+            "oneOf": [
+                { "required": ["question"] },
+                { "required": ["questions"] }
+            ]
         })
     }
 
@@ -251,33 +699,34 @@ impl Tool for AskTool {
         params: serde_json::Value,
         _context: &ToolContext,
     ) -> Result<ToolResult, ToolError> {
-        // Parse question
-        let question = params
-            .get("question")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| ToolError::invalid_params("Missing required parameter: question"))?;
-
-        // Parse options if provided
-        let options: Option<Vec<AskOption>> = params
-            .get("options")
-            .and_then(|v| serde_json::from_value(v.clone()).ok());
-
-        // Ask the question
-        let result = self.ask(question, options.as_deref()).await?;
+        let request = self.parse_request(params)?;
+        let result = self.ask(&request).await?;
+        let primary_response = result.primary_response().unwrap_or_default().to_string();
 
         // Format the response
-        let output = if result.from_option {
+        let output = if result.answers.len() > 1 {
+            let lines = result
+                .answers
+                .iter()
+                .map(|(question, answer)| format!("- {question}: {answer}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("User answered multiple questions:\n{lines}")
+        } else if result.from_option {
             format!(
                 "User selected option {}: {}",
                 result.option_index.unwrap_or(0) + 1,
-                result.response
+                primary_response
             )
         } else {
-            format!("User response: {}", result.response)
+            format!("User response: {}", primary_response)
         };
 
         Ok(ToolResult::success(output)
-            .with_metadata("response", serde_json::json!(result.response))
+            .with_metadata("response", serde_json::json!(primary_response))
+            .with_metadata("answers", serde_json::json!(result.answers))
+            .with_metadata("raw_response", result.response.clone())
+            .with_metadata("question_count", serde_json::json!(request.questions.len()))
             .with_metadata("from_option", serde_json::json!(result.from_option))
             .with_metadata("option_index", serde_json::json!(result.option_index)))
     }
@@ -299,16 +748,16 @@ mod tests {
     use std::path::PathBuf;
 
     /// Create a mock callback that returns a fixed response
-    fn mock_callback(response: Option<String>) -> AskCallback {
-        Arc::new(move |_question, _options| {
+    fn mock_callback(response: Option<Value>) -> AskCallback {
+        Arc::new(move |_request| {
             let resp = response.clone();
             Box::pin(async move { resp })
         })
     }
 
     /// Create a mock callback that delays before responding
-    fn mock_callback_delayed(response: Option<String>, delay_ms: u64) -> AskCallback {
-        Arc::new(move |_question, _options| {
+    fn mock_callback_delayed(response: Option<Value>, delay_ms: u64) -> AskCallback {
+        Arc::new(move |_request| {
             let resp = response.clone();
             Box::pin(async move {
                 tokio::time::sleep(Duration::from_millis(delay_ms)).await;
@@ -334,17 +783,29 @@ mod tests {
     }
 
     #[test]
-    fn test_ask_result_from_input() {
-        let result = AskResult::from_input("hello".to_string());
-        assert_eq!(result.response, "hello");
+    fn test_ask_request_from_legacy() {
+        let request = AskRequest::from_legacy("Continue?", vec![AskOption::new("yes")]);
+        assert_eq!(request.questions.len(), 1);
+        assert_eq!(request.questions[0].question, "Continue?");
+        assert_eq!(request.questions[0].options[0].value, "yes");
+    }
+
+    #[test]
+    fn test_ask_result_primary_response() {
+        let mut answers = BTreeMap::new();
+        answers.insert("Question".to_string(), "hello".to_string());
+        let result = AskResult::new(serde_json::json!("hello"), answers, false, None);
+        assert_eq!(result.primary_response(), Some("hello"));
         assert!(!result.from_option);
         assert!(result.option_index.is_none());
     }
 
     #[test]
-    fn test_ask_result_from_option() {
-        let result = AskResult::from_option("yes".to_string(), 0);
-        assert_eq!(result.response, "yes");
+    fn test_ask_result_option_metadata() {
+        let mut answers = BTreeMap::new();
+        answers.insert("Continue?".to_string(), "yes".to_string());
+        let result = AskResult::new(serde_json::json!("yes"), answers, true, Some(0));
+        assert_eq!(result.primary_response(), Some("yes"));
         assert!(result.from_option);
         assert_eq!(result.option_index, Some(0));
     }
@@ -361,7 +822,7 @@ mod tests {
 
     #[test]
     fn test_ask_tool_with_callback() {
-        let callback = mock_callback(Some("test".to_string()));
+        let callback = mock_callback(Some(serde_json::json!("test")));
         let tool = AskTool::new().with_callback(callback);
         assert!(tool.has_callback());
     }
@@ -385,38 +846,50 @@ mod tests {
     #[tokio::test]
     async fn test_ask_without_callback() {
         let tool = AskTool::new();
-        let result = tool.ask("What is your name?", None).await;
+        let result = tool
+            .ask(&AskRequest::from_legacy("What is your name?", vec![]))
+            .await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ToolError::ExecutionFailed(_)));
     }
 
     #[tokio::test]
     async fn test_ask_free_form_response() {
-        let callback = mock_callback(Some("John".to_string()));
+        let callback = mock_callback(Some(serde_json::json!("John")));
         let tool = AskTool::new().with_callback(callback);
 
-        let result = tool.ask("What is your name?", None).await.unwrap();
-        assert_eq!(result.response, "John");
+        let result = tool
+            .ask(&AskRequest::from_legacy("What is your name?", vec![]))
+            .await
+            .unwrap();
+        assert_eq!(result.primary_response(), Some("John"));
+        assert_eq!(
+            result.answers.get("What is your name?").map(String::as_str),
+            Some("John")
+        );
         assert!(!result.from_option);
         assert!(result.option_index.is_none());
     }
 
     #[tokio::test]
     async fn test_ask_with_options_select_by_value() {
-        let callback = mock_callback(Some("yes".to_string()));
+        let callback = mock_callback(Some(serde_json::json!("yes")));
         let tool = AskTool::new().with_callback(callback);
 
         let options = vec![AskOption::new("yes"), AskOption::new("no")];
 
-        let result = tool.ask("Continue?", Some(&options)).await.unwrap();
-        assert_eq!(result.response, "yes");
+        let result = tool
+            .ask(&AskRequest::from_legacy("Continue?", options))
+            .await
+            .unwrap();
+        assert_eq!(result.primary_response(), Some("yes"));
         assert!(result.from_option);
         assert_eq!(result.option_index, Some(0));
     }
 
     #[tokio::test]
     async fn test_ask_with_options_select_by_label() {
-        let callback = mock_callback(Some("Yes, proceed".to_string()));
+        let callback = mock_callback(Some(serde_json::json!("Yes, proceed")));
         let tool = AskTool::new().with_callback(callback);
 
         let options = vec![
@@ -424,23 +897,97 @@ mod tests {
             AskOption::with_label("n", "No, cancel"),
         ];
 
-        let result = tool.ask("Continue?", Some(&options)).await.unwrap();
-        assert_eq!(result.response, "y");
+        let result = tool
+            .ask(&AskRequest::from_legacy("Continue?", options))
+            .await
+            .unwrap();
+        assert_eq!(result.primary_response(), Some("y"));
         assert!(result.from_option);
         assert_eq!(result.option_index, Some(0));
     }
 
     #[tokio::test]
     async fn test_ask_with_options_free_form() {
-        let callback = mock_callback(Some("maybe".to_string()));
+        let callback = mock_callback(Some(serde_json::json!("maybe")));
         let tool = AskTool::new().with_callback(callback);
 
         let options = vec![AskOption::new("yes"), AskOption::new("no")];
 
-        let result = tool.ask("Continue?", Some(&options)).await.unwrap();
-        assert_eq!(result.response, "maybe");
+        let result = tool
+            .ask(&AskRequest::from_legacy("Continue?", options))
+            .await
+            .unwrap();
+        assert_eq!(result.primary_response(), Some("maybe"));
         assert!(!result.from_option);
         assert!(result.option_index.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_ask_with_modern_questions_payload() {
+        let callback = mock_callback(Some(serde_json::json!({
+            "answers": {
+                "Choose a theme": "Cyber green"
+            }
+        })));
+        let tool = AskTool::new().with_callback(callback);
+
+        let request = AskRequest {
+            questions: vec![AskQuestion {
+                question: "Choose a theme".to_string(),
+                header: Some("Theme".to_string()),
+                options: vec![
+                    AskOption {
+                        value: "Network matrix".to_string(),
+                        label: Some("Network matrix".to_string()),
+                        description: Some("Dense and technical".to_string()),
+                        preview: None,
+                    },
+                    AskOption {
+                        value: "Cyber green".to_string(),
+                        label: Some("Cyber green".to_string()),
+                        description: Some("Bright and futuristic".to_string()),
+                        preview: None,
+                    },
+                ],
+                multi_select: false,
+            }],
+        };
+
+        let result = tool.ask(&request).await.unwrap();
+        assert_eq!(result.primary_response(), Some("Cyber green"));
+        assert_eq!(
+            result.answers.get("Choose a theme").map(String::as_str),
+            Some("Cyber green")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ask_with_multiple_questions_payload() {
+        let callback = mock_callback(Some(serde_json::json!({
+            "answers": {
+                "Primary goal?": "Ship quickly",
+                "Need tests?": "Yes"
+            }
+        })));
+        let tool = AskTool::new().with_callback(callback);
+
+        let request = AskRequest {
+            questions: vec![
+                AskQuestion::new("Primary goal?"),
+                AskQuestion::new("Need tests?"),
+            ],
+        };
+
+        let result = tool.ask(&request).await.unwrap();
+        assert_eq!(result.answers.len(), 2);
+        assert_eq!(
+            result.answers.get("Primary goal?").map(String::as_str),
+            Some("Ship quickly")
+        );
+        assert_eq!(
+            result.answers.get("Need tests?").map(String::as_str),
+            Some("Yes")
+        );
     }
 
     #[tokio::test]
@@ -448,19 +995,23 @@ mod tests {
         let callback = mock_callback(None);
         let tool = AskTool::new().with_callback(callback);
 
-        let result = tool.ask("What is your name?", None).await;
+        let result = tool
+            .ask(&AskRequest::from_legacy("What is your name?", vec![]))
+            .await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ToolError::ExecutionFailed(_)));
     }
 
     #[tokio::test]
     async fn test_ask_timeout() {
-        let callback = mock_callback_delayed(Some("response".to_string()), 200);
+        let callback = mock_callback_delayed(Some(serde_json::json!("response")), 200);
         let tool = AskTool::new()
             .with_callback(callback)
             .with_timeout(Duration::from_millis(50));
 
-        let result = tool.ask("What is your name?", None).await;
+        let result = tool
+            .ask(&AskRequest::from_legacy("What is your name?", vec![]))
+            .await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ToolError::Timeout(_)));
     }
@@ -474,7 +1025,9 @@ mod tests {
     #[tokio::test]
     async fn test_ask_tool_trait_description() {
         let tool = AskTool::new();
-        assert!(tool.description().contains("Ask a question"));
+        assert!(tool
+            .description()
+            .contains("Ask one or more focused questions"));
     }
 
     #[tokio::test]
@@ -484,16 +1037,14 @@ mod tests {
 
         assert_eq!(schema["type"], "object");
         assert!(schema["properties"]["question"].is_object());
+        assert!(schema["properties"]["questions"].is_object());
         assert!(schema["properties"]["options"].is_object());
-        assert!(schema["required"]
-            .as_array()
-            .unwrap()
-            .contains(&serde_json::json!("question")));
+        assert!(schema["oneOf"].is_array());
     }
 
     #[tokio::test]
     async fn test_ask_tool_execute_success() {
-        let callback = mock_callback(Some("John".to_string()));
+        let callback = mock_callback(Some(serde_json::json!("John")));
         let tool = AskTool::new().with_callback(callback);
         let context = ToolContext::new(PathBuf::from("/tmp"));
 
@@ -509,6 +1060,10 @@ mod tests {
             Some(&serde_json::json!("John"))
         );
         assert_eq!(
+            result.metadata.get("question_count"),
+            Some(&serde_json::json!(1))
+        );
+        assert_eq!(
             result.metadata.get("from_option"),
             Some(&serde_json::json!(false))
         );
@@ -516,7 +1071,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ask_tool_execute_with_options() {
-        let callback = mock_callback(Some("yes".to_string()));
+        let callback = mock_callback(Some(serde_json::json!("yes")));
         let tool = AskTool::new().with_callback(callback);
         let context = ToolContext::new(PathBuf::from("/tmp"));
 
@@ -542,8 +1097,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_ask_tool_execute_with_modern_questions() {
+        let callback = mock_callback(Some(serde_json::json!({
+            "answers": {
+                "Which mode?": "Fast"
+            }
+        })));
+        let tool = AskTool::new().with_callback(callback);
+        let context = ToolContext::new(PathBuf::from("/tmp"));
+
+        let params = serde_json::json!({
+            "questions": [
+                {
+                    "question": "Which mode?",
+                    "header": "Mode",
+                    "options": [
+                        { "label": "Fast", "description": "Optimized for speed" },
+                        { "label": "Thorough", "description": "Optimized for depth" }
+                    ]
+                }
+            ]
+        });
+
+        let result = tool.execute(params, &context).await.unwrap();
+        assert!(result.is_success());
+        assert_eq!(
+            result.metadata.get("answers"),
+            Some(&serde_json::json!({
+                "Which mode?": "Fast"
+            }))
+        );
+    }
+
+    #[tokio::test]
     async fn test_ask_tool_execute_missing_question() {
-        let callback = mock_callback(Some("test".to_string()));
+        let callback = mock_callback(Some(serde_json::json!("test")));
         let tool = AskTool::new().with_callback(callback);
         let context = ToolContext::new(PathBuf::from("/tmp"));
 
@@ -576,11 +1164,14 @@ mod tests {
 
     #[test]
     fn test_ask_result_serialization() {
-        let result = AskResult::from_option("yes".to_string(), 0);
+        let mut answers = BTreeMap::new();
+        answers.insert("Continue?".to_string(), "yes".to_string());
+        let result = AskResult::new(serde_json::json!("yes"), answers, true, Some(0));
         let json = serde_json::to_string(&result).unwrap();
         let deserialized: AskResult = serde_json::from_str(&json).unwrap();
 
         assert_eq!(result.response, deserialized.response);
+        assert_eq!(result.answers, deserialized.answers);
         assert_eq!(result.from_option, deserialized.from_option);
         assert_eq!(result.option_index, deserialized.option_index);
     }

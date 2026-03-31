@@ -1130,6 +1130,25 @@ impl ExtensionManager {
         extension_name: &str,
         cancellation_token: CancellationToken,
     ) -> Result<Vec<Content>, ErrorData> {
+        let resources = self
+            .list_resources_from_extension_structured(extension_name, cancellation_token)
+            .await?;
+        let resource_list = resources
+            .into_iter()
+            .map(|(server, resource)| {
+                format!("{} - {}, uri: ({})", server, resource.name, resource.uri)
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        Ok(vec![Content::text(resource_list)])
+    }
+
+    async fn list_resources_from_extension_structured(
+        &self,
+        extension_name: &str,
+        cancellation_token: CancellationToken,
+    ) -> Result<Vec<(String, Resource)>, ErrorData> {
         let client = self
             .get_server_client(extension_name)
             .await
@@ -1153,35 +1172,26 @@ impl ExtensionManager {
                 )
             })
             .map(|lr| {
-                let resource_list = lr
-                    .resources
+                lr.resources
                     .into_iter()
-                    .map(|r| format!("{} - {}, uri: ({})", extension_name, r.name, r.uri))
-                    .collect::<Vec<String>>()
-                    .join("\n");
-
-                vec![Content::text(resource_list)]
+                    .map(|resource| (extension_name.to_string(), resource))
+                    .collect::<Vec<_>>()
             })
     }
 
-    pub async fn list_resources(
+    pub async fn list_resources_structured(
         &self,
-        params: Value,
+        extension_name: Option<&str>,
         cancellation_token: CancellationToken,
-    ) -> Result<Vec<Content>, ErrorData> {
-        let extension = params.get("extension").and_then(|v| v.as_str());
-
-        match extension {
+    ) -> Result<Vec<(String, Resource)>, ErrorData> {
+        match extension_name {
             Some(extension_name) => {
-                // Handle single extension case
-                self.list_resources_from_extension(extension_name, cancellation_token)
+                self.list_resources_from_extension_structured(extension_name, cancellation_token)
                     .await
             }
             None => {
-                // Handle all extensions case using FuturesUnordered
                 let mut futures = FuturesUnordered::new();
 
-                // Create futures for each resource_capable_extension
                 self.extensions
                     .lock()
                     .await
@@ -1191,7 +1201,7 @@ impl ExtensionManager {
                     .for_each(|name| {
                         let token = cancellation_token.clone();
                         futures.push(async move {
-                            self.list_resources_from_extension(&name.clone(), token)
+                            self.list_resources_from_extension_structured(&name.clone(), token)
                                 .await
                         });
                     });
@@ -1199,15 +1209,10 @@ impl ExtensionManager {
                 let mut all_resources = Vec::new();
                 let mut errors = Vec::new();
 
-                // Process results as they complete
                 while let Some(result) = futures.next().await {
                     match result {
-                        Ok(content) => {
-                            all_resources.extend(content);
-                        }
-                        Err(tool_error) => {
-                            errors.push(tool_error);
-                        }
+                        Ok(resources) => all_resources.extend(resources),
+                        Err(tool_error) => errors.push(tool_error),
                     }
                 }
 
@@ -1224,6 +1229,44 @@ impl ExtensionManager {
                 Ok(all_resources)
             }
         }
+    }
+
+    pub async fn list_resources(
+        &self,
+        params: Value,
+        cancellation_token: CancellationToken,
+    ) -> Result<Vec<Content>, ErrorData> {
+        let extension = params.get("extension").and_then(|v| v.as_str());
+        let resources = self
+            .list_resources_structured(extension, cancellation_token)
+            .await?;
+
+        if extension.is_some() {
+            let resource_list = resources
+                .into_iter()
+                .map(|(server, resource)| {
+                    format!("{} - {}, uri: ({})", server, resource.name, resource.uri)
+                })
+                .collect::<Vec<String>>()
+                .join("\n");
+            return Ok(vec![Content::text(resource_list)]);
+        }
+
+        let mut grouped_resources: HashMap<String, Vec<String>> = HashMap::new();
+        for (server, resource) in resources {
+            grouped_resources
+                .entry(server.clone())
+                .or_default()
+                .push(format!(
+                    "{} - {}, uri: ({})",
+                    server, resource.name, resource.uri
+                ));
+        }
+
+        Ok(grouped_resources
+            .into_values()
+            .map(|resource_lines| Content::text(resource_lines.join("\n")))
+            .collect())
     }
 
     pub async fn dispatch_tool_call(
@@ -1521,7 +1564,10 @@ impl ExtensionManager {
 mod tests {
     use super::*;
     use rmcp::model::CallToolResult;
-    use rmcp::model::{InitializeResult, JsonObject, RawContent};
+    use rmcp::model::{
+        AnnotateAble, Implementation, InitializeResult, JsonObject, ProtocolVersion, RawContent,
+        RawResource, ResourcesCapability, ServerCapabilities,
+    };
     use rmcp::{object, ServiceError as Error};
 
     use rmcp::model::ListPromptsResult;
@@ -1582,9 +1628,55 @@ mod tests {
                 .await
                 .insert(sanitized_name, extension);
         }
+
+        async fn add_mock_resource_extension(&self, name: String, client: McpClientBox) {
+            let sanitized_name = normalize(name.clone());
+            let config = ExtensionConfig::Builtin {
+                name: name.clone(),
+                display_name: Some(name.clone()),
+                description: "built-in".to_string(),
+                timeout: None,
+                bundled: None,
+                available_tools: vec![],
+                deferred_loading: false,
+                always_expose_tools: vec![],
+                allowed_caller: None,
+            };
+            let server_info = Some(ServerInfo {
+                protocol_version: ProtocolVersion::V_2025_03_26,
+                capabilities: ServerCapabilities {
+                    resources: Some(ResourcesCapability::default()),
+                    ..Default::default()
+                },
+                server_info: Implementation {
+                    name,
+                    ..Default::default()
+                },
+                instructions: None,
+            });
+            let extension = Extension::new(config, client, server_info, None);
+            self.extensions
+                .lock()
+                .await
+                .insert(sanitized_name, extension);
+        }
     }
 
     struct MockClient {}
+
+    struct ResourceMockClient {
+        resources: Vec<Resource>,
+        read_result: ReadResourceResult,
+    }
+
+    impl ResourceMockClient {
+        fn with_resources(resources: Vec<Resource>) -> Self {
+            Self {
+                resources,
+                read_result: ReadResourceResult { contents: vec![] },
+            }
+        }
+    }
 
     #[async_trait::async_trait]
     impl McpClientTrait for MockClient {
@@ -1675,6 +1767,148 @@ mod tests {
         async fn subscribe(&self) -> mpsc::Receiver<ServerNotification> {
             mpsc::channel(1).1
         }
+    }
+
+    #[async_trait::async_trait]
+    impl McpClientTrait for ResourceMockClient {
+        fn get_info(&self) -> Option<&InitializeResult> {
+            None
+        }
+
+        async fn list_resources(
+            &self,
+            _next_cursor: Option<String>,
+            _cancellation_token: CancellationToken,
+        ) -> Result<ListResourcesResult, Error> {
+            Ok(ListResourcesResult {
+                resources: self.resources.clone(),
+                next_cursor: None,
+                meta: None,
+            })
+        }
+
+        async fn read_resource(
+            &self,
+            _uri: &str,
+            _cancellation_token: CancellationToken,
+        ) -> Result<ReadResourceResult, Error> {
+            Ok(self.read_result.clone())
+        }
+
+        async fn list_tools(
+            &self,
+            _next_cursor: Option<String>,
+            _cancellation_token: CancellationToken,
+        ) -> Result<ListToolsResult, Error> {
+            Ok(ListToolsResult {
+                tools: vec![],
+                next_cursor: None,
+                meta: None,
+            })
+        }
+
+        async fn call_tool(
+            &self,
+            _name: &str,
+            _arguments: Option<JsonObject>,
+            _cancellation_token: CancellationToken,
+        ) -> Result<CallToolResult, Error> {
+            Err(Error::TransportClosed)
+        }
+
+        async fn list_prompts(
+            &self,
+            _next_cursor: Option<String>,
+            _cancellation_token: CancellationToken,
+        ) -> Result<ListPromptsResult, Error> {
+            Err(Error::TransportClosed)
+        }
+
+        async fn get_prompt(
+            &self,
+            _name: &str,
+            _arguments: Value,
+            _cancellation_token: CancellationToken,
+        ) -> Result<GetPromptResult, Error> {
+            Err(Error::TransportClosed)
+        }
+
+        async fn subscribe(&self) -> mpsc::Receiver<ServerNotification> {
+            mpsc::channel(1).1
+        }
+    }
+
+    #[tokio::test]
+    async fn test_list_resources_structured_returns_server_names() {
+        let extension_manager = ExtensionManager::new_without_provider();
+
+        let mut alpha = RawResource::new("file:///alpha.txt", "alpha");
+        alpha.description = Some("Alpha resource".to_string());
+        alpha.mime_type = Some("text/plain".to_string());
+
+        let mut beta = RawResource::new("file:///beta.json", "beta");
+        beta.mime_type = Some("application/json".to_string());
+
+        extension_manager
+            .add_mock_resource_extension(
+                "server_one".to_string(),
+                Arc::new(Mutex::new(Box::new(ResourceMockClient::with_resources(
+                    vec![alpha.no_annotation()],
+                )))),
+            )
+            .await;
+        extension_manager
+            .add_mock_resource_extension(
+                "server_two".to_string(),
+                Arc::new(Mutex::new(Box::new(ResourceMockClient::with_resources(
+                    vec![beta.no_annotation()],
+                )))),
+            )
+            .await;
+
+        let resources = extension_manager
+            .list_resources_structured(None, CancellationToken::default())
+            .await
+            .expect("structured resource listing should succeed");
+
+        assert_eq!(resources.len(), 2);
+        assert!(resources.iter().any(
+            |(server, resource)| server == "server_one" && resource.uri == "file:///alpha.txt"
+        ));
+        assert!(resources.iter().any(
+            |(server, resource)| server == "server_two" && resource.uri == "file:///beta.json"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_list_resources_structured_filters_by_server() {
+        let extension_manager = ExtensionManager::new_without_provider();
+
+        extension_manager
+            .add_mock_resource_extension(
+                "server_one".to_string(),
+                Arc::new(Mutex::new(Box::new(ResourceMockClient::with_resources(
+                    vec![RawResource::new("file:///alpha.txt", "alpha").no_annotation()],
+                )))),
+            )
+            .await;
+        extension_manager
+            .add_mock_resource_extension(
+                "server_two".to_string(),
+                Arc::new(Mutex::new(Box::new(ResourceMockClient::with_resources(
+                    vec![RawResource::new("file:///beta.txt", "beta").no_annotation()],
+                )))),
+            )
+            .await;
+
+        let resources = extension_manager
+            .list_resources_structured(Some("server_two"), CancellationToken::default())
+            .await
+            .expect("filtered resource listing should succeed");
+
+        assert_eq!(resources.len(), 1);
+        assert_eq!(resources[0].0, "server_two");
+        assert_eq!(resources[0].1.uri, "file:///beta.txt");
     }
 
     #[tokio::test]

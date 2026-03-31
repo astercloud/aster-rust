@@ -135,6 +135,7 @@ fn add_template_in_env(
     Ok(env)
 }
 
+#[allow(deprecated)]
 fn get_env_with_template_variables(
     content: &str,
     recipe_dir: Option<String>,
@@ -142,7 +143,7 @@ fn get_env_with_template_variables(
 ) -> Result<(Environment<'_>, HashSet<String>)> {
     let env = add_template_in_env(content, recipe_dir, undefined_behavior)?;
     let template = env.get_template(CURRENT_TEMPLATE_NAME).unwrap();
-    let state = template.eval_to_state(())?;
+    let (_, state) = template.render_and_return_state(())?;
     let mut template_variables = HashSet::new();
     for (_, template) in state.env().templates() {
         template_variables.extend(template.undeclared_variables(true));

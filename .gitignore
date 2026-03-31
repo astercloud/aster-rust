@@ -24,6 +24,9 @@ target/
 # UI
 ./ui/desktop/node_modules
 ./ui/desktop/out
+./ui/tauri/dist
+./ui/tauri/node_modules
+./ui/tauri/target
 
 # Generated aster DLLs (built at build time, not checked in)
 ui/desktop/src/bin/aster_ffi.dll

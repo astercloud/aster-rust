@@ -26,11 +26,11 @@ pub fn run() {
         .setup(|app| {
             // 初始化应用状态
             app.manage(AppState::new());
-            
+
             // 设置系统托盘
             #[cfg(desktop)]
             tray::setup_tray(app)?;
-            
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

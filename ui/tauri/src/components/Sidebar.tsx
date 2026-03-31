@@ -11,6 +11,7 @@ interface SidebarProps {
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
   serverStatus: string;
+  onToggleServer: () => void;
 }
 
 export default function Sidebar({
@@ -19,7 +20,10 @@ export default function Sidebar({
   onSelectSession,
   onNewSession,
   serverStatus,
+  onToggleServer,
 }: SidebarProps) {
+  const serverRunning = serverStatus === "Running";
+
   return (
     <aside className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
       <div className="p-4 border-b border-gray-700">
@@ -27,6 +31,16 @@ export default function Sidebar({
         <div className="text-sm text-gray-400 mt-1">
           Server: {serverStatus}
         </div>
+        <button
+          onClick={onToggleServer}
+          className={`mt-3 w-full rounded px-3 py-2 text-sm ${
+            serverRunning
+              ? "bg-red-600 hover:bg-red-700"
+              : "bg-emerald-600 hover:bg-emerald-700"
+          }`}
+        >
+          {serverRunning ? "Stop Server" : "Start Server"}
+        </button>
       </div>
 
       <div className="p-4">

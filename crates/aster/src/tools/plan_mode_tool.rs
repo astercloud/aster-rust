@@ -333,7 +333,7 @@ impl Tool for EnterPlanModeTool {
    - Example: "Fix the bug in checkout" - need to investigate root cause
 
 7. **User Preferences Matter**: The implementation could reasonably go multiple ways
-   - If you would use AskUserQuestion to clarify the approach, use EnterPlanMode instead
+   - If you would otherwise need to use `ask` to clarify the approach, use EnterPlanMode instead
    - Plan mode lets you explore first, then present options with context
 
 ## When NOT to Use This Tool
@@ -342,7 +342,7 @@ Only skip EnterPlanMode for simple tasks:
 - Single-line or few-line fixes (typos, obvious bugs, small tweaks)
 - Adding a single function with clear requirements
 - Tasks where the user has given very specific, detailed instructions
-- Pure research/exploration tasks (use the Task tool with explore agent instead)
+- Pure research/exploration tasks where you only need to read files, grep code, or understand existing behavior
 
 ## What Happens in Plan Mode
 
@@ -351,7 +351,7 @@ In plan mode, you'll:
 2. Understand existing patterns and architecture
 3. Design an implementation approach
 4. Present your plan to the user for approval
-5. Use AskUserQuestion if you need to clarify approaches
+5. Use `ask` if you need to clarify implementation choices with the user
 6. Exit plan mode with ExitPlanMode when ready to implement
 
 ## Examples
@@ -414,7 +414,7 @@ User: "What files handle routing?"
     async fn execute(
         &self,
         _params: Value,
-        _context: &ToolContext,
+        context: &ToolContext,
     ) -> Result<ToolResult, ToolError> {
         // 检查是否已经在计划模式中
         if GLOBAL_STATE.is_plan_mode_active() {
@@ -425,8 +425,23 @@ User: "What files handle routing?"
 
         // 生成计划 ID 和文件路径
         let plan_id = PlanPersistenceManager::generate_plan_id();
-        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let current_dir = if context.working_directory.as_os_str().is_empty() {
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        } else {
+            context.working_directory.clone()
+        };
         let plan_path = current_dir.join("PLAN.md");
+        let plan_file_guidance = if plan_path.exists() {
+            format!(
+                "A plan file already exists at {}. Read it first, then update it with the latest plan content using the write/edit tools.",
+                plan_path.display()
+            )
+        } else {
+            format!(
+                "No plan file exists yet. You should create your plan at {} using the write tool.",
+                plan_path.display()
+            )
+        };
 
         // 创建初始计划到持久化存储
         let now = SystemTime::now()
@@ -490,7 +505,7 @@ This is a READ-ONLY planning task. You are STRICTLY PROHIBITED from:
 Your role is EXCLUSIVELY to explore the codebase and design implementation plans. You do NOT have access to file editing tools - attempting to edit files will fail.
 
 ## Plan File Info:
-No plan file exists yet. You should create your plan at {} using the Write tool.
+{}
 You should build your plan incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
 
 The plan will be automatically saved to the persistent storage (~/.aster/plans/{}.json) when you exit plan mode.
@@ -499,14 +514,12 @@ In plan mode, you should:
 1. Thoroughly explore the codebase to understand existing patterns
 2. Identify similar features and architectural approaches
 3. Consider multiple approaches and their trade-offs
-4. Use AskUserQuestion if you need to clarify the approach
+4. Use `ask` if you need to clarify the approach
 5. Design a concrete implementation strategy
 6. When ready, use ExitPlanMode to present your plan for approval
 
 Focus on understanding the problem before proposing solutions."#,
-            plan_id,
-            plan_path.display(),
-            plan_id
+            plan_id, plan_file_guidance, plan_id
         );
 
         Ok(ToolResult::success(output)
@@ -536,7 +549,12 @@ impl ExitPlanModeTool {
     }
 
     /// 解析计划内容为 SavedPlan 结构
-    fn parse_plan_content(&self, plan_id: &str, content: &str) -> SavedPlan {
+    fn parse_plan_content(
+        &self,
+        plan_id: &str,
+        content: &str,
+        working_directory: &Path,
+    ) -> SavedPlan {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -558,10 +576,7 @@ impl ExitPlanModeTool {
                 status: "pending".to_string(),
                 created_at: now,
                 updated_at: now,
-                working_directory: std::env::current_dir()
-                    .unwrap_or_else(|_| PathBuf::from("."))
-                    .to_string_lossy()
-                    .to_string(),
+                working_directory: working_directory.to_string_lossy().to_string(),
                 version: 1,
                 priority: "medium".to_string(),
             },
@@ -752,7 +767,7 @@ IMPORTANT: Only use this tool when the task requires planning the implementation
 
 ## Handling Ambiguity in Plans
 Before using this tool, ensure your plan is clear and unambiguous. If there are multiple valid approaches or unclear requirements:
-1. Use the AskUserQuestion tool to clarify with the user
+1. Use the `ask` tool to clarify with the user
 2. Ask about specific implementation choices (e.g., architectural patterns, which library to use)
 3. Clarify any assumptions that could affect the implementation
 4. Edit your plan file to incorporate user feedback
@@ -762,7 +777,7 @@ Before using this tool, ensure your plan is clear and unambiguous. If there are 
 
 1. Initial task: "Search for and understand the implementation of vim mode in the codebase" - Do not use the exit plan mode tool because you are not planning the implementation steps of a task.
 2. Initial task: "Help me implement yank mode for vim" - Use the exit plan mode tool after you have finished planning the implementation steps of the task.
-3. Initial task: "Add a new feature to handle user authentication" - If unsure about auth method (OAuth, JWT, etc.), use AskUserQuestion first, then use exit plan mode tool after clarifying the approach."#
+3. Initial task: "Add a new feature to handle user authentication" - If unsure about auth method (OAuth, JWT, etc.), use `ask` first, then use exit plan mode tool after clarifying the approach."#
     }
 
     fn input_schema(&self) -> Value {
@@ -813,7 +828,11 @@ Before using this tool, ensure your plan is clear and unambiguous. If there are 
         // 解析并保存计划到持久化存储
         let mut saved_plan_path: Option<String> = None;
         if let (Some(plan_id), false) = (&plan_id, plan_content.is_empty()) {
-            let plan = self.parse_plan_content(plan_id, &plan_content);
+            let working_directory = plan_file
+                .as_ref()
+                .and_then(|path| Path::new(path).parent())
+                .unwrap_or_else(|| Path::new("."));
+            let plan = self.parse_plan_content(plan_id, &plan_content, working_directory);
             match PlanPersistenceManager::save_plan(&plan) {
                 Ok(_) => {
                     saved_plan_path = Some(format!("~/.aster/plans/{}.json", plan_id));
@@ -1099,7 +1118,8 @@ The implementation might be slow.
 Need to validate inputs properly.
 "#;
 
-        let plan = tool.parse_plan_content("test-id", content);
+        let working_directory = Path::new("/tmp/aster-plan-test");
+        let plan = tool.parse_plan_content("test-id", content, working_directory);
 
         assert_eq!(plan.metadata.title, "Test Implementation Plan");
         assert_eq!(
@@ -1112,6 +1132,10 @@ Need to validate inputs properly.
         assert_eq!(plan.critical_files.len(), 2);
         assert_eq!(plan.risks.len(), 2);
         assert_eq!(plan.content, content);
+        assert_eq!(
+            plan.metadata.working_directory,
+            working_directory.to_string_lossy()
+        );
     }
 
     #[test]

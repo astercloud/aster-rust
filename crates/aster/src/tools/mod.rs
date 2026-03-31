@@ -9,6 +9,8 @@
 // - Permission integration
 // - Audit logging
 
+use std::sync::Arc;
+
 // Core modules
 pub mod base;
 pub mod context;
@@ -18,18 +20,19 @@ pub mod registry;
 pub mod task;
 
 // Tool implementations
+pub mod agent_control;
 pub mod analyze_image;
 pub mod ask;
 pub mod bash;
 pub mod file;
-pub mod kill_shell_tool;
 pub mod lsp;
+pub mod mcp_resource_tools;
 pub mod notebook_edit_tool;
 pub mod plan_mode_tool;
 pub mod search;
+pub mod task_list_tools;
 pub mod task_output_tool;
-pub mod task_tool;
-pub mod todo_write_tool;
+pub mod task_stop_tool;
 pub mod web;
 pub mod workflow_integration;
 
@@ -78,6 +81,13 @@ pub use search::{
 };
 
 // Ask tool
+pub use agent_control::{
+    register_agent_control_tools, AgentControlToolConfig, CloseAgentCallback, CloseAgentRequest,
+    CloseAgentResponse, CloseAgentTool, ResumeAgentCallback, ResumeAgentRequest,
+    ResumeAgentResponse, ResumeAgentTool, SendInputCallback, SendInputRequest, SendInputResponse,
+    SendInputTool, SpawnAgentCallback, SpawnAgentRequest, SpawnAgentResponse, SpawnAgentTool,
+    WaitAgentCallback, WaitAgentRequest, WaitAgentResponse, WaitAgentTool,
+};
 pub use ask::{AskCallback, AskOption, AskResult, AskTool, DEFAULT_ASK_TIMEOUT_SECS};
 
 // LSP tool
@@ -85,17 +95,22 @@ pub use lsp::{
     CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, HoverInfo, Location,
     LspCallback, LspOperation, LspResult, LspTool, Position, Range,
 };
+pub use mcp_resource_tools::{
+    register_extension_resource_tools, ListMcpResourcesTool, ReadMcpResourceTool,
+};
 
 // Skill tool
 pub use crate::skills::SkillTool;
 
 // Task tools
-pub use kill_shell_tool::KillShellTool;
 pub use notebook_edit_tool::{NotebookCell, NotebookContent, NotebookEditInput, NotebookEditTool};
 pub use plan_mode_tool::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState, SavedPlan};
+pub use task_list_tools::{
+    TaskCreateInput, TaskCreateTool, TaskGetInput, TaskGetTool, TaskListInput, TaskListStorage,
+    TaskListTool, TaskUpdateInput, TaskUpdateStatus, TaskUpdateTool,
+};
 pub use task_output_tool::TaskOutputTool;
-pub use task_tool::TaskTool;
-pub use todo_write_tool::{TodoItem, TodoStatus, TodoStorage, TodoWriteTool};
+pub use task_stop_tool::TaskStopTool;
 
 // Web tools
 pub use web::{clear_web_caches, get_web_cache_stats, WebCache, WebFetchTool, WebSearchTool};
@@ -123,6 +138,8 @@ pub struct ToolRegistrationConfig {
     pub pdf_enabled: bool,
     /// Whether to enable hook system
     pub hooks_enabled: bool,
+    /// Optional modern delegation / agent runtime tools
+    pub agent_control_tools: Option<AgentControlToolConfig>,
 }
 
 impl std::fmt::Debug for ToolRegistrationConfig {
@@ -138,6 +155,10 @@ impl std::fmt::Debug for ToolRegistrationConfig {
             )
             .field("pdf_enabled", &self.pdf_enabled)
             .field("hooks_enabled", &self.hooks_enabled)
+            .field(
+                "agent_control_tools",
+                &self.agent_control_tools.as_ref().map(|_| "<callbacks>"),
+            )
             .finish()
     }
 }
@@ -149,6 +170,7 @@ impl Clone for ToolRegistrationConfig {
             lsp_callback: self.lsp_callback.clone(),
             pdf_enabled: self.pdf_enabled,
             hooks_enabled: self.hooks_enabled,
+            agent_control_tools: self.agent_control_tools.clone(),
         }
     }
 }
@@ -180,6 +202,12 @@ impl ToolRegistrationConfig {
     /// Enable hook system
     pub fn with_hooks_enabled(mut self, enabled: bool) -> Self {
         self.hooks_enabled = enabled;
+        self
+    }
+
+    /// Register modern delegation / agent runtime tools using callbacks
+    pub fn with_agent_control_tools(mut self, config: AgentControlToolConfig) -> Self {
+        self.agent_control_tools = Some(config);
         self
     }
 }
@@ -226,8 +254,13 @@ pub fn register_all_tools(
         None
     };
 
+    let shared_task_manager = Arc::new(TaskManager::new());
+    let shared_task_list_storage = Arc::new(TaskListStorage::new());
+
     // Register BashTool
-    registry.register(Box::new(BashTool::new()));
+    registry.register(Box::new(BashTool::with_task_manager(
+        shared_task_manager.clone(),
+    )));
 
     // Register file tools with shared history
     let read_tool = ReadTool::new(shared_history.clone()).with_pdf_enabled(config.pdf_enabled);
@@ -258,16 +291,34 @@ pub fn register_all_tools(
     // Register SkillTool
     registry.register(Box::new(SkillTool::new()));
 
-    // Register TaskTool and TaskOutputTool
-    registry.register(Box::new(TaskTool::new()));
-    registry.register(Box::new(TaskOutputTool::new()));
-    registry.register(Box::new(KillShellTool::new()));
-    registry.register(Box::new(TodoWriteTool::new()));
+    // Register background execution and structured task board tools
+    registry.register(Box::new(TaskCreateTool::with_storage(
+        shared_task_list_storage.clone(),
+    )));
+    registry.register(Box::new(TaskListTool::with_storage(
+        shared_task_list_storage.clone(),
+    )));
+    registry.register(Box::new(TaskGetTool::with_storage(
+        shared_task_list_storage.clone(),
+    )));
+    registry.register(Box::new(TaskUpdateTool::with_storage(
+        shared_task_list_storage,
+    )));
+    registry.register(Box::new(TaskOutputTool::with_manager(
+        shared_task_manager.clone(),
+    )));
+    registry.register(Box::new(TaskStopTool::with_task_manager(
+        shared_task_manager,
+    )));
     registry.register(Box::new(NotebookEditTool::new()));
 
     // Register Plan Mode tools
     registry.register(Box::new(EnterPlanModeTool::new()));
     registry.register(Box::new(ExitPlanModeTool::new()));
+
+    if let Some(agent_control_tools) = config.agent_control_tools.as_ref() {
+        register_agent_control_tools(registry, agent_control_tools);
+    }
 
     // Register Web tools
     registry.register(Box::new(WebFetchTool::new()));
@@ -315,16 +366,23 @@ mod tests {
         assert!(registry.contains("glob"));
         assert!(registry.contains("grep"));
         assert!(registry.contains("Skill"));
-        assert!(registry.contains("Task"));
+        assert!(registry.contains("TaskCreate"));
+        assert!(registry.contains("TaskList"));
+        assert!(registry.contains("TaskGet"));
+        assert!(registry.contains("TaskUpdate"));
         assert!(registry.contains("TaskOutput"));
-        assert!(registry.contains("KillShell"));
-        assert!(registry.contains("TodoWrite"));
+        assert!(registry.contains("TaskStop"));
         assert!(registry.contains("NotebookEdit"));
         assert!(registry.contains("EnterPlanMode"));
         assert!(registry.contains("ExitPlanMode"));
         assert!(registry.contains("WebFetch"));
         assert!(registry.contains("WebSearch"));
         assert!(registry.contains("analyze_image"));
+        assert!(!registry.contains("spawn_agent"));
+        assert!(!registry.contains("send_input"));
+        assert!(!registry.contains("wait_agent"));
+        assert!(!registry.contains("resume_agent"));
+        assert!(!registry.contains("close_agent"));
         // AskTool and LSPTool should not be registered without callbacks
         assert!(!registry.contains("ask"));
         assert!(!registry.contains("lsp"));
@@ -339,9 +397,18 @@ mod tests {
         let mut registry = ToolRegistry::new();
 
         // Create mock callbacks
-        let ask_callback: AskCallback = Arc::new(|_question, _options| {
-            Box::pin(async { Some("test response".to_string()) })
-                as Pin<Box<dyn Future<Output = Option<String>> + Send>>
+        let ask_callback: AskCallback = Arc::new(|_request| {
+            Box::pin(async { Some(serde_json::json!("test response")) })
+                as Pin<Box<dyn Future<Output = Option<serde_json::Value>> + Send>>
+        });
+        let spawn_agent_callback: SpawnAgentCallback = Arc::new(|request| {
+            Box::pin(async move {
+                Ok(SpawnAgentResponse {
+                    agent_id: request.parent_session_id,
+                    nickname: Some("delegate".to_string()),
+                    extra: std::collections::BTreeMap::new(),
+                })
+            })
         });
 
         let lsp_callback: LspCallback = Arc::new(|_operation, _path: PathBuf, _position| {
@@ -352,7 +419,10 @@ mod tests {
         let config = ToolRegistrationConfig::new()
             .with_ask_callback(ask_callback)
             .with_lsp_callback(lsp_callback)
-            .with_pdf_enabled(true);
+            .with_pdf_enabled(true)
+            .with_agent_control_tools(
+                AgentControlToolConfig::new().with_spawn_agent_callback(spawn_agent_callback),
+            );
 
         let (_history, _hook_manager) = register_all_tools(&mut registry, config);
 
@@ -366,16 +436,20 @@ mod tests {
         assert!(registry.contains("ask"));
         assert!(registry.contains("lsp"));
         assert!(registry.contains("Skill"));
-        assert!(registry.contains("Task"));
+        assert!(registry.contains("TaskCreate"));
+        assert!(registry.contains("TaskList"));
+        assert!(registry.contains("TaskGet"));
+        assert!(registry.contains("TaskUpdate"));
         assert!(registry.contains("TaskOutput"));
-        assert!(registry.contains("KillShell"));
-        assert!(registry.contains("TodoWrite"));
+        assert!(registry.contains("TaskStop"));
         assert!(registry.contains("NotebookEdit"));
         assert!(registry.contains("EnterPlanMode"));
         assert!(registry.contains("ExitPlanMode"));
         assert!(registry.contains("WebFetch"));
         assert!(registry.contains("WebSearch"));
         assert!(registry.contains("analyze_image"));
+        assert!(registry.contains("spawn_agent"));
+        assert!(!registry.contains("send_input"));
     }
 
     #[test]
@@ -410,5 +484,6 @@ mod tests {
         assert!(config.pdf_enabled);
         assert!(config.ask_callback.is_none());
         assert!(config.lsp_callback.is_none());
+        assert!(config.agent_control_tools.is_none());
     }
 }

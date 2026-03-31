@@ -17,7 +17,7 @@
 │  │  │ Bash   │ │ Read   │ │ Write  │ │ Edit   │ │ Glob   │    ││
 │  │  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘    ││
 │  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐    ││
-│  │  │ Grep   │ │ Ask    │ │ LSP    │ │ Skill  │ │ Task   │    ││
+│  │  │ Grep   │ │ Ask    │ │ LSP    │ │ Skill  │ │ Task*  │    ││
 │  │  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘    ││
 │  │  ┌────────┐ ┌────────┐ ┌────────────┐ ┌──────────────────┐ ││
 │  │  │WebFetch│ │WebSearch│ │AnalyzeImage│ │ NotebookEdit    │ ││
@@ -70,11 +70,12 @@ pub enum PermissionBehavior {
 | ask | `ask.rs` | 用户交互 |
 | lsp | `lsp.rs` | 代码智能 |
 | Skill | `skills/` | 技能执行 |
-| Task | `task_tool.rs` | 后台任务 |
+| TaskCreate / TaskList / TaskGet / TaskUpdate | `task_list_tools.rs` | 任务板管理 |
 | TaskOutput | `task_output_tool.rs` | 任务输出 |
-| KillShell | `kill_shell_tool.rs` | 终止 Shell |
-| TodoWrite | `todo_write_tool.rs` | TODO 管理 |
+| TaskStop | `task_stop_tool.rs` | 终止后台任务 |
 | NotebookEdit | `notebook_edit_tool.rs` | Notebook 编辑 |
+| ListMcpResourcesTool | `mcp_resource_tools.rs` | 列出 MCP 资源 |
+| ReadMcpResourceTool | `mcp_resource_tools.rs` | 读取指定 MCP 资源 |
 | WebFetch | `web.rs` | 网页获取 |
 | WebSearch | `web.rs` | 网页搜索 |
 | analyze_image | `analyze_image.rs` | 图片分析 |

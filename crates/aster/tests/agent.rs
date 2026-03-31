@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use aster::agents::{Agent, AgentEvent};
-use aster::config::extensions::{set_extension, ExtensionEntry};
 use futures::StreamExt;
 
 #[cfg(test)]
@@ -475,24 +474,6 @@ mod tests {
         };
 
         async fn setup_agent_with_extension_manager() -> Agent {
-            // Add the TODO extension to the config so it can be discovered by search_available_extensions
-            // Set it as disabled initially so tests can enable it
-            let todo_extension_entry = ExtensionEntry {
-                enabled: false,
-                config: ExtensionConfig::Platform {
-                    name: "todo".to_string(),
-                    description:
-                        "Enable a todo list for Aster so it can keep track of what it is doing"
-                            .to_string(),
-                    bundled: Some(true),
-                    available_tools: vec![],
-                    deferred_loading: false,
-                    always_expose_tools: vec![],
-                    allowed_caller: None,
-                },
-            };
-            set_extension(todo_extension_entry);
-
             let agent = Agent::new();
 
             agent
