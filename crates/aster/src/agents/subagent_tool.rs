@@ -1,11 +1,12 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use anyhow::{anyhow, Result};
 use futures::FutureExt;
 use rmcp::model::{Content, ErrorCode, ErrorData, Tool};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
@@ -18,7 +19,7 @@ use crate::recipe::local_recipes::load_local_recipe_file;
 use crate::recipe::{Recipe, SubRecipe};
 use crate::session::{SessionManager, SubagentSessionMetadata};
 
-pub const SUBAGENT_TOOL_NAME: &str = "subagent";
+pub const AGENT_TOOL_NAME: &str = "Agent";
 const SUBAGENT_TASK_SUMMARY_MAX_CHARS: usize = 160;
 
 const SUMMARY_INSTRUCTIONS: &str = r#"
@@ -45,7 +46,7 @@ pub struct SubagentParams {
     pub images: Option<Vec<ImageData>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ImageData {
     pub data: String,
     pub mime_type: String,
@@ -62,47 +63,101 @@ pub struct SubagentSettings {
     pub temperature: Option<f32>,
 }
 
+#[derive(Debug, Deserialize)]
+struct AgentToolParams {
+    description: String,
+    prompt: String,
+    #[serde(default)]
+    subagent_type: Option<String>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    run_in_background: bool,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    team_name: Option<String>,
+    #[serde(default)]
+    mode: Option<String>,
+    #[serde(default)]
+    isolation: Option<String>,
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
+    images: Option<Vec<ImageData>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentToolOutputBlock {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    text: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentToolOutput {
+    status: &'static str,
+    agent_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent_type: Option<String>,
+    content: Vec<AgentToolOutputBlock>,
+    total_tool_use_count: u64,
+    total_duration_ms: u64,
+    total_tokens: u64,
+    usage: Value,
+    prompt: String,
+}
+
 pub fn create_subagent_tool(sub_recipes: &[SubRecipe]) -> Tool {
     let description = build_tool_description(sub_recipes);
 
     let schema = json!({
         "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "prompt"],
         "properties": {
-            "instructions": {
+            "description": {
                 "type": "string",
-                "description": "Instructions for the subagent. Required for ad-hoc tasks. For predefined tasks, adds additional context."
+                "description": "A short 3-5 word description of the delegated task."
             },
-            "subrecipe": {
+            "prompt": {
                 "type": "string",
-                "description": "Name of a predefined subrecipe to run."
+                "description": "The task for the agent to perform."
             },
-            "role_hint": {
+            "subagent_type": {
                 "type": "string",
-                "description": "Optional role or display label for the subagent, for example 'planner' or 'Image #1'."
+                "description": "Optional specialized agent type. When it matches a local subrecipe, the runtime uses that recipe; otherwise it is treated as a role hint."
             },
-            "parameters": {
-                "type": "object",
-                "additionalProperties": true,
-                "description": "Parameters for the subrecipe. Only valid when 'subrecipe' is specified."
+            "model": {
+                "type": "string",
+                "description": "Optional model override for this agent."
             },
-            "extensions": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Extensions to enable. Omit to inherit all, empty array for none."
-            },
-            "settings": {
-                "type": "object",
-                "properties": {
-                    "provider": {"type": "string", "description": "Override LLM provider"},
-                    "model": {"type": "string", "description": "Override model"},
-                    "temperature": {"type": "number", "description": "Override temperature"}
-                },
-                "description": "Override model/provider settings."
-            },
-            "summary": {
+            "run_in_background": {
                 "type": "boolean",
-                "default": true,
-                "description": "If true (default), return only the subagent's final summary."
+                "description": "Whether to launch the agent in the background. Requires a callback-backed agent runtime; otherwise the tool falls back to foreground completion."
+            },
+            "name": {
+                "type": "string",
+                "description": "Optional display name for the agent. Callback-backed runtimes also use it as the teammate routing name."
+            },
+            "team_name": {
+                "type": "string",
+                "description": "Optional team name for teammate spawning. Requires `name` plus a callback-backed runtime with an existing team context."
+            },
+            "mode": {
+                "type": "string",
+                "description": "Optional teammate permission mode. Not supported in the current runtime."
+            },
+            "isolation": {
+                "type": "string",
+                "enum": ["worktree", "remote"],
+                "description": "Optional isolation mode. Not supported in the current runtime."
+            },
+            "cwd": {
+                "type": "string",
+                "description": "Optional working directory override for the agent. The current runtime accepts an absolute path to an existing directory."
             },
             "images": {
                 "type": "array",
@@ -114,13 +169,13 @@ pub fn create_subagent_tool(sub_recipes: &[SubRecipe]) -> Tool {
                     },
                     "required": ["data", "mime_type"]
                 },
-                "description": "Images to include in the subagent task for multimodal analysis."
+                "description": "Images to include in the delegated agent task for multimodal analysis."
             }
         }
     });
 
     Tool::new(
-        SUBAGENT_TOOL_NAME,
+        AGENT_TOOL_NAME,
         description,
         schema.as_object().unwrap().clone(),
     )
@@ -128,18 +183,15 @@ pub fn create_subagent_tool(sub_recipes: &[SubRecipe]) -> Tool {
 
 fn build_tool_description(sub_recipes: &[SubRecipe]) -> String {
     let mut desc = String::from(
-        "Delegate a task to a subagent that runs independently with its own context.\n\n\
-         Modes:\n\
-         1. Ad-hoc: Provide `instructions` for a custom task\n\
-         2. Predefined: Provide `subrecipe` name to run a predefined task\n\
-         3. Augmented: Provide both `subrecipe` and `instructions` to add context\n\n\
-         The subagent has access to the same tools as you by default. \
-         Use `extensions` to limit which extensions the subagent can use.\n\n\
-         For parallel execution, make multiple `subagent` tool calls in the same message.",
+        "Launch a new agent to handle complex multi-step tasks autonomously.\n\n\
+         Provide a short `description` plus a detailed `prompt`.\n\
+         `subagent_type` is optional: when it matches a local subrecipe, the runtime uses that specialized flow; otherwise it becomes a role hint for a general delegated agent.\n\n\
+         Without a callback-backed agent runtime, delegated agents execute in the foreground and return a structured completion payload when the agent finishes.\n\
+         When callback-backed agent control is available, the tool can launch async named or team-routed agents and honor `cwd` overrides.",
     );
 
     if !sub_recipes.is_empty() {
-        desc.push_str("\n\nAvailable subrecipes:");
+        desc.push_str("\n\nAvailable specialized agent types:");
         for sr in sub_recipes {
             let params_info = get_subrecipe_params_description(sr);
             let sequential_hint = if sr.sequential_when_repeated {
@@ -207,7 +259,7 @@ pub fn handle_subagent_tool(
     working_dir: PathBuf,
     cancellation_token: Option<CancellationToken>,
 ) -> ToolCallResult {
-    let parsed_params: SubagentParams = match serde_json::from_value(params) {
+    let agent_params: AgentToolParams = match serde_json::from_value(params) {
         Ok(p) => p,
         Err(e) => {
             return ToolCallResult::from(Err(ErrorData {
@@ -217,22 +269,28 @@ pub fn handle_subagent_tool(
             }));
         }
     };
+    let cwd_override = match resolve_agent_cwd(agent_params.cwd.clone()) {
+        Ok(path) => path,
+        Err(message) => {
+            return ToolCallResult::from(Err(ErrorData {
+                code: ErrorCode::INVALID_PARAMS,
+                message: Cow::from(message.to_string()),
+                data: None,
+            }));
+        }
+    };
 
-    if parsed_params.instructions.is_none() && parsed_params.subrecipe.is_none() {
-        return ToolCallResult::from(Err(ErrorData {
-            code: ErrorCode::INVALID_PARAMS,
-            message: Cow::from("Must provide 'instructions' or 'subrecipe' (or both)"),
-            data: None,
-        }));
-    }
-
-    if parsed_params.parameters.is_some() && parsed_params.subrecipe.is_none() {
-        return ToolCallResult::from(Err(ErrorData {
-            code: ErrorCode::INVALID_PARAMS,
-            message: Cow::from("'parameters' can only be used with 'subrecipe'"),
-            data: None,
-        }));
-    }
+    let (parsed_params, requested_agent_type, prompt) =
+        match map_agent_tool_params(agent_params, &sub_recipes) {
+            Ok(value) => value,
+            Err(message) => {
+                return ToolCallResult::from(Err(ErrorData {
+                    code: ErrorCode::INVALID_PARAMS,
+                    message: Cow::from(message.to_string()),
+                    data: None,
+                }));
+            }
+        };
 
     let recipe = match build_recipe(&parsed_params, &sub_recipes) {
         Ok(r) => r,
@@ -252,7 +310,9 @@ pub fn handle_subagent_tool(
                 recipe,
                 task_config,
                 parsed_params,
-                working_dir,
+                requested_agent_type,
+                prompt,
+                cwd_override.unwrap_or(working_dir),
                 cancellation_token,
             )
             .boxed(),
@@ -260,13 +320,121 @@ pub fn handle_subagent_tool(
     }
 }
 
+fn normalize_required_text(value: String, field_name: &str) -> Result<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow!("{field_name} cannot be empty"));
+    }
+
+    Ok(trimmed.to_string())
+}
+
+fn normalize_optional_text(value: Option<String>) -> Option<String> {
+    let trimmed = value?.trim().to_string();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+fn resolve_agent_cwd(value: Option<String>) -> Result<Option<PathBuf>> {
+    let Some(cwd) = normalize_optional_text(value) else {
+        return Ok(None);
+    };
+
+    let path = PathBuf::from(&cwd);
+    if !path.is_absolute() {
+        return Err(anyhow!("cwd must be an absolute path"));
+    }
+    if !path.is_dir() {
+        return Err(anyhow!("cwd is not a directory: {cwd}"));
+    }
+
+    Ok(Some(path))
+}
+
+fn map_agent_tool_params(
+    params: AgentToolParams,
+    sub_recipes: &HashMap<String, SubRecipe>,
+) -> Result<(SubagentParams, Option<String>, String)> {
+    let AgentToolParams {
+        description,
+        prompt,
+        subagent_type,
+        model,
+        run_in_background,
+        name,
+        team_name,
+        mode,
+        isolation,
+        cwd: _,
+        images,
+    } = params;
+
+    if run_in_background {
+        return Err(anyhow!(
+            "run_in_background is not supported in the current runtime; omit it or pass false"
+        ));
+    }
+    if normalize_optional_text(team_name).is_some() {
+        return Err(anyhow!("team_name is not supported in the current runtime"));
+    }
+    if normalize_optional_text(mode).is_some() {
+        return Err(anyhow!("mode is not supported in the current runtime"));
+    }
+    if normalize_optional_text(isolation).is_some() {
+        return Err(anyhow!("isolation is not supported in the current runtime"));
+    }
+
+    let description = normalize_required_text(description, "description")?;
+    let prompt = normalize_required_text(prompt, "prompt")?;
+    let requested_agent_type = normalize_optional_text(subagent_type);
+    let matched_subrecipe = requested_agent_type
+        .as_ref()
+        .filter(|agent_type| sub_recipes.contains_key(agent_type.as_str()))
+        .cloned();
+
+    let instructions = if let Some(agent_type) = requested_agent_type.as_ref() {
+        if matched_subrecipe.is_some() {
+            prompt.clone()
+        } else {
+            format!("Specialized agent hint: {agent_type}\n\n{prompt}")
+        }
+    } else {
+        prompt.clone()
+    };
+
+    Ok((
+        SubagentParams {
+            instructions: Some(instructions),
+            subrecipe: matched_subrecipe,
+            role_hint: normalize_optional_text(name).or(Some(description)),
+            parameters: None,
+            extensions: None,
+            settings: Some(SubagentSettings {
+                provider: None,
+                model: normalize_optional_text(model),
+                temperature: None,
+            }),
+            summary: true,
+            images,
+        },
+        requested_agent_type,
+        prompt,
+    ))
+}
+
 async fn execute_subagent(
     recipe: Recipe,
     task_config: TaskConfig,
     params: SubagentParams,
+    requested_agent_type: Option<String>,
+    prompt: String,
     working_dir: PathBuf,
     cancellation_token: Option<CancellationToken>,
 ) -> Result<rmcp::model::CallToolResult, ErrorData> {
+    let start = Instant::now();
     let task_config = apply_settings_overrides(task_config, &params)
         .await
         .map_err(|e| ErrorData {
@@ -302,23 +470,49 @@ async fn execute_subagent(
         data: None,
     })?;
 
+    let agent_id = session.id.clone();
     let result = run_complete_subagent_task(
         recipe,
         task_config,
         params.summary,
-        session.id,
+        agent_id.clone(),
         params.images,
         cancellation_token,
     )
     .await;
 
     match result {
-        Ok(text) => Ok(rmcp::model::CallToolResult {
-            content: vec![Content::text(text)],
-            structured_content: None,
-            is_error: Some(false),
-            meta: None,
-        }),
+        Ok(text) => {
+            let output = AgentToolOutput {
+                status: "completed",
+                agent_id,
+                agent_type: requested_agent_type,
+                content: vec![AgentToolOutputBlock { kind: "text", text }],
+                total_tool_use_count: 0,
+                total_duration_ms: start.elapsed().as_millis().min(u64::MAX as u128) as u64,
+                total_tokens: 0,
+                usage: json!({
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cache_creation_input_tokens": Value::Null,
+                    "cache_read_input_tokens": Value::Null,
+                    "server_tool_use": Value::Null,
+                    "service_tier": Value::Null,
+                    "cache_creation": Value::Null,
+                }),
+                prompt,
+            };
+            Ok(rmcp::model::CallToolResult {
+                content: vec![Content::text(
+                    serde_json::to_string_pretty(&output).unwrap_or_else(|_| {
+                        "{\"status\":\"completed\",\"content\":[{\"type\":\"text\",\"text\":\"Agent finished\"}]}".to_string()
+                    }),
+                )],
+                structured_content: None,
+                is_error: Some(false),
+                meta: None,
+            })
+        }
         Err(e) => Err(ErrorData {
             code: ErrorCode::INTERNAL_ERROR,
             message: Cow::from(e.to_string()),
@@ -528,8 +722,8 @@ fn build_adhoc_recipe(params: &SubagentParams) -> Result<Recipe> {
 
     let recipe = Recipe::builder()
         .version("1.0.0")
-        .title("Subagent Task")
-        .description("Ad-hoc subagent task")
+        .title("Agent Task")
+        .description("Ad-hoc delegated agent task")
         .instructions(instructions)
         .build()
         .map_err(|e| anyhow!("Failed to build recipe: {}", e))?;
@@ -634,19 +828,23 @@ mod tests {
 
     #[test]
     fn test_tool_name() {
-        assert_eq!(SUBAGENT_TOOL_NAME, "subagent");
+        assert_eq!(AGENT_TOOL_NAME, "Agent");
     }
 
     #[test]
     fn test_create_tool_without_subrecipes() {
         let tool = create_subagent_tool(&[]);
-        assert_eq!(tool.name, "subagent");
-        assert!(tool.description.as_ref().unwrap().contains("Ad-hoc"));
+        assert_eq!(tool.name, "Agent");
+        assert!(tool
+            .description
+            .as_ref()
+            .unwrap()
+            .contains("Launch a new agent"));
         assert!(!tool
             .description
             .as_ref()
             .unwrap()
-            .contains("Available subrecipes"));
+            .contains("Available specialized agent types"));
     }
 
     #[test]
@@ -664,8 +862,125 @@ mod tests {
             .description
             .as_ref()
             .unwrap()
-            .contains("Available subrecipes"));
+            .contains("Available specialized agent types"));
         assert!(tool.description.as_ref().unwrap().contains("test_recipe"));
+    }
+
+    #[test]
+    fn test_resolve_agent_cwd_accepts_absolute_directory() {
+        let cwd = tempfile::tempdir().unwrap();
+        let resolved =
+            resolve_agent_cwd(Some(cwd.path().display().to_string())).expect("cwd should parse");
+        assert_eq!(resolved.as_deref(), Some(cwd.path()));
+    }
+
+    #[test]
+    fn test_resolve_agent_cwd_rejects_relative_path() {
+        let error = resolve_agent_cwd(Some("./relative".to_string())).expect_err("should fail");
+        assert!(error.to_string().contains("absolute path"));
+    }
+
+    #[test]
+    fn test_map_agent_tool_params_uses_matching_subrecipe() {
+        let sub_recipes = HashMap::from([(
+            "planner".to_string(),
+            SubRecipe {
+                name: "planner".to_string(),
+                path: "planner.yaml".to_string(),
+                values: None,
+                sequential_when_repeated: false,
+                description: Some("Planner".to_string()),
+            },
+        )]);
+
+        let (params, requested_agent_type, prompt) = map_agent_tool_params(
+            AgentToolParams {
+                description: "Plan migration".to_string(),
+                prompt: "Review the migration plan".to_string(),
+                subagent_type: Some("planner".to_string()),
+                model: Some("gpt-5.4".to_string()),
+                run_in_background: false,
+                name: Some("migration-review".to_string()),
+                team_name: None,
+                mode: None,
+                isolation: None,
+                cwd: None,
+                images: None,
+            },
+            &sub_recipes,
+        )
+        .unwrap();
+
+        assert_eq!(requested_agent_type.as_deref(), Some("planner"));
+        assert_eq!(prompt, "Review the migration plan");
+        assert_eq!(params.subrecipe.as_deref(), Some("planner"));
+        assert_eq!(params.role_hint.as_deref(), Some("migration-review"));
+        assert_eq!(
+            params
+                .settings
+                .as_ref()
+                .and_then(|settings| settings.model.as_deref()),
+            Some("gpt-5.4")
+        );
+    }
+
+    #[test]
+    fn test_map_agent_tool_params_converts_unknown_agent_type_to_hint() {
+        let (params, requested_agent_type, _) = map_agent_tool_params(
+            AgentToolParams {
+                description: "Investigate failure".to_string(),
+                prompt: "Find the root cause".to_string(),
+                subagent_type: Some("debugger".to_string()),
+                model: None,
+                run_in_background: false,
+                name: None,
+                team_name: None,
+                mode: None,
+                isolation: None,
+                cwd: None,
+                images: None,
+            },
+            &HashMap::new(),
+        )
+        .unwrap();
+
+        assert_eq!(requested_agent_type.as_deref(), Some("debugger"));
+        assert_eq!(params.subrecipe, None);
+        assert!(params
+            .instructions
+            .as_deref()
+            .unwrap()
+            .contains("Specialized agent hint: debugger"));
+        assert_eq!(params.role_hint.as_deref(), Some("Investigate failure"));
+    }
+
+    #[test]
+    fn test_map_agent_tool_params_preserves_images() {
+        let images = vec![ImageData {
+            data: "ZmFrZQ==".to_string(),
+            mime_type: "image/png".to_string(),
+        }];
+
+        let (params, _, _) = map_agent_tool_params(
+            AgentToolParams {
+                description: "Inspect screenshot".to_string(),
+                prompt: "Find the failing UI state".to_string(),
+                subagent_type: None,
+                model: None,
+                run_in_background: false,
+                name: None,
+                team_name: None,
+                mode: None,
+                isolation: None,
+                cwd: None,
+                images: Some(images.clone()),
+            },
+            &HashMap::new(),
+        )
+        .unwrap();
+
+        assert_eq!(params.images.as_ref().map(Vec::len), Some(1));
+        assert_eq!(params.images.unwrap()[0].data, images[0].data);
     }
 
     #[test]

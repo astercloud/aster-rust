@@ -9,7 +9,9 @@
 // - Permission integration
 // - Audit logging
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
+
+use crate::agents::ExtensionManager;
 
 // Core modules
 pub mod base;
@@ -20,21 +22,30 @@ pub mod registry;
 pub mod task;
 
 // Tool implementations
-pub mod agent_control;
-pub mod analyze_image;
+mod agent_control;
+mod analyze_image;
 pub mod ask;
 pub mod bash;
+pub mod config_tool;
+pub mod cron_tools;
 pub mod file;
 pub mod lsp;
 pub mod mcp_resource_tools;
 pub mod notebook_edit_tool;
 pub mod plan_mode_tool;
+pub mod powershell_tool;
 pub mod search;
+pub mod send_user_message_tool;
+pub mod sleep_tool;
 pub mod task_list_tools;
 pub mod task_output_tool;
 pub mod task_stop_tool;
+pub mod team_tools;
+pub mod tool_search_tool;
 pub mod web;
-pub mod workflow_integration;
+mod workflow_integration;
+pub mod workflow_tool;
+pub mod worktree_tools;
 
 // Skills integration
 
@@ -67,6 +78,9 @@ pub use task::{
 
 // Tool implementations
 pub use bash::{BashTool, SafetyCheckResult, SandboxConfig, MAX_OUTPUT_LENGTH};
+pub use config_tool::ConfigTool;
+pub use cron_tools::{CronCreateTool, CronDeleteTool, CronListTool};
+pub use sleep_tool::SleepTool;
 
 // File tools
 pub use file::{
@@ -82,11 +96,8 @@ pub use search::{
 
 // Ask tool
 pub use agent_control::{
-    register_agent_control_tools, AgentControlToolConfig, CloseAgentCallback, CloseAgentRequest,
-    CloseAgentResponse, CloseAgentTool, ResumeAgentCallback, ResumeAgentRequest,
-    ResumeAgentResponse, ResumeAgentTool, SendInputCallback, SendInputRequest, SendInputResponse,
-    SendInputTool, SpawnAgentCallback, SpawnAgentRequest, SpawnAgentResponse, SpawnAgentTool,
-    WaitAgentCallback, WaitAgentRequest, WaitAgentResponse, WaitAgentTool,
+    register_agent_control_tools, AgentControlToolConfig, SendInputCallback, SendInputRequest,
+    SendInputResponse, SpawnAgentCallback, SpawnAgentRequest, SpawnAgentResponse,
 };
 pub use ask::{AskCallback, AskOption, AskResult, AskTool, DEFAULT_ASK_TIMEOUT_SECS};
 
@@ -98,6 +109,7 @@ pub use lsp::{
 pub use mcp_resource_tools::{
     register_extension_resource_tools, ListMcpResourcesTool, ReadMcpResourceTool,
 };
+pub use tool_search_tool::{register_tool_search_tool, ToolSearchTool};
 
 // Skill tool
 pub use crate::skills::SkillTool;
@@ -105,23 +117,20 @@ pub use crate::skills::SkillTool;
 // Task tools
 pub use notebook_edit_tool::{NotebookCell, NotebookContent, NotebookEditInput, NotebookEditTool};
 pub use plan_mode_tool::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState, SavedPlan};
+pub use powershell_tool::PowerShellTool;
+pub use send_user_message_tool::{SendUserMessageTool, SEND_USER_MESSAGE_TOOL_NAME};
 pub use task_list_tools::{
     TaskCreateInput, TaskCreateTool, TaskGetInput, TaskGetTool, TaskListInput, TaskListStorage,
     TaskListTool, TaskUpdateInput, TaskUpdateStatus, TaskUpdateTool,
 };
 pub use task_output_tool::TaskOutputTool;
 pub use task_stop_tool::TaskStopTool;
+pub use team_tools::{ListPeersTool, TeamCreateTool, TeamDeleteTool};
 
 // Web tools
 pub use web::{clear_web_caches, get_web_cache_stats, WebCache, WebFetchTool, WebSearchTool};
-
-// Image analysis tools
-// Image analysis tools
-pub use analyze_image::AnalyzeImageTool;
-pub use analyze_image::{AnalyzeImageInput, AnalyzeImageResult, ImageDimensions};
-
-// Workflow integration
-pub use workflow_integration::{WorkflowIntegratedTool, WorkflowIntegratedToolBuilder};
+pub use workflow_tool::WorkflowTool;
+pub use worktree_tools::{EnterWorktreeTool, ExitWorktreeTool};
 
 // =============================================================================
 // Tool Registration (Requirements: 11.3)
@@ -130,7 +139,7 @@ pub use workflow_integration::{WorkflowIntegratedTool, WorkflowIntegratedToolBui
 /// Configuration for tool registration
 #[derive(Default)]
 pub struct ToolRegistrationConfig {
-    /// Callback for AskTool user interaction
+    /// Callback for AskUserQuestion user interaction
     pub ask_callback: Option<AskCallback>,
     /// Callback for LSPTool operations
     pub lsp_callback: Option<LspCallback>,
@@ -138,6 +147,8 @@ pub struct ToolRegistrationConfig {
     pub pdf_enabled: bool,
     /// Whether to enable hook system
     pub hooks_enabled: bool,
+    /// Optional extension manager for current MCP resource / tool search surface
+    pub extension_manager: Option<Weak<ExtensionManager>>,
     /// Optional modern delegation / agent runtime tools
     pub agent_control_tools: Option<AgentControlToolConfig>,
 }
@@ -156,6 +167,10 @@ impl std::fmt::Debug for ToolRegistrationConfig {
             .field("pdf_enabled", &self.pdf_enabled)
             .field("hooks_enabled", &self.hooks_enabled)
             .field(
+                "extension_manager",
+                &self.extension_manager.as_ref().map(|_| "<manager>"),
+            )
+            .field(
                 "agent_control_tools",
                 &self.agent_control_tools.as_ref().map(|_| "<callbacks>"),
             )
@@ -170,6 +185,7 @@ impl Clone for ToolRegistrationConfig {
             lsp_callback: self.lsp_callback.clone(),
             pdf_enabled: self.pdf_enabled,
             hooks_enabled: self.hooks_enabled,
+            extension_manager: self.extension_manager.clone(),
             agent_control_tools: self.agent_control_tools.clone(),
         }
     }
@@ -181,7 +197,7 @@ impl ToolRegistrationConfig {
         Self::default()
     }
 
-    /// Set the AskTool callback
+    /// Set the AskUserQuestion callback
     pub fn with_ask_callback(mut self, callback: AskCallback) -> Self {
         self.ask_callback = Some(callback);
         self
@@ -205,6 +221,13 @@ impl ToolRegistrationConfig {
         self
     }
 
+    /// Attach the extension manager so current MCP resource and ToolSearch surfaces
+    /// are registered from the same tool entrypoint as the rest of the tool pool.
+    pub fn with_extension_manager(mut self, extension_manager: Weak<ExtensionManager>) -> Self {
+        self.extension_manager = Some(extension_manager);
+        self
+    }
+
     /// Register modern delegation / agent runtime tools using callbacks
     pub fn with_agent_control_tools(mut self, config: AgentControlToolConfig) -> Self {
         self.agent_control_tools = Some(config);
@@ -221,7 +244,7 @@ impl ToolRegistrationConfig {
 /// - EditTool: Smart file editing
 /// - GlobTool: File search with glob patterns
 /// - GrepTool: Content search with regex
-/// - AskTool: User interaction (if callback provided)
+/// - AskUserQuestion: User interaction (if callback provided)
 /// - LSPTool: Code intelligence (if callback provided)
 /// - SkillTool: Skill execution and management
 ///
@@ -275,8 +298,15 @@ pub fn register_all_tools(
     // Register search tools
     registry.register(Box::new(GlobTool::new()));
     registry.register(Box::new(GrepTool::new()));
+    registry.register(Box::new(ConfigTool::new()));
+    registry.register(Box::new(SendUserMessageTool::new()));
+    registry.register(Box::new(SleepTool::new()));
+    let powershell_tool = PowerShellTool::with_task_manager(shared_task_manager.clone());
+    if powershell_tool.is_available() {
+        registry.register(Box::new(powershell_tool));
+    }
 
-    // Register AskTool if callback is provided
+    // Register AskUserQuestion if callback is provided
     if let Some(callback) = config.ask_callback {
         let ask_tool = AskTool::new().with_callback(callback);
         registry.register(Box::new(ask_tool));
@@ -290,6 +320,7 @@ pub fn register_all_tools(
 
     // Register SkillTool
     registry.register(Box::new(SkillTool::new()));
+    registry.register(Box::new(WorkflowTool::new()));
 
     // Register background execution and structured task board tools
     registry.register(Box::new(TaskCreateTool::with_storage(
@@ -311,6 +342,8 @@ pub fn register_all_tools(
         shared_task_manager,
     )));
     registry.register(Box::new(NotebookEditTool::new()));
+    registry.register(Box::new(EnterWorktreeTool::new()));
+    registry.register(Box::new(ExitWorktreeTool::new()));
 
     // Register Plan Mode tools
     registry.register(Box::new(EnterPlanModeTool::new()));
@@ -318,14 +351,21 @@ pub fn register_all_tools(
 
     if let Some(agent_control_tools) = config.agent_control_tools.as_ref() {
         register_agent_control_tools(registry, agent_control_tools);
+        if agent_control_tools.spawn_agent.is_some() && agent_control_tools.send_input.is_some() {
+            registry.register(Box::new(TeamCreateTool::new()));
+            registry.register(Box::new(TeamDeleteTool::new()));
+            registry.register(Box::new(ListPeersTool::new()));
+        }
+    }
+
+    if let Some(extension_manager) = config.extension_manager {
+        register_extension_resource_tools(registry, extension_manager.clone());
+        register_tool_search_tool(registry, extension_manager);
     }
 
     // Register Web tools
     registry.register(Box::new(WebFetchTool::new()));
     registry.register(Box::new(WebSearchTool::new()));
-
-    // Register Image Analysis tools
-    registry.register(Box::new(AnalyzeImageTool::new()));
 
     (shared_history, hook_manager)
 }
@@ -333,7 +373,7 @@ pub fn register_all_tools(
 /// Register all native tools with default configuration
 ///
 /// This is a convenience function that registers all tools with default settings.
-/// AskTool and LSPTool are not registered since they require callbacks.
+/// AskUserQuestion and LSPTool are not registered since they require callbacks.
 ///
 /// # Arguments
 /// * `registry` - The ToolRegistry to register tools with
@@ -359,13 +399,21 @@ mod tests {
         let (_history, _hook_manager) = register_default_tools(&mut registry);
 
         // Verify core tools are registered
-        assert!(registry.contains("bash"));
-        assert!(registry.contains("read"));
-        assert!(registry.contains("write"));
-        assert!(registry.contains("edit"));
-        assert!(registry.contains("glob"));
-        assert!(registry.contains("grep"));
+        assert!(registry.contains("Bash"));
+        assert!(registry.contains("Read"));
+        assert!(registry.contains("Write"));
+        assert!(registry.contains("Edit"));
+        assert!(registry.contains("Glob"));
+        assert!(registry.contains("Grep"));
+        assert!(registry.contains("Config"));
+        assert!(registry.contains("SendUserMessage"));
+        assert!(registry.contains("Sleep"));
+        assert_eq!(
+            registry.contains("PowerShell"),
+            PowerShellTool::is_runtime_available()
+        );
         assert!(registry.contains("Skill"));
+        assert!(registry.contains("Workflow"));
         assert!(registry.contains("TaskCreate"));
         assert!(registry.contains("TaskList"));
         assert!(registry.contains("TaskGet"));
@@ -373,19 +421,24 @@ mod tests {
         assert!(registry.contains("TaskOutput"));
         assert!(registry.contains("TaskStop"));
         assert!(registry.contains("NotebookEdit"));
+        assert!(registry.contains("EnterWorktree"));
+        assert!(registry.contains("ExitWorktree"));
         assert!(registry.contains("EnterPlanMode"));
         assert!(registry.contains("ExitPlanMode"));
         assert!(registry.contains("WebFetch"));
         assert!(registry.contains("WebSearch"));
-        assert!(registry.contains("analyze_image"));
+        assert!(!registry.contains("ToolSearch"));
         assert!(!registry.contains("spawn_agent"));
-        assert!(!registry.contains("send_input"));
+        assert!(!registry.contains("SendMessage"));
         assert!(!registry.contains("wait_agent"));
         assert!(!registry.contains("resume_agent"));
         assert!(!registry.contains("close_agent"));
-        // AskTool and LSPTool should not be registered without callbacks
-        assert!(!registry.contains("ask"));
-        assert!(!registry.contains("lsp"));
+        assert!(!registry.contains("TeamCreate"));
+        assert!(!registry.contains("TeamDelete"));
+        assert!(!registry.contains("ListPeers"));
+        // AskUserQuestion and LSPTool should not be registered without callbacks
+        assert!(!registry.contains("AskUserQuestion"));
+        assert!(!registry.contains("LSP"));
     }
 
     #[test]
@@ -427,15 +480,22 @@ mod tests {
         let (_history, _hook_manager) = register_all_tools(&mut registry, config);
 
         // Verify all tools are registered
-        assert!(registry.contains("bash"));
-        assert!(registry.contains("read"));
-        assert!(registry.contains("write"));
-        assert!(registry.contains("edit"));
-        assert!(registry.contains("glob"));
-        assert!(registry.contains("grep"));
-        assert!(registry.contains("ask"));
-        assert!(registry.contains("lsp"));
+        assert!(registry.contains("Bash"));
+        assert!(registry.contains("Read"));
+        assert!(registry.contains("Write"));
+        assert!(registry.contains("Edit"));
+        assert!(registry.contains("Glob"));
+        assert!(registry.contains("Grep"));
+        assert!(registry.contains("Sleep"));
+        assert!(registry.contains("SendUserMessage"));
+        assert_eq!(
+            registry.contains("PowerShell"),
+            PowerShellTool::is_runtime_available()
+        );
+        assert!(registry.contains("AskUserQuestion"));
+        assert!(registry.contains("LSP"));
         assert!(registry.contains("Skill"));
+        assert!(registry.contains("Workflow"));
         assert!(registry.contains("TaskCreate"));
         assert!(registry.contains("TaskList"));
         assert!(registry.contains("TaskGet"));
@@ -443,13 +503,17 @@ mod tests {
         assert!(registry.contains("TaskOutput"));
         assert!(registry.contains("TaskStop"));
         assert!(registry.contains("NotebookEdit"));
+        assert!(registry.contains("EnterWorktree"));
+        assert!(registry.contains("ExitWorktree"));
         assert!(registry.contains("EnterPlanMode"));
         assert!(registry.contains("ExitPlanMode"));
         assert!(registry.contains("WebFetch"));
         assert!(registry.contains("WebSearch"));
-        assert!(registry.contains("analyze_image"));
-        assert!(registry.contains("spawn_agent"));
-        assert!(!registry.contains("send_input"));
+        assert!(!registry.contains("spawn_agent"));
+        assert!(!registry.contains("SendMessage"));
+        assert!(!registry.contains("TeamCreate"));
+        assert!(!registry.contains("TeamDelete"));
+        assert!(!registry.contains("ListPeers"));
     }
 
     #[test]
@@ -484,6 +548,62 @@ mod tests {
         assert!(config.pdf_enabled);
         assert!(config.ask_callback.is_none());
         assert!(config.lsp_callback.is_none());
+        assert!(config.extension_manager.is_none());
         assert!(config.agent_control_tools.is_none());
+    }
+
+    #[test]
+    fn test_register_all_tools_with_extension_manager_registers_current_extension_tools() {
+        let extension_manager = Arc::new(ExtensionManager::default());
+        let mut registry = ToolRegistry::new();
+        let config = ToolRegistrationConfig::new()
+            .with_extension_manager(Arc::downgrade(&extension_manager));
+
+        let (_history, _hook_manager) = register_all_tools(&mut registry, config);
+
+        assert!(registry.contains("ListMcpResourcesTool"));
+        assert!(registry.contains("ReadMcpResourceTool"));
+        assert!(registry.contains("ToolSearch"));
+    }
+
+    #[test]
+    fn test_registers_team_tools_when_spawn_and_send_callbacks_exist() {
+        use std::future::Future;
+        use std::pin::Pin;
+        use std::sync::Arc;
+
+        let spawn_agent_callback: SpawnAgentCallback = Arc::new(|request| {
+            Box::pin(async move {
+                Ok(SpawnAgentResponse {
+                    agent_id: request.parent_session_id,
+                    nickname: Some("delegate".to_string()),
+                    extra: std::collections::BTreeMap::new(),
+                })
+            })
+        });
+        let send_input_callback: SendInputCallback = Arc::new(|request| {
+            Box::pin(async move {
+                Ok(SendInputResponse {
+                    submission_id: request.id,
+                    extra: std::collections::BTreeMap::new(),
+                })
+            })
+                as Pin<Box<dyn Future<Output = Result<SendInputResponse, String>> + Send>>
+        });
+
+        let mut registry = ToolRegistry::new();
+        let config = ToolRegistrationConfig::new().with_agent_control_tools(
+            AgentControlToolConfig::new()
+                .with_spawn_agent_callback(spawn_agent_callback)
+                .with_send_input_callback(send_input_callback),
+        );
+
+        let (_history, _hook_manager) = register_all_tools(&mut registry, config);
+
+        assert!(!registry.contains("spawn_agent"));
+        assert!(registry.contains("SendMessage"));
+        assert!(registry.contains("TeamCreate"));
+        assert!(registry.contains("TeamDelete"));
+        assert!(registry.contains("ListPeers"));
     }
 }

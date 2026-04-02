@@ -11,14 +11,17 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
+
+use crate::providers::base::Provider;
 
 /// Tool execution context
 ///
 /// Contains environment information available during tool execution.
 /// This is passed to every tool's execute method.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ToolContext {
     /// Current working directory for the tool execution
     pub working_directory: PathBuf,
@@ -34,6 +37,25 @@ pub struct ToolContext {
 
     /// Cancellation token for cooperative cancellation
     pub cancellation_token: Option<CancellationToken>,
+
+    /// Optional model provider associated with the current session
+    pub provider: Option<Arc<dyn Provider>>,
+}
+
+impl std::fmt::Debug for ToolContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let provider_name = self.provider.as_ref().map(|provider| provider.get_name());
+        let has_cancellation_token = self.cancellation_token.is_some();
+
+        f.debug_struct("ToolContext")
+            .field("working_directory", &self.working_directory)
+            .field("session_id", &self.session_id)
+            .field("user", &self.user)
+            .field("environment", &self.environment)
+            .field("has_cancellation_token", &has_cancellation_token)
+            .field("provider", &provider_name)
+            .finish()
+    }
 }
 
 impl Default for ToolContext {
@@ -44,6 +66,7 @@ impl Default for ToolContext {
             user: None,
             environment: HashMap::new(),
             cancellation_token: None,
+            provider: None,
         }
     }
 }
@@ -84,6 +107,12 @@ impl ToolContext {
     /// Set the cancellation token
     pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
         self.cancellation_token = Some(token);
+        self
+    }
+
+    /// Set the provider associated with the current session
+    pub fn with_provider(mut self, provider: Arc<dyn Provider>) -> Self {
+        self.provider = Some(provider);
         self
     }
 

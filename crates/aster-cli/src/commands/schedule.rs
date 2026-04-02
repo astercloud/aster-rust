@@ -81,6 +81,10 @@ pub async fn handle_schedule_add(
         id: schedule_id.clone(),
         source: recipe_source_arg.clone(), // Pass the original user-provided path
         cron,
+        recurring: true,
+        durable: true,
+        prompt: None,
+        scheduled_for: None,
         last_run: None,
         currently_running: false,
         paused: false,

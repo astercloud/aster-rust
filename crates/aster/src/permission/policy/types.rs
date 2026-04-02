@@ -16,6 +16,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+pub(crate) fn normalize_tool_name(tool: &str) -> String {
+    tool.to_ascii_lowercase()
+}
+
 // =============================================================================
 // ToolProfile 枚举
 // =============================================================================
@@ -184,12 +188,16 @@ impl ToolPolicy {
 
     /// 检查工具是否在允许列表中
     pub fn is_in_allow_list(&self, tool: &str) -> bool {
-        self.allow.iter().any(|t| t == tool || t == "*")
+        self.allow
+            .iter()
+            .any(|candidate| candidate == "*" || candidate.eq_ignore_ascii_case(tool))
     }
 
     /// 检查工具是否在拒绝列表中
     pub fn is_in_deny_list(&self, tool: &str) -> bool {
-        self.deny.iter().any(|t| t == tool || t == "*")
+        self.deny
+            .iter()
+            .any(|candidate| candidate == "*" || candidate.eq_ignore_ascii_case(tool))
     }
 }
 
@@ -267,18 +275,19 @@ impl MergedPolicy {
 
     /// 检查工具是否被允许
     pub fn is_allowed(&self, tool: &str) -> bool {
-        if self.denied_tools.contains(tool) {
+        let normalized_tool = normalize_tool_name(tool);
+        if self.denied_tools.contains(&normalized_tool) {
             return false;
         }
         if self.allow_all {
             return true;
         }
-        self.allowed_tools.contains(tool)
+        self.allowed_tools.contains(&normalized_tool)
     }
 
     /// 获取工具的策略来源
     pub fn get_source(&self, tool: &str) -> Option<PolicyLayer> {
-        self.tool_sources.get(tool).copied()
+        self.tool_sources.get(&normalize_tool_name(tool)).copied()
     }
 }
 

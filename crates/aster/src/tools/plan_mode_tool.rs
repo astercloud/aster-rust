@@ -2,7 +2,7 @@
 // Plan Mode Tools
 // =============================================================================
 //
-// 计划模式工具，基于 Claude Agent SDK 的 planmode.ts 实现
+// 计划模式工具，基于当前工具面的 plan mode 语义实现
 // 提供 EnterPlanModeTool 和 ExitPlanModeTool 功能
 //
 // 功能特性：
@@ -137,6 +137,10 @@ impl GlobalStateManager {
 // 全局状态管理器实例
 lazy_static::lazy_static! {
     static ref GLOBAL_STATE: GlobalStateManager = GlobalStateManager::new();
+}
+
+pub(crate) fn current_plan_mode_active() -> bool {
+    GLOBAL_STATE.is_plan_mode_active()
 }
 
 // =============================================================================
@@ -279,7 +283,7 @@ impl PlanPersistenceManager {
 
 /// 进入计划模式工具
 ///
-/// 基于 Claude Agent SDK 的 EnterPlanModeTool 完全复刻
+/// 对齐当前工具面的 EnterPlanModeTool 语义
 /// 用于复杂任务的规划和探索阶段
 pub struct EnterPlanModeTool;
 
@@ -333,7 +337,7 @@ impl Tool for EnterPlanModeTool {
    - Example: "Fix the bug in checkout" - need to investigate root cause
 
 7. **User Preferences Matter**: The implementation could reasonably go multiple ways
-   - If you would otherwise need to use `ask` to clarify the approach, use EnterPlanMode instead
+   - If you would otherwise need to use `AskUserQuestion` to clarify the approach, use EnterPlanMode instead
    - Plan mode lets you explore first, then present options with context
 
 ## When NOT to Use This Tool
@@ -351,7 +355,7 @@ In plan mode, you'll:
 2. Understand existing patterns and architecture
 3. Design an implementation approach
 4. Present your plan to the user for approval
-5. Use `ask` if you need to clarify implementation choices with the user
+5. Use `AskUserQuestion` if you need to clarify implementation choices with the user
 6. Exit plan mode with ExitPlanMode when ready to implement
 
 ## Examples
@@ -514,7 +518,7 @@ In plan mode, you should:
 1. Thoroughly explore the codebase to understand existing patterns
 2. Identify similar features and architectural approaches
 3. Consider multiple approaches and their trade-offs
-4. Use `ask` if you need to clarify the approach
+4. Use `AskUserQuestion` if you need to clarify the approach
 5. Design a concrete implementation strategy
 6. When ready, use ExitPlanMode to present your plan for approval
 
@@ -539,7 +543,7 @@ pub struct ExitPlanModeInput {}
 
 /// 退出计划模式工具
 ///
-/// 基于 Claude Agent SDK 的 ExitPlanModeTool 完全复刻
+/// 对齐当前工具面的 ExitPlanModeTool 语义
 /// 用于完成计划并等待用户批准
 pub struct ExitPlanModeTool;
 
@@ -767,7 +771,7 @@ IMPORTANT: Only use this tool when the task requires planning the implementation
 
 ## Handling Ambiguity in Plans
 Before using this tool, ensure your plan is clear and unambiguous. If there are multiple valid approaches or unclear requirements:
-1. Use the `ask` tool to clarify with the user
+1. Use the `AskUserQuestion` tool to clarify with the user
 2. Ask about specific implementation choices (e.g., architectural patterns, which library to use)
 3. Clarify any assumptions that could affect the implementation
 4. Edit your plan file to incorporate user feedback
@@ -777,7 +781,7 @@ Before using this tool, ensure your plan is clear and unambiguous. If there are 
 
 1. Initial task: "Search for and understand the implementation of vim mode in the codebase" - Do not use the exit plan mode tool because you are not planning the implementation steps of a task.
 2. Initial task: "Help me implement yank mode for vim" - Use the exit plan mode tool after you have finished planning the implementation steps of the task.
-3. Initial task: "Add a new feature to handle user authentication" - If unsure about auth method (OAuth, JWT, etc.), use `ask` first, then use exit plan mode tool after clarifying the approach."#
+3. Initial task: "Add a new feature to handle user authentication" - If unsure about auth method (OAuth, JWT, etc.), use `AskUserQuestion` first, then use exit plan mode tool after clarifying the approach."#
     }
 
     fn input_schema(&self) -> Value {
@@ -898,6 +902,7 @@ mod tests {
             user: Some("test-user".to_string()),
             environment: HashMap::new(),
             cancellation_token: None,
+            provider: None,
         }
     }
 

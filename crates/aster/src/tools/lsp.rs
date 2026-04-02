@@ -616,7 +616,7 @@ impl LspTool {
 #[async_trait]
 impl Tool for LspTool {
     fn name(&self) -> &str {
-        "lsp"
+        "LSP"
     }
 
     fn description(&self) -> &str {
@@ -1447,7 +1447,7 @@ mod tests {
     #[tokio::test]
     async fn test_lsp_tool_trait_name() {
         let tool = LspTool::new();
-        assert_eq!(tool.name(), "lsp");
+        assert_eq!(tool.name(), "LSP");
     }
 
     #[tokio::test]

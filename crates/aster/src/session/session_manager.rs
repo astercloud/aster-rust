@@ -1583,7 +1583,7 @@ impl SessionStorage {
                    s.provider_name, s.model_config_json,
                    COUNT(m.id) as message_count
             FROM sessions s
-            INNER JOIN messages m ON s.id = m.session_id
+            LEFT JOIN messages m ON s.id = m.session_id
             WHERE s.session_type IN ({})
             GROUP BY s.id
             ORDER BY s.updated_at DESC
@@ -1880,6 +1880,31 @@ mod tests {
         assert_eq!(insights.total_sessions, NUM_SESSIONS as usize);
         let expected_tokens = 100 * NUM_SESSIONS * (NUM_SESSIONS - 1) / 2;
         assert_eq!(insights.total_tokens, expected_tokens as i64);
+    }
+
+    #[tokio::test]
+    async fn test_list_sessions_by_types_includes_sessions_without_messages() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_sessions_empty.db");
+        let storage = Arc::new(SessionStorage::create(&db_path).await.unwrap());
+
+        let empty_subagent = storage
+            .create_session(
+                temp_dir.path().to_path_buf(),
+                "Empty subagent".to_string(),
+                SessionType::SubAgent,
+            )
+            .await
+            .unwrap();
+
+        let sessions = storage
+            .list_sessions_by_types(&[SessionType::SubAgent])
+            .await
+            .unwrap();
+
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].id, empty_subagent.id);
+        assert_eq!(sessions[0].message_count, 0);
     }
 
     #[tokio::test]

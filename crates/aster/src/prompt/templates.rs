@@ -16,7 +16,9 @@ pub const TOOL_GUIDELINES: &str = r#"# Tool usage policy
 - Use specialized tools instead of bash commands when possible, as this provides a better user experience.
 - NEVER use bash echo or other command-line tools to communicate thoughts, explanations, or instructions to the user.
 - Use TaskCreate, TaskList, TaskGet, and TaskUpdate to track progress on multi-step work.
-- Use ListMcpResourcesTool and ReadMcpResourceTool for MCP resource discovery and inspection instead of legacy extension-manager resource helpers.
+- Use ToolSearch to discover deferred extension tools, and use `select:<tool_name>` when you need to load a specific deferred tool into the active tool surface.
+- Use Config when the user asks to inspect or update supported runtime settings such as model selection or permission mode.
+- Use Sleep instead of `Bash(sleep ...)` when you intentionally need to wait.
 - Only use host-injected delegation tools when the tool schema explicitly exposes them."#;
 
 /// 权限模式说明

@@ -173,6 +173,18 @@ impl ToolRegistry {
 // =============================================================================
 
 impl ToolRegistry {
+    fn find_native_key(&self, name: &str) -> Option<&String> {
+        self.native_tools
+            .keys()
+            .find(|registered| registered.eq_ignore_ascii_case(name))
+    }
+
+    fn find_mcp_key(&self, name: &str) -> Option<&String> {
+        self.mcp_tools
+            .keys()
+            .find(|registered| registered.eq_ignore_ascii_case(name))
+    }
+
     /// Register a native tool
     ///
     /// Native tools have higher priority than MCP tools with the same name.
@@ -184,6 +196,9 @@ impl ToolRegistry {
     /// Requirements: 2.1
     pub fn register(&mut self, tool: Box<dyn Tool>) {
         let name = tool.name().to_string();
+        if let Some(existing_name) = self.find_native_key(&name).cloned() {
+            self.native_tools.remove(&existing_name);
+        }
         self.native_tools.insert(name, tool);
     }
 
@@ -198,6 +213,9 @@ impl ToolRegistry {
     ///
     /// Requirements: 11.4
     pub fn register_mcp(&mut self, name: String, tool: McpToolWrapper) {
+        if let Some(existing_name) = self.find_mcp_key(&name).cloned() {
+            self.mcp_tools.remove(&existing_name);
+        }
         self.mcp_tools.insert(name, tool);
     }
 
@@ -209,7 +227,8 @@ impl ToolRegistry {
     /// # Returns
     /// The unregistered tool if it existed
     pub fn unregister(&mut self, name: &str) -> Option<Box<dyn Tool>> {
-        self.native_tools.remove(name)
+        let key = self.find_native_key(name).cloned()?;
+        self.native_tools.remove(&key)
     }
 
     /// Unregister an MCP tool
@@ -220,7 +239,8 @@ impl ToolRegistry {
     /// # Returns
     /// The unregistered MCP tool wrapper if it existed
     pub fn unregister_mcp(&mut self, name: &str) -> Option<McpToolWrapper> {
-        self.mcp_tools.remove(name)
+        let key = self.find_mcp_key(name).cloned()?;
+        self.mcp_tools.remove(&key)
     }
 
     /// Check if a tool is registered (native or MCP)
@@ -231,17 +251,17 @@ impl ToolRegistry {
     /// # Returns
     /// `true` if the tool is registered
     pub fn contains(&self, name: &str) -> bool {
-        self.native_tools.contains_key(name) || self.mcp_tools.contains_key(name)
+        self.find_native_key(name).is_some() || self.find_mcp_key(name).is_some()
     }
 
     /// Check if a native tool is registered
     pub fn contains_native(&self, name: &str) -> bool {
-        self.native_tools.contains_key(name)
+        self.find_native_key(name).is_some()
     }
 
     /// Check if an MCP tool is registered
     pub fn contains_mcp(&self, name: &str) -> bool {
-        self.mcp_tools.contains_key(name)
+        self.find_mcp_key(name).is_some()
     }
 
     /// Get the number of registered native tools
@@ -282,10 +302,16 @@ impl ToolRegistry {
     /// Requirements: 2.2
     pub fn get(&self, name: &str) -> Option<&dyn Tool> {
         // Native tools have priority over MCP tools
-        if let Some(tool) = self.native_tools.get(name) {
+        if let Some(tool) = self
+            .find_native_key(name)
+            .and_then(|registered| self.native_tools.get(registered))
+        {
             return Some(tool.as_ref());
         }
-        if let Some(tool) = self.mcp_tools.get(name) {
+        if let Some(tool) = self
+            .find_mcp_key(name)
+            .and_then(|registered| self.mcp_tools.get(registered))
+        {
             return Some(tool as &dyn Tool);
         }
         None
@@ -358,12 +384,12 @@ impl ToolRegistry {
 
     /// Check if a tool is a native tool
     pub fn is_native(&self, name: &str) -> bool {
-        self.native_tools.contains_key(name)
+        self.find_native_key(name).is_some()
     }
 
     /// Check if a tool is an MCP tool (and not shadowed by a native tool)
     pub fn is_mcp(&self, name: &str) -> bool {
-        !self.native_tools.contains_key(name) && self.mcp_tools.contains_key(name)
+        self.find_native_key(name).is_none() && self.find_mcp_key(name).is_some()
     }
 }
 
@@ -700,6 +726,17 @@ mod tests {
         assert!(registry.contains("test_tool"));
         assert!(registry.contains_native("test_tool"));
         assert!(!registry.contains_mcp("test_tool"));
+    }
+
+    #[test]
+    fn test_registry_lookup_is_case_insensitive_for_current_surface_names() {
+        let mut registry = ToolRegistry::new();
+        registry.register(Box::new(TestTool::new("Bash")));
+
+        assert!(registry.contains("Bash"));
+        assert!(registry.contains("bash"));
+        assert!(registry.contains_native("bash"));
+        assert!(registry.get("bash").is_some());
     }
 
     #[test]

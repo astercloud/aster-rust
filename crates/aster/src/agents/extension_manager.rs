@@ -1315,8 +1315,8 @@ impl ExtensionManager {
             return Err(ErrorData::new(
                 ErrorCode::RESOURCE_NOT_FOUND,
                 format!(
-                    "Tool '{}' is deferred. Use extensionmanager__load_tools first.",
-                    tool_call.name
+                    "Tool '{}' is deferred. Use ToolSearch with select:{} first.",
+                    tool_call.name, tool_call.name
                 ),
                 None,
             )

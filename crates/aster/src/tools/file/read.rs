@@ -291,7 +291,7 @@ impl ReadTool {
 impl ReadTool {
     /// Read an image file with enhanced analysis capabilities
     ///
-    /// Enhanced version inspired by Claude Agent SDK:
+    /// 增强版实现，对齐当前多模态读取能力：
     /// - Provides detailed image metadata
     /// - Estimates token consumption
     /// - Supports intelligent image analysis
@@ -405,7 +405,7 @@ impl ReadTool {
 impl ReadTool {
     /// Read a PDF file with enhanced processing capabilities
     ///
-    /// Enhanced version inspired by Claude Agent SDK:
+    /// 增强版实现，对齐当前文档读取能力：
     /// - Provides detailed PDF metadata
     /// - Supports document block processing for AI analysis
     /// - Returns structured information for multimodal AI processing
@@ -499,7 +499,7 @@ impl ReadTool {
 impl ReadTool {
     /// Read an SVG file with enhanced rendering capabilities
     ///
-    /// Enhanced version inspired by Claude Agent SDK:
+    /// 增强版实现，对齐当前 SVG 读取能力：
     /// - Supports SVG content analysis
     /// - Provides rendering information
     /// - Includes vector graphics analysis capabilities
@@ -575,7 +575,7 @@ impl ReadTool {
 
     /// Read a Jupyter notebook file with enhanced analysis
     ///
-    /// Enhanced version inspired by Claude Agent SDK:
+    /// 增强版实现，对齐当前 Notebook 读取能力：
     /// - Extracts and formats code cells and markdown cells
     /// - Provides execution output analysis
     /// - Includes data visualization detection
@@ -839,7 +839,7 @@ impl ReadTool {
 #[async_trait]
 impl Tool for ReadTool {
     fn name(&self) -> &str {
-        "read"
+        "Read"
     }
 
     fn description(&self) -> &str {
@@ -848,7 +848,7 @@ impl Tool for ReadTool {
          images (with metadata and AI analysis hints), PDF files (with document processing), \
          SVG files (with vector graphics analysis), and Jupyter notebooks (with computational analysis). \
          Automatically detects file type and provides structured information optimized for AI processing. \
-         Inspired by Claude Agent SDK for comprehensive file understanding and analysis."
+         Aligned with the current multimodal file understanding surface."
     }
 
     fn input_schema(&self) -> serde_json::Value {
@@ -979,7 +979,7 @@ impl ReadTool {
 
     /// Read a text file with enhanced analysis capabilities
     ///
-    /// Enhanced version inspired by Claude Agent SDK:
+    /// 增强版实现，对齐当前文本读取能力：
     /// - Provides intelligent content analysis
     /// - Detects programming languages and file types
     /// - Includes syntax highlighting hints
@@ -1550,7 +1550,7 @@ mod tests {
     #[test]
     fn test_tool_name() {
         let tool = create_read_tool();
-        assert_eq!(tool.name(), "read");
+        assert_eq!(tool.name(), "Read");
     }
 
     #[test]

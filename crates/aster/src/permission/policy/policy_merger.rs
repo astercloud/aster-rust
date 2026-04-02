@@ -18,7 +18,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::groups::ToolGroups;
-use super::types::{MergedPolicy, PolicyDecision, PolicyLayer, ToolPolicy};
+use super::types::{normalize_tool_name, MergedPolicy, PolicyDecision, PolicyLayer, ToolPolicy};
 
 /// 多层策略合并器
 ///
@@ -130,9 +130,10 @@ impl PolicyMerger {
                         result.allow_all = true;
                         tool_sources.insert("*".to_string(), layer);
                     } else {
-                        result.allowed_tools.insert(tool.clone());
-                        result.denied_tools.remove(tool);
-                        tool_sources.insert(tool.clone(), layer);
+                        let normalized_tool = normalize_tool_name(tool);
+                        result.allowed_tools.insert(normalized_tool.clone());
+                        result.denied_tools.remove(&normalized_tool);
+                        tool_sources.insert(normalized_tool, layer);
                     }
                 }
 
@@ -142,9 +143,10 @@ impl PolicyMerger {
                         result.allow_all = false;
                         result.allowed_tools.clear();
                     }
-                    result.denied_tools.insert(tool.clone());
-                    result.allowed_tools.remove(tool);
-                    tool_sources.insert(tool.clone(), layer);
+                    let normalized_tool = normalize_tool_name(tool);
+                    result.denied_tools.insert(normalized_tool.clone());
+                    result.allowed_tools.remove(&normalized_tool);
+                    tool_sources.insert(normalized_tool, layer);
                 }
             }
         }
@@ -161,8 +163,9 @@ impl PolicyMerger {
     /// - 3.5: 高层 deny 覆盖低层 allow
     pub fn is_tool_allowed(&self, tool: &str) -> PolicyDecision {
         let merged = self.merge();
+        let normalized_tool = normalize_tool_name(tool);
 
-        if merged.denied_tools.contains(tool) {
+        if merged.denied_tools.contains(&normalized_tool) {
             let source = merged.get_source(tool).unwrap_or(PolicyLayer::Profile);
             return PolicyDecision::deny(source, format!("Tool '{}' is explicitly denied", tool));
         }
@@ -172,7 +175,7 @@ impl PolicyMerger {
             return PolicyDecision::allow(source, "All tools are allowed");
         }
 
-        if merged.allowed_tools.contains(tool) {
+        if merged.allowed_tools.contains(&normalized_tool) {
             let source = merged.get_source(tool).unwrap_or(PolicyLayer::Profile);
             return PolicyDecision::allow(source, format!("Tool '{}' is explicitly allowed", tool));
         }

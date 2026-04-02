@@ -26,6 +26,12 @@ use uuid::Uuid;
 use super::context::ToolContext;
 use super::error::ToolError;
 
+#[derive(Debug, Clone)]
+pub enum TaskShell {
+    PlatformDefault,
+    PowerShell { executable_path: PathBuf },
+}
+
 /// Default maximum concurrent tasks
 pub const DEFAULT_MAX_CONCURRENT: usize = 10;
 
@@ -323,6 +329,16 @@ impl TaskManager {
     ///
     /// Requirements: 10.1, 10.4
     pub async fn start(&self, command: &str, context: &ToolContext) -> Result<String, ToolError> {
+        self.start_with_shell(command, context, TaskShell::PlatformDefault)
+            .await
+    }
+
+    pub async fn start_with_shell(
+        &self,
+        command: &str,
+        context: &ToolContext,
+        shell: TaskShell,
+    ) -> Result<String, ToolError> {
         // Check concurrent task limit
         let running_count = self.running_count().await;
         if running_count >= self.max_concurrent {
@@ -344,7 +360,7 @@ impl TaskManager {
         let output_file = self.output_directory.join(format!("{}.log", task_id));
 
         // Build the command
-        let mut cmd = self.build_command(command, context);
+        let mut cmd = self.build_command(command, context, &shell);
 
         // Create output file for writing
         let output_file_handle = tokio::fs::File::create(&output_file).await.map_err(|e| {
@@ -407,15 +423,24 @@ impl TaskManager {
     }
 
     /// Build a platform-specific command
-    fn build_command(&self, command: &str, context: &ToolContext) -> Command {
-        let mut cmd = if cfg!(target_os = "windows") {
-            let mut cmd = Command::new("powershell");
-            cmd.args(["-NoProfile", "-NonInteractive", "-Command", command]);
-            cmd
-        } else {
-            let mut cmd = Command::new("sh");
-            cmd.args(["-c", command]);
-            cmd
+    fn build_command(&self, command: &str, context: &ToolContext, shell: &TaskShell) -> Command {
+        let mut cmd = match shell {
+            TaskShell::PlatformDefault => {
+                if cfg!(target_os = "windows") {
+                    let mut cmd = Command::new("powershell");
+                    cmd.args(["-NoProfile", "-NonInteractive", "-Command", command]);
+                    cmd
+                } else {
+                    let mut cmd = Command::new("sh");
+                    cmd.args(["-c", command]);
+                    cmd
+                }
+            }
+            TaskShell::PowerShell { executable_path } => {
+                let mut cmd = Command::new(executable_path);
+                cmd.args(["-NoProfile", "-NonInteractive", "-Command", command]);
+                cmd
+            }
         };
 
         cmd.current_dir(&context.working_directory);

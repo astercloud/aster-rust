@@ -1,6 +1,6 @@
 //! Web 工具 - WebFetch 和 WebSearch
 //!
-//! 对齐 Claude Agent SDK 的 Web 工具功能
+//! 对齐当前工具面的 Web 工具能力
 //!
 //! ## 搜索引擎支持（按优先级）
 //!
@@ -635,7 +635,7 @@ impl WebCache {
 
 /// WebFetchTool - Web 内容获取工具
 ///
-/// 对齐 Claude Agent SDK 的 WebFetchTool 功能
+/// 对齐当前工具面的 WebFetch 能力
 pub struct WebFetchTool {
     client: Client,
     cache: Arc<WebCache>,
@@ -1079,7 +1079,7 @@ impl Tool for WebFetchTool {
 
 /// WebSearchTool - Web 搜索工具
 ///
-/// 对齐 Claude Agent SDK 的 WebSearchTool 功能
+/// 对齐当前工具面的 WebSearch 能力
 pub struct WebSearchTool {
     client: Client,
     cache: Arc<WebCache>,
@@ -1786,10 +1786,10 @@ impl Tool for WebSearchTool {
     }
 
     fn description(&self) -> &str {
-        "允许 Claude 搜索网络并使用结果来提供响应。\n\
-         提供超出 Claude 知识截止日期的最新信息。\n\
+        "允许当前代理搜索网络并使用结果来提供响应。\n\
+         提供超出本地知识截止日期的最新信息。\n\
          返回格式化为搜索结果块的搜索结果信息，包括 Markdown 超链接。\n\
-         用于访问 Claude 知识截止日期之外的信息。\n\
+         用于访问本地知识截止日期之外的信息。\n\
          搜索在单个 API 调用中自动执行。"
     }
 

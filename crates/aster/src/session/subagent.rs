@@ -1,10 +1,11 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 
 use crate::session::extension_data::ExtensionData;
 use crate::session::{extension_data::ExtensionState, Session, SessionManager, SessionType};
 
-pub const SUBAGENT_SESSION_ORIGIN_TOOL: &str = "subagent";
+pub const SUBAGENT_SESSION_ORIGIN_TOOL: &str = "Agent";
 
 /// Subagent session metadata stored in session extension data.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -83,6 +84,16 @@ pub async fn list_subagent_child_sessions(parent_session_id: &str) -> Result<Vec
     ))
 }
 
+pub async fn resolve_named_subagent_child_session(
+    parent_session_id: &str,
+    name: &str,
+) -> Result<Option<Session>> {
+    let sessions = list_subagent_child_sessions(parent_session_id).await?;
+    Ok(resolve_named_subagent_child_session_from_sessions(
+        sessions, name,
+    ))
+}
+
 pub async fn list_subagent_sessions_with_metadata() -> Result<Vec<Session>> {
     let sessions = SessionManager::list_sessions_by_types(&[SessionType::SubAgent]).await?;
     Ok(filter_subagent_child_sessions(sessions, None))
@@ -106,8 +117,41 @@ fn filter_subagent_child_sessions(
         })
         .collect::<Vec<_>>();
 
-    filtered.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+    filtered.sort_by(|left, right| compare_session_recency(right, left));
     filtered
+}
+
+fn resolve_named_subagent_child_session_from_sessions(
+    sessions: Vec<Session>,
+    name: &str,
+) -> Option<Session> {
+    let target = normalize_subagent_name(Some(name))?;
+
+    sessions
+        .into_iter()
+        .filter(|session| {
+            SubagentSessionMetadata::from_session(session)
+                .and_then(|metadata| normalize_subagent_name(metadata.role_hint.as_deref()))
+                .as_deref()
+                == Some(target.as_str())
+        })
+        .max_by(compare_session_recency)
+}
+
+fn normalize_subagent_name(value: Option<&str>) -> Option<String> {
+    let trimmed = value?.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn compare_session_recency(left: &Session, right: &Session) -> Ordering {
+    left.updated_at
+        .cmp(&right.updated_at)
+        .then_with(|| left.created_at.cmp(&right.created_at))
+        .then_with(|| left.id.cmp(&right.id))
 }
 
 #[cfg(test)]
@@ -199,5 +243,85 @@ mod tests {
             .map(|session| session.id)
             .collect::<Vec<_>>();
         assert_eq!(ids, vec!["child-new".to_string(), "child-old".to_string()]);
+    }
+
+    #[test]
+    fn test_resolve_named_subagent_child_session_prefers_latest_updated_match() {
+        let now = Utc::now();
+        let parent = "parent-a";
+
+        let older = Session {
+            id: "child-old".to_string(),
+            session_type: SessionType::SubAgent,
+            updated_at: now - Duration::minutes(5),
+            extension_data: SubagentSessionMetadata::new(parent)
+                .with_role_hint(Some("verifier".to_string()))
+                .into_updated_extension_data(&Session::default())
+                .unwrap(),
+            ..Session::default()
+        };
+        let newer = Session {
+            id: "child-new".to_string(),
+            session_type: SessionType::SubAgent,
+            updated_at: now - Duration::minutes(1),
+            extension_data: SubagentSessionMetadata::new(parent)
+                .with_role_hint(Some("verifier".to_string()))
+                .into_updated_extension_data(&Session::default())
+                .unwrap(),
+            ..Session::default()
+        };
+        let other_name = Session {
+            id: "child-other".to_string(),
+            session_type: SessionType::SubAgent,
+            updated_at: now,
+            extension_data: SubagentSessionMetadata::new(parent)
+                .with_role_hint(Some("reviewer".to_string()))
+                .into_updated_extension_data(&Session::default())
+                .unwrap(),
+            ..Session::default()
+        };
+
+        let resolved = resolve_named_subagent_child_session_from_sessions(
+            vec![older, other_name, newer],
+            " verifier ",
+        )
+        .unwrap();
+
+        assert_eq!(resolved.id, "child-new");
+    }
+
+    #[test]
+    fn test_resolve_named_subagent_child_session_breaks_same_timestamp_ties_by_id() {
+        let now = Utc::now();
+        let parent = "parent-a";
+
+        let older = Session {
+            id: "20260401_49".to_string(),
+            session_type: SessionType::SubAgent,
+            created_at: now,
+            updated_at: now,
+            extension_data: SubagentSessionMetadata::new(parent)
+                .with_role_hint(Some("verifier".to_string()))
+                .into_updated_extension_data(&Session::default())
+                .unwrap(),
+            ..Session::default()
+        };
+        let newer = Session {
+            id: "20260401_50".to_string(),
+            session_type: SessionType::SubAgent,
+            created_at: now,
+            updated_at: now,
+            extension_data: SubagentSessionMetadata::new(parent)
+                .with_role_hint(Some("verifier".to_string()))
+                .into_updated_extension_data(&Session::default())
+                .unwrap(),
+            ..Session::default()
+        };
+
+        let resolved =
+            resolve_named_subagent_child_session_from_sessions(vec![older, newer], "verifier")
+                .unwrap();
+
+        assert_eq!(resolved.id, "20260401_50");
     }
 }

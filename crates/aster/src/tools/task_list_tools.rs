@@ -1,6 +1,6 @@
 //! 新版任务板工具
 //!
-//! 提供与 ClaudeCode 现代任务板语义对齐的一组工具：
+//! 提供与当前任务板语义对齐的一组工具：
 //! - `TaskCreate`
 //! - `TaskList`
 //! - `TaskGet`
@@ -19,7 +19,7 @@ use crate::session::extension_data::{
     persist_task_board_state, resolve_task_board_state, TaskBoardItem, TaskBoardItemStatus,
     TaskBoardState,
 };
-use crate::session::SessionManager;
+use crate::session::{resolve_team_task_list_id, SessionManager};
 
 #[derive(Debug, Default)]
 pub struct TaskListStorage {
@@ -107,20 +107,27 @@ pub struct TaskUpdateInput {
     pub metadata: Option<BTreeMap<String, Value>>,
 }
 
-fn resolve_task_list_id(context: &ToolContext) -> String {
-    context
+async fn resolve_task_list_id(context: &ToolContext) -> String {
+    if let Some(task_list_id) = context
         .environment
         .get("TASK_LIST_ID")
-        .or_else(|| context.environment.get("CLAUDE_CODE_TASK_LIST_ID"))
         .cloned()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| {
-            if context.session_id.trim().is_empty() {
-                "main".to_string()
-            } else {
-                context.session_id.clone()
+    {
+        return task_list_id;
+    }
+
+    if !context.session_id.trim().is_empty() {
+        if let Ok(session) = SessionManager::get_session(&context.session_id, false).await {
+            if let Some(task_list_id) = resolve_team_task_list_id(&session.extension_data) {
+                return task_list_id;
             }
-        })
+        }
+
+        return context.session_id.clone();
+    }
+
+    "main".to_string()
 }
 
 fn ensure_non_empty(value: &str, field_name: &str) -> Result<(), ToolError> {
@@ -379,7 +386,7 @@ impl Tool for TaskCreateTool {
         ensure_non_empty(&input.subject, "subject")?;
         ensure_non_empty(&input.description, "description")?;
 
-        let task_list_id = resolve_task_list_id(context);
+        let task_list_id = resolve_task_list_id(context).await;
         let mut state = load_task_board_state(&self.storage, &task_list_id, context).await;
         let task_id = state.allocate_id();
 
@@ -472,7 +479,7 @@ impl Tool for TaskListTool {
         let _: TaskListInput = serde_json::from_value(params)
             .map_err(|error| ToolError::invalid_params(format!("参数解析失败: {error}")))?;
 
-        let task_list_id = resolve_task_list_id(context);
+        let task_list_id = resolve_task_list_id(context).await;
         let state = load_task_board_state(&self.storage, &task_list_id, context).await;
 
         if state.items.is_empty() {
@@ -605,7 +612,7 @@ impl Tool for TaskGetTool {
             .map_err(|error| ToolError::invalid_params(format!("参数解析失败: {error}")))?;
         ensure_non_empty(&input.task_id, "taskId")?;
 
-        let task_list_id = resolve_task_list_id(context);
+        let task_list_id = resolve_task_list_id(context).await;
         let state = load_task_board_state(&self.storage, &task_list_id, context).await;
         let task = state
             .items
@@ -723,7 +730,7 @@ impl Tool for TaskUpdateTool {
             .map_err(|error| ToolError::invalid_params(format!("参数解析失败: {error}")))?;
         ensure_non_empty(&input.task_id, "taskId")?;
 
-        let task_list_id = resolve_task_list_id(context);
+        let task_list_id = resolve_task_list_id(context).await;
         let mut state = load_task_board_state(&self.storage, &task_list_id, context).await;
         let Some(task_index) = find_task_index(&state, &input.task_id) else {
             return Ok(ToolResult::success("Task not found")

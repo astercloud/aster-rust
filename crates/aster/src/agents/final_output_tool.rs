@@ -4,9 +4,9 @@ use rmcp::model::{CallToolRequestParam, Content, ErrorCode, ErrorData, Tool, Too
 use serde_json::Value;
 use std::borrow::Cow;
 
-pub const FINAL_OUTPUT_TOOL_NAME: &str = "recipe__final_output";
+pub const FINAL_OUTPUT_TOOL_NAME: &str = "StructuredOutput";
 pub const FINAL_OUTPUT_CONTINUATION_MESSAGE: &str =
-    "You MUST call the `final_output` tool NOW with the final output for the user.";
+    "You MUST call the `StructuredOutput` tool NOW with the structured final output for the user.";
 
 #[derive(Debug)]
 pub struct FinalOutputTool {
@@ -52,17 +52,17 @@ impl FinalOutputTool {
 
     pub fn tool(&self) -> Tool {
         let instructions = formatdoc! {r#"
-            The final_output tool collects the final output for the user and provides validation for structured JSON final output against a predefined schema.
+            The StructuredOutput tool validates and returns the final structured output for the user against a predefined JSON schema.
 
-            This final_output tool MUST be called with the final output for the user.
+            This tool MUST be called exactly once when you are ready to return the final structured result.
             
             Purpose:
-            - Collects the final output for the user
-            - Ensures that final outputs conform to the expected JSON structure
-            - Provides clear validation feedback when outputs don't match the schema
+            - Return the final response as structured JSON
+            - Ensure the final output conforms to the expected JSON structure
+            - Provide clear validation feedback when outputs do not match the schema
             
             Usage:
-            - Call the `final_output` tool with your JSON final output passed as the argument.
+            - Call the `StructuredOutput` tool with the JSON object that should be returned to the caller.
             
             The expected JSON schema format is:
 
@@ -79,7 +79,7 @@ impl FinalOutputTool {
             self.output_schema.as_object().unwrap().clone(),
         )
         .annotate(ToolAnnotations {
-            title: Some("Final Output".to_string()),
+            title: Some("Structured Output".to_string()),
             read_only_hint: Some(false),
             destructive_hint: Some(false),
             idempotent_hint: Some(true),
@@ -89,10 +89,10 @@ impl FinalOutputTool {
 
     pub fn system_prompt(&self) -> String {
         formatdoc! {r#"
-            # Final Output Instructions
+            # Structured Output Instructions
 
-            You MUST use the `final_output` tool to collect the final output for the user rather than providing the output directly in your response.
-            The final output MUST be a valid JSON object that is provided to the `final_output` tool when called and it must match the following schema:
+            You MUST use the `StructuredOutput` tool to return the final structured output for the user rather than providing the output directly in your response.
+            The final output MUST be a valid JSON object provided to the `StructuredOutput` tool, and it must match the following schema:
 
             {}
 
@@ -133,7 +133,7 @@ impl FinalOutputTool {
                         self.final_output = Some(Self::parsed_final_output_string(parsed_value));
                         ToolCallResult::from(Ok(rmcp::model::CallToolResult {
                             content: vec![Content::text(
-                                "Final output successfully collected.".to_string(),
+                                "Structured output captured successfully.".to_string(),
                             )],
                             structured_content: None,
                             is_error: Some(false),

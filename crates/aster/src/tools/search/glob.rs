@@ -142,7 +142,7 @@ impl GlobTool {
 #[async_trait]
 impl Tool for GlobTool {
     fn name(&self) -> &str {
-        "glob"
+        "Glob"
     }
 
     fn description(&self) -> &str {
@@ -456,7 +456,7 @@ mod tests {
     #[test]
     fn test_glob_tool_name() {
         let tool = GlobTool::new();
-        assert_eq!(tool.name(), "glob");
+        assert_eq!(tool.name(), "Glob");
     }
 
     #[test]

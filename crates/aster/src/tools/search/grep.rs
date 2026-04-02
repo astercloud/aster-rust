@@ -533,7 +533,7 @@ impl GrepTool {
 #[async_trait]
 impl Tool for GrepTool {
     fn name(&self) -> &str {
-        "grep"
+        "Grep"
     }
 
     fn description(&self) -> &str {
@@ -974,7 +974,7 @@ mod tests {
     #[test]
     fn test_grep_tool_name() {
         let tool = GrepTool::new();
-        assert_eq!(tool.name(), "grep");
+        assert_eq!(tool.name(), "Grep");
     }
 
     #[test]

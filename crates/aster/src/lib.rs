@@ -71,4 +71,5 @@ pub mod tool_monitor;
 pub mod tools;
 pub mod tracing;
 pub mod updater;
+pub mod user_message_manager;
 pub mod utils;

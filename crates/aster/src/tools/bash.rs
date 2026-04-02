@@ -546,7 +546,7 @@ impl BashTool {
 impl Tool for BashTool {
     /// Returns the tool name
     fn name(&self) -> &str {
-        "bash"
+        "Bash"
     }
 
     /// Returns the tool description
@@ -835,7 +835,7 @@ mod tests {
     #[test]
     fn test_tool_name() {
         let tool = BashTool::new();
-        assert_eq!(tool.name(), "bash");
+        assert_eq!(tool.name(), "Bash");
     }
 
     #[test]

@@ -105,7 +105,7 @@ impl TodoState {
 /// 结构化 TODO 条目状态
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum TodoListItemStatus {
+pub(crate) enum TodoListItemStatus {
     #[default]
     Pending,
     InProgress,
@@ -120,11 +120,19 @@ impl TodoListItemStatus {
             Self::Completed => "[x]",
         }
     }
+
+    fn to_task_board_status(&self) -> TaskBoardItemStatus {
+        match self {
+            Self::Pending => TaskBoardItemStatus::Pending,
+            Self::InProgress => TaskBoardItemStatus::InProgress,
+            Self::Completed => TaskBoardItemStatus::Completed,
+        }
+    }
 }
 
 /// 结构化 TODO 条目
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TodoListItem {
+pub(crate) struct TodoListItem {
     pub content: String,
     pub status: TodoListItemStatus,
     pub active_form: String,
@@ -132,7 +140,7 @@ pub struct TodoListItem {
 
 /// 结构化 TODO 清单状态
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub struct TodoListState {
+pub(crate) struct TodoListState {
     #[serde(default)]
     pub items: Vec<TodoListItem>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -145,7 +153,7 @@ impl ExtensionState for TodoListState {
 }
 
 impl TodoListState {
-    pub fn new(items: Vec<TodoListItem>) -> Self {
+    pub(crate) fn new(items: Vec<TodoListItem>) -> Self {
         let rendered_markdown = Some(Self::render_items(&items));
         Self {
             items,
@@ -153,7 +161,7 @@ impl TodoListState {
         }
     }
 
-    pub fn from_markdown(content: impl Into<String>) -> Self {
+    pub(crate) fn from_markdown(content: impl Into<String>) -> Self {
         let rendered_markdown = content.into();
         let items = Self::parse_items(&rendered_markdown);
         Self {
@@ -162,7 +170,7 @@ impl TodoListState {
         }
     }
 
-    pub fn markdown(&self) -> String {
+    pub(crate) fn markdown(&self) -> String {
         self.rendered_markdown
             .clone()
             .unwrap_or_else(|| Self::render_items(&self.items))
@@ -294,7 +302,7 @@ impl TaskBoardState {
         id.to_string()
     }
 
-    pub fn to_todo_list_state(&self) -> TodoListState {
+    pub(crate) fn to_todo_list_state(&self) -> TodoListState {
         TodoListState::new(
             self.items
                 .iter()
@@ -322,10 +330,41 @@ impl TaskBoardState {
     }
 }
 
-/// Resolve the current structured todo state, preferring `todo.v1`
-/// and falling back to legacy `todo.v0` when needed.
-pub fn resolve_todo_list_state(extension_data: &ExtensionData) -> Option<TodoListState> {
-    resolve_task_board_state(extension_data)
+impl TodoListState {
+    pub(crate) fn to_task_board_state(&self) -> TaskBoardState {
+        let items = self
+            .items
+            .iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let subject = item.content.trim().to_string();
+                let active_form = item.active_form.trim();
+                TaskBoardItem {
+                    id: (index + 1).to_string(),
+                    subject: subject.clone(),
+                    description: String::new(),
+                    active_form: if active_form.is_empty() || active_form == subject {
+                        None
+                    } else {
+                        Some(active_form.to_string())
+                    },
+                    status: item.status.to_task_board_status(),
+                    owner: None,
+                    blocks: Vec::new(),
+                    blocked_by: Vec::new(),
+                    metadata: None,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let next_id = items.len().saturating_add(1) as u64;
+        TaskBoardState::with_next_id(items, next_id)
+    }
+}
+
+/// crate 内部兼容读取旧 todo snapshot，优先从 current task board 派生。
+pub(crate) fn resolve_todo_list_state(extension_data: &ExtensionData) -> Option<TodoListState> {
+    TaskBoardState::from_extension_data(extension_data)
         .map(|state| state.to_todo_list_state())
         .or_else(|| TodoListState::from_extension_data(extension_data))
         .or_else(|| {
@@ -334,8 +373,8 @@ pub fn resolve_todo_list_state(extension_data: &ExtensionData) -> Option<TodoLis
         })
 }
 
-/// Resolve the current todo markdown, preferring the structured state render.
-pub fn resolve_todo_markdown(extension_data: &ExtensionData) -> Option<String> {
+/// crate 内部兼容导出旧 todo markdown，避免继续暴露旧 surface。
+pub(crate) fn resolve_todo_markdown(extension_data: &ExtensionData) -> Option<String> {
     resolve_todo_list_state(extension_data)
         .map(|state| state.markdown())
         .filter(|content| !content.trim().is_empty())
@@ -345,8 +384,8 @@ fn clear_legacy_todo_state(extension_data: &mut ExtensionData) {
     extension_data.remove_extension_state(TodoState::EXTENSION_NAME, TodoState::VERSION);
 }
 
-/// Persist structured todo state and clear the legacy markdown compat shadow on write.
-pub fn persist_todo_list_state(
+/// crate 内部兼容写入旧 todo snapshot，并在写入后清掉 markdown 旧影子。
+pub(crate) fn persist_todo_list_state(
     extension_data: &mut ExtensionData,
     todo_list_state: TodoListState,
 ) -> Result<()> {
@@ -356,8 +395,17 @@ pub fn persist_todo_list_state(
 }
 
 /// Resolve the current structured task board state.
+/// 读取优先级为 task_list.v1 -> todo.v1 -> todo.v0，统一向 task board 语义收敛。
 pub fn resolve_task_board_state(extension_data: &ExtensionData) -> Option<TaskBoardState> {
     TaskBoardState::from_extension_data(extension_data)
+        .or_else(|| {
+            TodoListState::from_extension_data(extension_data)
+                .map(|state| state.to_task_board_state())
+        })
+        .or_else(|| {
+            TodoState::from_extension_data(extension_data)
+                .map(|state| TodoListState::from_markdown(state.content).to_task_board_state())
+        })
 }
 
 /// Persist structured task board state and update the derived todo snapshot.
@@ -373,8 +421,8 @@ pub fn persist_task_board_state(
     Ok(())
 }
 
-/// Persist markdown todo content through the unified todo state boundary.
-pub fn persist_todo_markdown(
+/// crate 内部兼容入口：把 markdown todo 写入统一的 task/todo 快照边界。
+pub(crate) fn persist_todo_markdown(
     extension_data: &mut ExtensionData,
     content: impl Into<String>,
 ) -> Result<()> {
@@ -496,6 +544,45 @@ mod tests {
         assert_eq!(retrieved.next_id, 4);
         assert_eq!(retrieved.items[0].subject, "整理运行时边界");
         assert_eq!(retrieved.items[0].status, TaskBoardItemStatus::InProgress);
+    }
+
+    #[test]
+    fn test_resolve_task_board_state_falls_back_to_todo_list_state() {
+        let mut extension_data = ExtensionData::new();
+        TodoListState::new(vec![TodoListItem {
+            content: "旧 todo".to_string(),
+            status: TodoListItemStatus::InProgress,
+            active_form: "旧 todo 处理中".to_string(),
+        }])
+        .to_extension_data(&mut extension_data)
+        .unwrap();
+
+        let resolved = resolve_task_board_state(&extension_data).unwrap();
+        assert_eq!(resolved.next_id, 2);
+        assert_eq!(resolved.items.len(), 1);
+        assert_eq!(resolved.items[0].id, "1");
+        assert_eq!(resolved.items[0].subject, "旧 todo");
+        assert_eq!(resolved.items[0].status, TaskBoardItemStatus::InProgress);
+        assert_eq!(
+            resolved.items[0].active_form.as_deref(),
+            Some("旧 todo 处理中")
+        );
+    }
+
+    #[test]
+    fn test_resolve_task_board_state_falls_back_to_legacy_todo_markdown() {
+        let mut extension_data = ExtensionData::new();
+        TodoState::new("- [x] Legacy".to_string())
+            .to_extension_data(&mut extension_data)
+            .unwrap();
+
+        let resolved = resolve_task_board_state(&extension_data).unwrap();
+        assert_eq!(resolved.next_id, 2);
+        assert_eq!(resolved.items.len(), 1);
+        assert_eq!(resolved.items[0].id, "1");
+        assert_eq!(resolved.items[0].subject, "Legacy");
+        assert_eq!(resolved.items[0].status, TaskBoardItemStatus::Completed);
+        assert_eq!(resolved.items[0].active_form, None);
     }
 
     #[test]

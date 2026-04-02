@@ -1,6 +1,6 @@
 # Chrome MCP 集成
 
-与官方 Claude Code Chrome 扩展集成。
+与官方 Chrome 扩展方案集成。
 
 ## 模块结构
 

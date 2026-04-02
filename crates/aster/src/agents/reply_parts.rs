@@ -581,7 +581,7 @@ mod tests {
     async fn prepare_tools_sorts_and_includes_frontend_and_list_tools() -> anyhow::Result<()> {
         let agent = crate::agents::Agent::new();
 
-        // 设置 mock scheduler 以便 platform__ 工具可用
+        // 设置 mock scheduler 以便 current cron tools 可用
         agent
             .set_scheduler(std::sync::Arc::new(MockScheduler))
             .await;
@@ -634,9 +634,15 @@ mod tests {
             .prepare_tools_and_prompt(&working_dir, None, &ModelConfig::new("test-model").unwrap())
             .await?;
 
-        // Ensure both platform and frontend tools are present
+        // Ensure both current cron tools and frontend tools are present
         let names: Vec<String> = tools.iter().map(|t| t.name.clone().into_owned()).collect();
-        assert!(names.iter().any(|n| n.starts_with("platform__")));
+        assert!(names.iter().any(|n| n == "CronCreate"));
+        assert!(names.iter().any(|n| n == "CronList"));
+        assert!(names.iter().any(|n| n == "CronDelete"));
+        assert!(names.iter().any(|n| n == "EnterWorktree"));
+        assert!(names.iter().any(|n| n == "ExitWorktree"));
+        assert!(names.iter().any(|n| n == "SendUserMessage"));
+        assert!(!names.iter().any(|n| n == "platform__manage_schedule"));
         assert!(names.iter().any(|n| n == "frontend__a_tool"));
         assert!(names.iter().any(|n| n == "frontend__z_tool"));
 
@@ -679,7 +685,8 @@ mod tests {
             .prepare_tools_and_prompt(&working_dir, None, &ModelConfig::new("test-model").unwrap())
             .await?;
 
-        assert!(system_prompt.contains("# Final Output Instructions"));
+        assert!(system_prompt.contains("# Structured Output Instructions"));
+        assert!(system_prompt.contains("StructuredOutput"));
         assert!(system_prompt.contains("\"answer\""));
         Ok(())
     }

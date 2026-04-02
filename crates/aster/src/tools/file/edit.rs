@@ -433,7 +433,7 @@ impl EditTool {
 #[async_trait]
 impl Tool for EditTool {
     fn name(&self) -> &str {
-        "edit"
+        "Edit"
     }
 
     fn description(&self) -> &str {
@@ -920,7 +920,7 @@ mod tests {
     #[test]
     fn test_tool_name() {
         let tool = create_edit_tool();
-        assert_eq!(tool.name(), "edit");
+        assert_eq!(tool.name(), "Edit");
     }
 
     #[test]

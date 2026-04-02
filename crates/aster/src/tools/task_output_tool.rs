@@ -1,6 +1,6 @@
 //! TaskOutput Tool - 任务输出查询工具
 //!
-//! 用于查询后台任务的状态和输出，对齐 Claude Agent SDK
+//! 用于查询后台任务的状态和输出，对齐当前工具面
 
 use super::base::{PermissionCheckResult, Tool};
 use super::context::{ToolContext, ToolResult};
@@ -28,7 +28,7 @@ pub struct TaskOutputInput {
 
 /// TaskOutputTool - 查询任务输出和状态
 ///
-/// 对齐 Claude Agent SDK 的 TaskOutputTool 功能
+/// 对齐当前工具面的 TaskOutput 能力
 pub struct TaskOutputTool {
     /// 任务管理器
     task_manager: Arc<TaskManager>,

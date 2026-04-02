@@ -11,7 +11,6 @@ mod tests {
     #[cfg(test)]
     mod schedule_tool_tests {
         use super::*;
-        use aster::agents::platform_tools::PLATFORM_MANAGE_SCHEDULE_TOOL_NAME;
         use aster::scheduler::{ScheduledJob, SchedulerError};
         use aster::scheduler_trait::SchedulerTrait;
         use aster::session::Session;
@@ -19,6 +18,10 @@ mod tests {
         use chrono::{DateTime, Utc};
         use std::path::PathBuf;
         use std::sync::Arc;
+
+        const CRON_CREATE_TOOL_NAME: &str = "CronCreate";
+        const CRON_LIST_TOOL_NAME: &str = "CronList";
+        const CRON_DELETE_TOOL_NAME: &str = "CronDelete";
 
         struct MockScheduler {
             jobs: tokio::sync::Mutex<Vec<ScheduledJob>>,
@@ -117,76 +120,78 @@ mod tests {
             let mock_scheduler = Arc::new(MockScheduler::new());
             agent.set_scheduler(mock_scheduler.clone()).await;
 
-            // Test that the schedule management tool is available in the tools list
+            // Test that the current cron tools are available in the tools list
             let tools = agent.list_tools(None).await;
-            let schedule_tool = tools
-                .iter()
-                .find(|tool| tool.name == PLATFORM_MANAGE_SCHEDULE_TOOL_NAME);
-            assert!(schedule_tool.is_some());
+            let create_tool = tools.iter().find(|tool| tool.name == CRON_CREATE_TOOL_NAME);
+            let list_tool = tools.iter().find(|tool| tool.name == CRON_LIST_TOOL_NAME);
+            let delete_tool = tools.iter().find(|tool| tool.name == CRON_DELETE_TOOL_NAME);
 
-            let tool = schedule_tool.unwrap();
-            assert!(tool
+            assert!(create_tool.is_some());
+            assert!(list_tool.is_some());
+            assert!(delete_tool.is_some());
+
+            assert!(create_tool
+                .unwrap()
                 .description
                 .clone()
                 .unwrap_or_default()
-                .contains("Manage scheduled recipe execution"));
+                .contains("Schedule a prompt to run"));
+            assert!(list_tool
+                .unwrap()
+                .description
+                .clone()
+                .unwrap_or_default()
+                .contains("List scheduled cron jobs"));
+            assert!(delete_tool
+                .unwrap()
+                .description
+                .clone()
+                .unwrap_or_default()
+                .contains("Cancel a scheduled cron job"));
         }
 
         #[tokio::test]
         async fn test_schedule_management_tool_no_scheduler() {
             let agent = Agent::new();
-            // Don't set scheduler - verify the tool is NOT available without scheduler
-            // This is the expected behavior: schedule tool requires scheduler service
+            // Don't set scheduler - verify the current cron tools are NOT available without scheduler
+            // This is the expected behavior: these tools require scheduler service
 
             let tools = agent.list_tools(None).await;
-            let schedule_tool = tools
-                .iter()
-                .find(|tool| tool.name == PLATFORM_MANAGE_SCHEDULE_TOOL_NAME);
             assert!(
-                schedule_tool.is_none(),
-                "Schedule tool should NOT be available without scheduler"
+                tools.iter().all(|tool| {
+                    tool.name != CRON_CREATE_TOOL_NAME
+                        && tool.name != CRON_LIST_TOOL_NAME
+                        && tool.name != CRON_DELETE_TOOL_NAME
+                }),
+                "Current cron tools should NOT be available without scheduler"
             );
         }
 
         #[tokio::test]
-        async fn test_schedule_management_tool_in_platform_tools() {
+        async fn test_schedule_management_tool_in_current_surface() {
             let agent = Agent::new();
             let mock_scheduler = Arc::new(MockScheduler::new());
             agent.set_scheduler(mock_scheduler.clone()).await;
 
-            let tools = agent.list_tools(Some("platform".to_string())).await;
+            let tools = agent.list_tools(None).await;
 
-            // Check that the schedule management tool is included in platform tools
-            let schedule_tool = tools
-                .iter()
-                .find(|tool| tool.name == PLATFORM_MANAGE_SCHEDULE_TOOL_NAME);
-            assert!(schedule_tool.is_some());
+            // Check that the current cron create tool is included in the current surface
+            let create_tool = tools.iter().find(|tool| tool.name == CRON_CREATE_TOOL_NAME);
+            assert!(create_tool.is_some());
 
-            let tool = schedule_tool.unwrap();
+            let tool = create_tool.unwrap();
             assert!(tool
                 .description
                 .clone()
                 .unwrap_or_default()
-                .contains("Manage scheduled recipe execution"));
+                .contains("Schedule a prompt to run"));
 
-            // Verify the tool has the expected actions in its schema
+            // Verify the create schema exposes the expected fields
             if let Some(properties) = tool.input_schema.get("properties") {
-                if let Some(action_prop) = properties.get("action") {
-                    if let Some(enum_values) = action_prop.get("enum") {
-                        let actions: Vec<String> = enum_values
-                            .as_array()
-                            .unwrap()
-                            .iter()
-                            .map(|v| v.as_str().unwrap().to_string())
-                            .collect();
-
-                        // Check that our session_content action is included
-                        assert!(actions.contains(&"session_content".to_string()));
-                        assert!(actions.contains(&"list".to_string()));
-                        assert!(actions.contains(&"create".to_string()));
-                        assert!(actions.contains(&"sessions".to_string()));
-                    }
-                }
+                assert!(properties.get("cron").is_some());
+                assert!(properties.get("prompt").is_some());
+                assert!(properties.get("recurring").is_some());
+                assert!(properties.get("durable").is_some());
             }
         }
 
@@ -197,28 +202,23 @@ mod tests {
             agent.set_scheduler(mock_scheduler.clone()).await;
 
             let tools = agent.list_tools(None).await;
-            let schedule_tool = tools
-                .iter()
-                .find(|tool| tool.name == PLATFORM_MANAGE_SCHEDULE_TOOL_NAME);
-            assert!(schedule_tool.is_some());
+            let delete_tool = tools.iter().find(|tool| tool.name == CRON_DELETE_TOOL_NAME);
+            assert!(delete_tool.is_some());
 
-            let tool = schedule_tool.unwrap();
+            let tool = delete_tool.unwrap();
 
-            // Verify the tool schema has the session_id parameter for session_content action
+            // Verify the delete schema requires an id parameter
             if let Some(properties) = tool.input_schema.get("properties") {
-                assert!(properties.get("session_id").is_some());
+                assert!(properties.get("id").is_some());
 
-                if let Some(session_id_prop) = properties.get("session_id") {
-                    assert_eq!(
-                        session_id_prop.get("type").unwrap().as_str().unwrap(),
-                        "string"
-                    );
-                    assert!(session_id_prop
+                if let Some(id_prop) = properties.get("id") {
+                    assert_eq!(id_prop.get("type").unwrap().as_str().unwrap(), "string");
+                    assert!(id_prop
                         .get("description")
                         .unwrap()
                         .as_str()
                         .unwrap()
-                        .contains("Session identifier for session_content action"));
+                        .contains("Job ID returned by CronCreate"));
                 }
             }
         }

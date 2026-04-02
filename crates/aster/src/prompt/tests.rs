@@ -57,6 +57,12 @@ fn test_prompt_cache_miss() {
 }
 
 #[test]
+fn test_tool_guidelines_do_not_unconditionally_reference_resource_helpers() {
+    assert!(!TOOL_GUIDELINES.contains("ListMcpResourcesTool"));
+    assert!(!TOOL_GUIDELINES.contains("ReadMcpResourceTool"));
+}
+
+#[test]
 fn test_prompt_cache_is_valid() {
     let mut cache = PromptCache::new(None, None);
 

@@ -15,11 +15,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration as StdDuration;
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Local, Utc};
+use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tokio_cron_scheduler::{job::JobId, Job, JobScheduler as TokioJobScheduler};
@@ -118,6 +121,14 @@ pub struct ScheduledJob {
     pub id: String,
     pub source: String,
     pub cron: String,
+    #[serde(default = "default_true")]
+    pub recurring: bool,
+    #[serde(default = "default_true")]
+    pub durable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scheduled_for: Option<DateTime<Utc>>,
     pub last_run: Option<DateTime<Utc>>,
     #[serde(default)]
     pub currently_running: bool,
@@ -129,18 +140,172 @@ pub struct ScheduledJob {
     pub process_start_time: Option<DateTime<Utc>>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+impl ScheduledJob {
+    fn persisted(&self) -> bool {
+        self.durable
+    }
+}
+
+fn normalize_scheduler_cron_expression(cron: &str) -> Result<String, SchedulerError> {
+    let normalized = cron.split_whitespace().collect::<Vec<_>>().join(" ");
+    let parts: Vec<&str> = normalized.split_whitespace().collect();
+    match parts.len() {
+        5 => Ok(format!("0 {normalized}")),
+        6 => Ok(normalized),
+        _ => Err(SchedulerError::CronParseError(format!(
+            "Invalid cron expression '{}': expected 5 or 6 fields, got {}",
+            cron,
+            parts.len()
+        ))),
+    }
+}
+
+fn next_run_from_cron_expression(cron: &str) -> Result<DateTime<Utc>, SchedulerError> {
+    let normalized = normalize_scheduler_cron_expression(cron)?;
+    let schedule = Schedule::from_str(&normalized)
+        .map_err(|e| SchedulerError::CronParseError(e.to_string()))?;
+
+    schedule
+        .after(&Local::now())
+        .next()
+        .map(|value| value.with_timezone(&Utc))
+        .ok_or_else(|| {
+            SchedulerError::CronParseError(format!(
+                "Cron expression '{}' has no future run time",
+                cron
+            ))
+        })
+}
+
 async fn persist_jobs(
     storage_path: &Path,
     jobs: &Arc<Mutex<JobsMap>>,
 ) -> Result<(), SchedulerError> {
     let jobs_guard = jobs.lock().await;
-    let list: Vec<ScheduledJob> = jobs_guard.values().map(|(_, j)| j.clone()).collect();
+    let list: Vec<ScheduledJob> = jobs_guard
+        .values()
+        .map(|(_, j)| j.clone())
+        .filter(ScheduledJob::persisted)
+        .collect();
     if let Some(parent) = storage_path.parent() {
         fs::create_dir_all(parent)?;
     }
     let data = serde_json::to_string_pretty(&list)?;
     fs::write(storage_path, data)?;
     Ok(())
+}
+
+async fn run_scheduled_job(
+    tokio_scheduler: TokioJobScheduler,
+    jobs: Arc<Mutex<JobsMap>>,
+    storage_path: PathBuf,
+    running_tasks: Arc<Mutex<RunningTasksMap>>,
+    task_job_id: String,
+    job_uuid: JobId,
+    job_to_execute: ScheduledJob,
+) {
+    let should_execute = {
+        let jobs_guard = jobs.lock().await;
+        jobs_guard
+            .get(&task_job_id)
+            .map(|(_, job)| !job.paused)
+            .unwrap_or(false)
+    };
+
+    if !should_execute {
+        return;
+    }
+
+    let current_time = Utc::now();
+    {
+        let mut jobs_guard = jobs.lock().await;
+        if let Some((_, job)) = jobs_guard.get_mut(&task_job_id) {
+            job.last_run = Some(current_time);
+            job.currently_running = true;
+            job.process_start_time = Some(current_time);
+        }
+    }
+
+    if let Err(e) = persist_jobs(&storage_path, &jobs).await {
+        tracing::error!("Failed to persist job status: {}", e);
+    }
+
+    let cancel_token = CancellationToken::new();
+    {
+        let mut tasks = running_tasks.lock().await;
+        tasks.insert(task_job_id.clone(), cancel_token.clone());
+    }
+
+    let result = execute_job(
+        job_to_execute.clone(),
+        jobs.clone(),
+        task_job_id.clone(),
+        cancel_token,
+    )
+    .await;
+
+    {
+        let mut tasks = running_tasks.lock().await;
+        tasks.remove(&task_job_id);
+    }
+
+    if job_to_execute.recurring {
+        {
+            let mut jobs_guard = jobs.lock().await;
+            if let Some((_, job)) = jobs_guard.get_mut(&task_job_id) {
+                job.currently_running = false;
+                job.current_session_id = None;
+                job.process_start_time = None;
+            }
+        }
+
+        if let Err(e) = persist_jobs(&storage_path, &jobs).await {
+            tracing::error!("Failed to persist job completion: {}", e);
+        }
+    } else {
+        let recipe_path = {
+            let mut jobs_guard = jobs.lock().await;
+            jobs_guard
+                .remove(&task_job_id)
+                .map(|(_, job)| job.source)
+                .unwrap_or_else(|| job_to_execute.source.clone())
+        };
+
+        if let Err(e) = tokio_scheduler.remove(&job_uuid).await {
+            tracing::warn!(
+                "Failed to remove completed one-shot job '{}' from scheduler: {}",
+                task_job_id,
+                e
+            );
+        }
+
+        let recipe_path = Path::new(&recipe_path);
+        if recipe_path.exists() {
+            if let Err(e) = fs::remove_file(recipe_path) {
+                tracing::warn!(
+                    "Failed to remove completed one-shot recipe '{}': {}",
+                    recipe_path.display(),
+                    e
+                );
+            }
+        }
+
+        if let Err(e) = persist_jobs(&storage_path, &jobs).await {
+            tracing::error!("Failed to persist one-shot cleanup: {}", e);
+        }
+    }
+
+    match result {
+        Ok(_) => tracing::info!("Job '{}' completed", task_job_id),
+        Err(ref e) => {
+            tracing::error!("Job '{}' failed: {}", task_job_id, e);
+            crate::posthog::emit_error("scheduler_job_failed", &e.to_string());
+        }
+    }
 }
 
 pub struct Scheduler {
@@ -181,106 +346,68 @@ impl Scheduler {
         let jobs_arc = self.jobs.clone();
         let storage_path = self.storage_path.clone();
         let running_tasks_arc = self.running_tasks.clone();
+        let tokio_scheduler = self.tokio_scheduler.clone();
 
-        let cron_parts: Vec<&str> = job.cron.split_whitespace().collect();
-        let cron = match cron_parts.len() {
-            5 => {
-                tracing::warn!(
-                    "Job '{}' has legacy 5-field cron '{}', converting to 6-field",
-                    job.id,
-                    job.cron
-                );
-                format!("0 {}", job.cron)
-            }
-            6 => job.cron.clone(),
-            _ => {
-                return Err(SchedulerError::CronParseError(format!(
-                    "Invalid cron expression '{}': expected 5 or 6 fields, got {}",
-                    job.cron,
-                    cron_parts.len()
-                )))
-            }
-        };
+        if job.recurring {
+            let cron = normalize_scheduler_cron_expression(&job.cron)?;
+            let local_tz = Local::now().timezone();
 
-        let local_tz = Local::now().timezone();
+            Job::new_async_tz(&cron, local_tz, move |job_uuid, _l| {
+                tracing::info!("Cron task triggered for job '{}'", job_for_task.id);
+                let task_job_id = job_for_task.id.clone();
+                let current_jobs_arc = jobs_arc.clone();
+                let local_storage_path = storage_path.clone();
+                let job_to_execute = job_for_task.clone();
+                let running_tasks = running_tasks_arc.clone();
+                let scheduler = tokio_scheduler.clone();
 
-        Job::new_async_tz(&cron, local_tz, move |_uuid, _l| {
-            tracing::info!("Cron task triggered for job '{}'", job_for_task.id);
-            let task_job_id = job_for_task.id.clone();
-            let current_jobs_arc = jobs_arc.clone();
-            let local_storage_path = storage_path.clone();
-            let job_to_execute = job_for_task.clone();
-            let running_tasks = running_tasks_arc.clone();
-
-            Box::pin(async move {
-                let should_execute = {
-                    let jobs_guard = current_jobs_arc.lock().await;
-                    jobs_guard
-                        .get(&task_job_id)
-                        .map(|(_, j)| !j.paused)
-                        .unwrap_or(false)
-                };
-
-                if !should_execute {
-                    return;
-                }
-
-                let current_time = Utc::now();
-                {
-                    let mut jobs_guard = current_jobs_arc.lock().await;
-                    if let Some((_, job)) = jobs_guard.get_mut(&task_job_id) {
-                        job.last_run = Some(current_time);
-                        job.currently_running = true;
-                        job.process_start_time = Some(current_time);
-                    }
-                }
-
-                if let Err(e) = persist_jobs(&local_storage_path, &current_jobs_arc).await {
-                    tracing::error!("Failed to persist job status: {}", e);
-                }
-
-                let cancel_token = CancellationToken::new();
-                {
-                    let mut tasks = running_tasks.lock().await;
-                    tasks.insert(task_job_id.clone(), cancel_token.clone());
-                }
-
-                let result = execute_job(
-                    job_to_execute,
-                    current_jobs_arc.clone(),
-                    task_job_id.clone(),
-                    cancel_token.clone(),
-                )
-                .await;
-
-                {
-                    let mut tasks = running_tasks.lock().await;
-                    tasks.remove(&task_job_id);
-                }
-
-                {
-                    let mut jobs_guard = current_jobs_arc.lock().await;
-                    if let Some((_, job)) = jobs_guard.get_mut(&task_job_id) {
-                        job.currently_running = false;
-                        job.current_session_id = None;
-                        job.process_start_time = None;
-                    }
-                }
-
-                if let Err(e) = persist_jobs(&local_storage_path, &current_jobs_arc).await {
-                    tracing::error!("Failed to persist job completion: {}", e);
-                }
-
-                match result {
-                    Ok(_) => tracing::info!("Job '{}' completed", task_job_id),
-                    Err(ref e) => {
-                        tracing::error!("Job '{}' failed: {}", task_job_id, e);
-                        crate::posthog::emit_error("scheduler_job_failed", &e.to_string());
-                    }
-                }
+                Box::pin(async move {
+                    run_scheduled_job(
+                        scheduler,
+                        current_jobs_arc,
+                        local_storage_path,
+                        running_tasks,
+                        task_job_id,
+                        job_uuid,
+                        job_to_execute,
+                    )
+                    .await;
+                })
             })
-        })
-        .map_err(|e| SchedulerError::CronParseError(e.to_string()))
+            .map_err(|e| SchedulerError::CronParseError(e.to_string()))
+        } else {
+            let scheduled_for = job
+                .scheduled_for
+                .unwrap_or(next_run_from_cron_expression(&job.cron)?);
+            let delay = scheduled_for
+                .signed_duration_since(Utc::now())
+                .to_std()
+                .unwrap_or_else(|_| StdDuration::from_secs(0));
+
+            Job::new_one_shot_async(delay, move |job_uuid, _l| {
+                tracing::info!("One-shot cron task triggered for job '{}'", job_for_task.id);
+                let task_job_id = job_for_task.id.clone();
+                let current_jobs_arc = jobs_arc.clone();
+                let local_storage_path = storage_path.clone();
+                let job_to_execute = job_for_task.clone();
+                let running_tasks = running_tasks_arc.clone();
+                let scheduler = tokio_scheduler.clone();
+
+                Box::pin(async move {
+                    run_scheduled_job(
+                        scheduler,
+                        current_jobs_arc,
+                        local_storage_path,
+                        running_tasks,
+                        task_job_id,
+                        job_uuid,
+                        job_to_execute,
+                    )
+                    .await;
+                })
+            })
+            .map_err(|e| SchedulerError::CronParseError(e.to_string()))
+        }
     }
 
     pub async fn add_scheduled_job(
@@ -296,6 +423,10 @@ impl Scheduler {
         }
 
         let mut stored_job = original_job_spec;
+        if !stored_job.recurring && stored_job.scheduled_for.is_none() {
+            stored_job.scheduled_for = Some(next_run_from_cron_expression(&stored_job.cron)?);
+        }
+
         if make_copy {
             let original_recipe_path = Path::new(&stored_job.source);
             if !original_recipe_path.is_file() {
@@ -362,6 +493,10 @@ impl Scheduler {
                         id: job_id,
                         source: recipe_path_str,
                         cron,
+                        recurring: true,
+                        durable: true,
+                        prompt: None,
+                        scheduled_for: None,
                         last_run: None,
                         currently_running: false,
                         paused: false,
@@ -429,7 +564,7 @@ impl Scheduler {
             }
         };
 
-        for job_to_load in list {
+        for mut job_to_load in list {
             if !Path::new(&job_to_load.source).exists() {
                 tracing::warn!(
                     "Recipe file {} not found, skipping job '{}'",
@@ -437,6 +572,20 @@ impl Scheduler {
                     job_to_load.id
                 );
                 continue;
+            }
+
+            if !job_to_load.recurring && job_to_load.scheduled_for.is_none() {
+                match next_run_from_cron_expression(&job_to_load.cron) {
+                    Ok(next_run) => job_to_load.scheduled_for = Some(next_run),
+                    Err(e) => {
+                        tracing::error!(
+                            "Failed to recover next run for one-shot job '{}': {}. Skipping.",
+                            job_to_load.id,
+                            e
+                        );
+                        continue;
+                    }
+                }
             }
 
             let cron_task = match self.create_cron_task(job_to_load.clone()) {
@@ -545,6 +694,7 @@ impl Scheduler {
                 None => return Err(SchedulerError::JobNotFound(sched_id.to_string())),
             }
         };
+        let remove_after_run = !job_to_run.recurring;
 
         persist_jobs(&self.storage_path, &self.jobs).await?;
 
@@ -567,17 +717,21 @@ impl Scheduler {
             tasks.remove(sched_id);
         }
 
-        {
-            let mut jobs_guard = self.jobs.lock().await;
-            if let Some((_, job)) = jobs_guard.get_mut(sched_id) {
-                job.currently_running = false;
-                job.current_session_id = None;
-                job.process_start_time = None;
-                job.last_run = Some(Utc::now());
+        if remove_after_run {
+            self.remove_scheduled_job(sched_id, true).await?;
+        } else {
+            {
+                let mut jobs_guard = self.jobs.lock().await;
+                if let Some((_, job)) = jobs_guard.get_mut(sched_id) {
+                    job.currently_running = false;
+                    job.current_session_id = None;
+                    job.process_start_time = None;
+                    job.last_run = Some(Utc::now());
+                }
             }
-        }
 
-        persist_jobs(&self.storage_path, &self.jobs).await?;
+            persist_jobs(&self.storage_path, &self.jobs).await?;
+        }
 
         match result {
             Ok(session_id) => Ok(session_id),
@@ -640,6 +794,11 @@ impl Scheduler {
                         return Ok(());
                     }
                     job.cron = new_cron.clone();
+                    job.scheduled_for = if job.recurring {
+                        None
+                    } else {
+                        Some(next_run_from_cron_expression(&new_cron)?)
+                    };
                     (*uuid, job.clone())
                 }
                 None => return Err(SchedulerError::JobNotFound(sched_id.to_string())),
@@ -953,6 +1112,10 @@ mod tests {
             id: "scheduled_job".to_string(),
             source: recipe_path.to_string_lossy().to_string(),
             cron: "* * * * * *".to_string(),
+            recurring: true,
+            durable: true,
+            prompt: None,
+            scheduled_for: None,
             last_run: None,
             currently_running: false,
             paused: false,
@@ -978,6 +1141,10 @@ mod tests {
             id: "paused_job".to_string(),
             source: recipe_path.to_string_lossy().to_string(),
             cron: "* * * * * *".to_string(),
+            recurring: true,
+            durable: true,
+            prompt: None,
+            scheduled_for: None,
             last_run: None,
             currently_running: false,
             paused: false,
@@ -991,5 +1158,71 @@ mod tests {
 
         let jobs = scheduler.list_scheduled_jobs().await;
         assert!(jobs[0].last_run.is_none(), "Paused job should not run");
+    }
+
+    #[tokio::test]
+    async fn test_session_only_job_is_not_persisted() {
+        let temp_dir = tempdir().unwrap();
+        let storage_path = temp_dir.path().join("schedules.json");
+        let recipe_path = create_test_recipe(temp_dir.path(), "session_only_job");
+        let scheduler = Scheduler::new(storage_path.clone()).await.unwrap();
+
+        let job = ScheduledJob {
+            id: "session_only_job".to_string(),
+            source: recipe_path.to_string_lossy().to_string(),
+            cron: "* * * * * *".to_string(),
+            recurring: true,
+            durable: false,
+            prompt: Some("session only".to_string()),
+            scheduled_for: None,
+            last_run: None,
+            currently_running: false,
+            paused: false,
+            current_session_id: None,
+            process_start_time: None,
+        };
+
+        scheduler.add_scheduled_job(job, false).await.unwrap();
+
+        let persisted = fs::read_to_string(storage_path).unwrap();
+        let jobs: Vec<ScheduledJob> = serde_json::from_str(&persisted).unwrap();
+        assert!(jobs.is_empty(), "session-only job should not be persisted");
+    }
+
+    #[tokio::test]
+    async fn test_one_shot_job_auto_deletes_after_run() {
+        let temp_dir = tempdir().unwrap();
+        let storage_path = temp_dir.path().join("schedules.json");
+        let recipe_path = create_test_recipe(temp_dir.path(), "one_shot_job");
+        let scheduler = Scheduler::new(storage_path.clone()).await.unwrap();
+
+        let job = ScheduledJob {
+            id: "one_shot_job".to_string(),
+            source: recipe_path.to_string_lossy().to_string(),
+            cron: "* * * * * *".to_string(),
+            recurring: false,
+            durable: true,
+            prompt: Some("run once".to_string()),
+            scheduled_for: Some(Utc::now() + chrono::Duration::milliseconds(500)),
+            last_run: None,
+            currently_running: false,
+            paused: false,
+            current_session_id: None,
+            process_start_time: None,
+        };
+
+        scheduler.add_scheduled_job(job, false).await.unwrap();
+        sleep(Duration::from_millis(1800)).await;
+
+        let jobs = scheduler.list_scheduled_jobs().await;
+        assert!(jobs.is_empty(), "one-shot job should auto-delete after run");
+        assert!(!recipe_path.exists(), "one-shot recipe should be removed");
+
+        let persisted = fs::read_to_string(storage_path).unwrap();
+        let jobs: Vec<ScheduledJob> = serde_json::from_str(&persisted).unwrap();
+        assert!(
+            jobs.is_empty(),
+            "persisted schedules should be empty after cleanup"
+        );
     }
 }

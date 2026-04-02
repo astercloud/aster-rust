@@ -1,4 +1,4 @@
-use aster::agents::subagent_tool::{create_subagent_tool, SUBAGENT_TOOL_NAME};
+use aster::agents::subagent_tool::{create_subagent_tool, AGENT_TOOL_NAME};
 use aster::recipe::{Recipe, SubRecipe};
 use std::collections::HashMap;
 use tempfile::TempDir;
@@ -78,16 +78,20 @@ fn test_adhoc_recipe_builder_and_security_check() {
 }
 
 #[test]
-fn test_adhoc_tool_schema_properties() {
+fn test_agent_tool_schema_properties_current_surface() {
     let tool = create_subagent_tool(&[]);
 
-    assert_eq!(tool.name, SUBAGENT_TOOL_NAME);
-    assert!(tool.description.as_ref().unwrap().contains("Ad-hoc"));
+    assert_eq!(tool.name, AGENT_TOOL_NAME);
+    assert!(tool
+        .description
+        .as_ref()
+        .unwrap()
+        .contains("Launch a new agent"));
     assert!(!tool
         .description
         .as_ref()
         .unwrap()
-        .contains("Available subrecipes"));
+        .contains("Available specialized agent types"));
 
     let props = tool
         .input_schema
@@ -95,10 +99,11 @@ fn test_adhoc_tool_schema_properties() {
         .unwrap()
         .as_object()
         .unwrap();
-    assert!(props.contains_key("instructions"));
-    assert!(props.contains_key("subrecipe"));
-    assert!(props.contains_key("parameters"));
-    assert!(props.contains_key("extensions"));
-    assert!(props.contains_key("settings"));
-    assert!(props.contains_key("summary"));
+    assert!(props.contains_key("description"));
+    assert!(props.contains_key("prompt"));
+    assert!(props.contains_key("subagent_type"));
+    assert!(props.contains_key("model"));
+    assert!(props.contains_key("run_in_background"));
+    assert!(props.contains_key("name"));
+    assert!(props.contains_key("images"));
 }

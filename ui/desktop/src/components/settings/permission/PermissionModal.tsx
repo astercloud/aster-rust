@@ -52,7 +52,9 @@ export default function PermissionModal({ extensionName, onClose }: PermissionMo
         } else {
           const filteredTools = (response.data || []).filter(
             (tool: ToolInfo) =>
-              tool.name !== 'platform__read_resource' && tool.name !== 'platform__list_resources'
+              tool.name !== 'ListMcpResourcesTool' &&
+              tool.name !== 'ReadMcpResourceTool' &&
+              tool.name !== 'ToolSearch'
           );
           setTools(filteredTools);
         }

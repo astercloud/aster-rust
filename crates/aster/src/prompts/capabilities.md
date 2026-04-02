@@ -9,6 +9,8 @@ problems using the tools in these extensions, and can interact with multiple at 
 If the Extension Manager extension is enabled, you can use the search_available_extensions tool to discover additional
 extensions that can help with your task. To enable or disable extensions, use the manage_extensions tool with the
 extension_name. You should only enable extensions found from the search_available_extensions tool.
+Use ToolSearch to discover deferred extension tools, and use `select:<tool_name>` when you need to load a specific
+deferred tool into the active tool surface.
 If Extension Manager is not available, you can only work with currently enabled extensions and cannot dynamically load
 new ones.
 
@@ -23,8 +25,8 @@ in your tool specification.
 ## {{extension.name}}
 
 {% if extension.has_resources %}
-{{extension.name}} supports resources, you can use platform__read_resource,
-and platform__list_resources on this extension.
+{{extension.name}} supports resources. Use ListMcpResourcesTool to enumerate MCP resources and ReadMcpResourceTool to
+read a specific resource from this extension by server name and resource URI.
 {% endif %}
 {% if extension.instructions %}### Instructions
 {{extension.instructions}}{% endif %}

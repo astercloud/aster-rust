@@ -25,7 +25,9 @@
 /// assert!(!match_pattern("other_tool", "file_*"));
 /// ```
 pub fn match_pattern(value: &str, pattern: &str) -> bool {
-    match_pattern_recursive(value.as_bytes(), pattern.as_bytes())
+    let normalized_value = value.to_ascii_lowercase();
+    let normalized_pattern = pattern.to_ascii_lowercase();
+    match_pattern_recursive(normalized_value.as_bytes(), normalized_pattern.as_bytes())
 }
 
 /// 递归实现模式匹配

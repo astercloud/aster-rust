@@ -44,6 +44,8 @@ pub mod session_manager;
 mod statistics;
 mod store;
 mod subagent;
+mod team;
+mod worktree;
 
 // 导出存储抽象
 pub use bootstrap::{
@@ -69,8 +71,8 @@ pub use export::{
     bulk_export_sessions, export_session, export_session_to_file, ExportFormat, ExportOptions,
 };
 pub use extension_data::{
-    EnabledExtensionsState, ExtensionData, ExtensionState, TodoListItem, TodoListItemStatus,
-    TodoListState,
+    resolve_task_board_state, EnabledExtensionsState, ExtensionData, ExtensionState, TaskBoardItem,
+    TaskBoardItemStatus, TaskBoardState,
 };
 pub use fork::{
     fork_session, get_session_branch_tree, merge_sessions, ForkMetadata, ForkOptions, MergeOptions,
@@ -104,5 +106,11 @@ pub use statistics::{
 };
 pub use subagent::{
     list_subagent_child_sessions, list_subagent_sessions_with_metadata,
-    resolve_subagent_session_metadata, SubagentSessionMetadata, SUBAGENT_SESSION_ORIGIN_TOOL,
+    resolve_named_subagent_child_session, resolve_subagent_session_metadata,
+    SubagentSessionMetadata, SUBAGENT_SESSION_ORIGIN_TOOL,
 };
+pub use team::{
+    resolve_team_context, resolve_team_task_list_id, save_team_membership, save_team_state,
+    ResolvedTeamContext, TeamMember, TeamMembershipState, TeamSessionState, TEAM_LEAD_NAME,
+};
+pub use worktree::WorktreeSessionState;

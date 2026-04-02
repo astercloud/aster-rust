@@ -188,7 +188,7 @@ impl WriteTool {
 #[async_trait]
 impl Tool for WriteTool {
     fn name(&self) -> &str {
-        "write"
+        "Write"
     }
 
     fn description(&self) -> &str {
@@ -492,7 +492,7 @@ mod tests {
     #[test]
     fn test_tool_name() {
         let tool = create_write_tool();
-        assert_eq!(tool.name(), "write");
+        assert_eq!(tool.name(), "Write");
     }
 
     #[test]

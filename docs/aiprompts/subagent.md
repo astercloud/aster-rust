@@ -9,77 +9,90 @@
 ## 工具定义
 
 ```rust
-pub const SUBAGENT_TOOL_NAME: &str = "subagent";
+pub const AGENT_TOOL_NAME: &str = "Agent";
 ```
 
 ## 使用模式
 
 ### 1. Ad-hoc 模式
-提供 `instructions` 执行自定义任务：
+省略 `subagent_type` 时，使用通用委派 Agent：
 
 ```json
 {
-  "tool": "subagent",
+  "tool": "Agent",
   "input": {
-    "instructions": "分析 src/ 目录下的代码结构"
+    "description": "分析代码结构",
+    "prompt": "分析 src/ 目录下的代码结构"
   }
 }
 ```
 
-### 2. Predefined 模式
-使用预定义的 `subrecipe`：
+### 2. Specialized 模式
+使用 `subagent_type` 命中本地 specialized recipe：
 
 ```json
 {
-  "tool": "subagent",
+  "tool": "Agent",
   "input": {
-    "subrecipe": "code-review",
-    "parameters": {
-      "file_path": "src/main.rs"
-    }
+    "description": "代码审查",
+    "subagent_type": "code-review",
+    "prompt": "检查 src/main.rs 的实现质量与潜在风险"
   }
 }
 ```
 
 ### 3. Augmented 模式
-结合 subrecipe 和额外指令：
+结合 specialized type、命名和模型覆盖：
 
 ```json
 {
-  "tool": "subagent",
+  "tool": "Agent",
   "input": {
-    "subrecipe": "code-review",
-    "instructions": "特别关注安全问题",
-    "parameters": {
-      "file_path": "src/auth.rs"
-    }
+    "description": "鉴权审查",
+    "subagent_type": "code-review",
+    "name": "auth-review",
+    "model": "gpt-5.4",
+    "prompt": "检查 src/auth.rs，特别关注安全问题"
   }
 }
 ```
 
-## 参数结构
+## 模型可见参数结构
+
+```rust
+struct AgentToolParams {
+    pub description: String,
+    pub prompt: String,
+    pub subagent_type: Option<String>,
+    pub model: Option<String>,
+    pub run_in_background: bool,
+    pub name: Option<String>,
+    pub team_name: Option<String>,
+    pub mode: Option<String>,
+    pub isolation: Option<String>,
+    pub cwd: Option<String>,
+    pub images: Option<Vec<ImageData>>,
+}
+```
+
+当前 runtime 的收敛规则：
+
+- `description` + `prompt` 是必填
+- `subagent_type` 命中本地 `SubRecipe` 时走 specialized recipe
+- `subagent_type` 未命中时，不报错，而是作为 role hint 注入 prompt
+- `run_in_background` / `team_name` / `mode` / `isolation` / `cwd` 当前 runtime 暂不支持，会直接报参错
+
+## 内部映射结构
 
 ```rust
 pub struct SubagentParams {
-    // 任务指令 (ad-hoc 必需)
     pub instructions: Option<String>,
-    
-    // 预定义 subrecipe 名称
     pub subrecipe: Option<String>,
-    
-    // subrecipe 参数
+    pub role_hint: Option<String>,
     pub parameters: Option<HashMap<String, Value>>,
-    
-    // 启用的扩展 (空数组=无扩展, 省略=继承全部)
     pub extensions: Option<Vec<String>>,
-    
-    // 模型设置覆盖
     pub settings: Option<SubagentSettings>,
-    
-    // 是否返回摘要 (默认 true)
     pub summary: bool,
-    
-    // 图片数据 (多模态)
     pub images: Option<Vec<ImageData>>,
 }
 
@@ -122,12 +135,12 @@ sub_recipes:
 ## 执行流程
 
 ```
-主 Agent 调用 subagent 工具
+主 Agent 调用 Agent 工具
     │
     ▼
 ┌─────────────────────────────┐
 │  解析参数                    │
-│  - 验证 instructions/subrecipe │
+│  - 验证 description/prompt   │
 │  - 构建 Recipe               │
 └───────────┬─────────────────┘
             │
@@ -173,8 +186,8 @@ Make sure your last message provides a comprehensive summary of:
 1. **子 Agent 不能创建子 Agent**
    ```rust
    if session.session_type == SessionType::SubAgent 
-      && tool_call.name == SUBAGENT_TOOL_NAME {
-       return Err("Subagents cannot create other subagents");
+      && tool_call.name == AGENT_TOOL_NAME {
+       return Err("Agents cannot create other agents");
    }
    ```
 
@@ -184,14 +197,14 @@ Make sure your last message provides a comprehensive summary of:
 
 ## 并行执行
 
-在同一消息中多次调用 `subagent` 可并行执行：
+在同一消息中多次调用 `Agent` 可并行执行：
 
 ```json
 // 主 Agent 的工具调用
 [
-  {"tool": "subagent", "input": {"subrecipe": "lint"}},
-  {"tool": "subagent", "input": {"subrecipe": "test"}},
-  {"tool": "subagent", "input": {"subrecipe": "build"}}
+  {"tool": "Agent", "input": {"description": "代码检查", "subagent_type": "lint", "prompt": "运行 lint 并汇总结果"}},
+  {"tool": "Agent", "input": {"description": "测试执行", "subagent_type": "test", "prompt": "运行测试并汇总失败项"}},
+  {"tool": "Agent", "input": {"description": "构建验证", "subagent_type": "build", "prompt": "执行构建并报告结果"}}
 ]
 ```
 

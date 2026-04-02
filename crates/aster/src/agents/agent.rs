@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
@@ -10,7 +11,6 @@ use futures::{stream, FutureExt, Stream, StreamExt, TryStreamExt};
 use uuid::Uuid;
 
 use super::final_output_tool::FinalOutputTool;
-use super::platform_tools;
 use super::tool_execution::{ToolCallResult, CHAT_MODE_TOOL_SKIPPED_RESPONSE, DECLINED_RESPONSE};
 use crate::action_required_manager::ActionRequiredManager;
 use crate::agents::error_handling::OverflowHandler;
@@ -18,13 +18,10 @@ use crate::agents::extension::{ExtensionConfig, ExtensionResult, ToolInfo};
 use crate::agents::extension_manager::{get_parameter_names, ExtensionManager};
 use crate::agents::extension_manager_extension::MANAGE_EXTENSIONS_TOOL_NAME_COMPLETE;
 use crate::agents::final_output_tool::{FINAL_OUTPUT_CONTINUATION_MESSAGE, FINAL_OUTPUT_TOOL_NAME};
-use crate::agents::platform_tools::PLATFORM_MANAGE_SCHEDULE_TOOL_NAME;
 use crate::agents::prompt_manager::PromptManager;
 use crate::agents::retry::{RetryManager, RetryResult};
 use crate::agents::subagent_task_config::TaskConfig;
-use crate::agents::subagent_tool::{
-    create_subagent_tool, handle_subagent_tool, SUBAGENT_TOOL_NAME,
-};
+use crate::agents::subagent_tool::{create_subagent_tool, handle_subagent_tool, AGENT_TOOL_NAME};
 use crate::agents::types::SessionConfig;
 use crate::agents::types::{FrontendTool, SharedProvider, ToolResultReceiver};
 use crate::config::{get_enabled_extensions, AsterMode, Config};
@@ -34,8 +31,8 @@ use crate::context_mgmt::{
     compact_messages_with_summary, DEFAULT_COMPACTION_THRESHOLD,
 };
 use crate::conversation::message::{
-    ActionRequired, ActionRequiredData, Message, MessageContent, ProviderMetadata,
-    SystemNotificationType, ThinkingContent, ToolRequest, ToolResponse,
+    ActionRequired, ActionRequiredData, ActionRequiredScope, Message, MessageContent,
+    ProviderMetadata, SystemNotificationType, ThinkingContent, ToolRequest, ToolResponse,
 };
 use crate::conversation::{debug_conversation_fix, fix_conversation, Conversation};
 use crate::mcp_utils::ToolResult;
@@ -52,22 +49,26 @@ use crate::session::extension_data::{EnabledExtensionsState, ExtensionState};
 use crate::session::{
     load_session_runtime_snapshot, require_shared_thread_runtime_store, save_summary,
     InMemoryThreadRuntimeStore, ItemRuntime, ItemRuntimePayload, ItemStatus, Session,
-    SessionManager, SessionRuntimeSnapshot, SessionStore, SessionType, ThreadRuntime,
-    ThreadRuntimeStore, TurnContextOverride, TurnOutputSchemaRuntime, TurnOutputSchemaSource,
-    TurnOutputSchemaStrategy, TurnRuntime, TurnStatus,
+    SessionManager, SessionRuntimeSnapshot, SessionStore, SessionType, TeamMembershipState,
+    TeamSessionState, ThreadRuntime, ThreadRuntimeStore, TurnContextOverride,
+    TurnOutputSchemaRuntime, TurnOutputSchemaSource, TurnOutputSchemaStrategy, TurnRuntime,
+    TurnStatus,
 };
 use crate::tool_inspection::ToolInspectionManager;
 use crate::tool_monitor::RepetitionInspector;
 use crate::tools::{
-    register_default_tools, register_extension_resource_tools, SharedFileReadHistory,
-    ToolRegistrationConfig, ToolRegistry,
+    register_all_tools, AgentControlToolConfig, AskTool, CronCreateTool, CronDeleteTool,
+    CronListTool, SharedFileReadHistory, SpawnAgentRequest, SpawnAgentResponse,
+    ToolRegistrationConfig, ToolRegistry, DEFAULT_ASK_TIMEOUT_SECS,
 };
+use crate::user_message_manager::UserMessageManager;
 use crate::utils::is_token_cancelled;
 use regex::Regex;
 use rmcp::model::{
     CallToolRequestParam, CallToolResult, Content, ErrorCode, ErrorData, GetPromptResult, Prompt,
     Role, ServerNotification, TextContent, Tool,
 };
+use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
@@ -77,6 +78,38 @@ const DEFAULT_MAX_TURNS: u32 = 1000;
 const COMPACTION_THINKING_TEXT: &str = "aster is compacting the conversation...";
 const CONTEXT_COMPACTION_WARNING_TEXT: &str =
     "长对话和多次上下文压缩会降低模型准确性；如果后续结果开始漂移，建议新开会话。";
+const CURRENT_SURFACE_POWERSHELL_ENV: &str = "ASTER_USE_POWERSHELL_TOOL";
+const RESOURCE_GATED_TOOL_NAMES: [&str; 2] = ["ListMcpResourcesTool", "ReadMcpResourceTool"];
+const SUBAGENT_ALLOWED_NATIVE_TOOL_NAMES: [&str; 14] = [
+    "Bash",
+    "PowerShell",
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep",
+    "WebFetch",
+    "WebSearch",
+    "TaskCreate",
+    "TaskGet",
+    "TaskList",
+    "TaskUpdate",
+    "NotebookEdit",
+];
+const SUBAGENT_ALLOWED_COORDINATION_TOOL_NAMES: [&str; 5] = [
+    "Skill",
+    "ToolSearch",
+    FINAL_OUTPUT_TOOL_NAME,
+    "EnterWorktree",
+    "ExitWorktree",
+];
+const SUBAGENT_TEAMMATE_ALLOWED_TOOL_NAMES: [&str; 5] = [
+    "SendMessage",
+    "ListPeers",
+    "CronCreate",
+    "CronList",
+    "CronDelete",
+];
 const AUTO_COMPACTION_DISABLED_CONTEXT_LIMIT_TEXT: &str =
     "Automatic compaction is disabled for this turn. The conversation reached the context limit. Compact the session manually or start a new session before retrying.";
 const PROPOSED_PLAN_OPEN: &str = "<proposed_plan>";
@@ -97,6 +130,67 @@ const FILE_ARTIFACT_METADATA_KEYS: [&str; 9] = [
 struct ResolvedOutputSchema {
     schema: Value,
     source: TurnOutputSchemaSource,
+}
+
+#[derive(Debug, Deserialize)]
+struct CurrentAgentToolRequest {
+    description: String,
+    prompt: String,
+    #[serde(default)]
+    subagent_type: Option<String>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    run_in_background: bool,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    team_name: Option<String>,
+    #[serde(default)]
+    mode: Option<String>,
+    #[serde(default)]
+    isolation: Option<String>,
+    #[serde(default)]
+    cwd: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CurrentSurfaceToolGates {
+    config: bool,
+    sleep: bool,
+    workflow: bool,
+    powershell: bool,
+}
+
+fn default_ask_callback() -> crate::tools::AskCallback {
+    Arc::new(|request| {
+        Box::pin(async move {
+            let scope = crate::session_context::current_action_scope().unwrap_or_else(|| {
+                let session_id = crate::session_context::current_session_id();
+                ActionRequiredScope {
+                    session_id: session_id.clone(),
+                    thread_id: session_id,
+                    turn_id: None,
+                }
+            });
+
+            match ActionRequiredManager::global()
+                .request_and_wait_scoped(
+                    scope,
+                    AskTool::build_elicitation_message(&request),
+                    AskTool::build_elicitation_schema(&request),
+                    Duration::from_secs(DEFAULT_ASK_TIMEOUT_SECS),
+                )
+                .await
+            {
+                Ok(user_data) => Some(user_data),
+                Err(error) => {
+                    warn!(?error, "AskUserQuestion elicitation failed");
+                    None
+                }
+            }
+        })
+    })
 }
 
 fn extract_proposed_plan_block(text: &str) -> Option<String> {
@@ -124,6 +218,131 @@ fn build_reasoning_summary_sections(text: &str) -> Option<Vec<String>> {
     } else {
         Some(sections)
     }
+}
+
+fn env_truthy(value: Option<&String>) -> bool {
+    value.is_some_and(|raw| {
+        matches!(
+            raw.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    })
+}
+
+fn env_defined_falsy(value: Option<&String>) -> bool {
+    value.is_some_and(|raw| {
+        matches!(
+            raw.trim().to_ascii_lowercase().as_str(),
+            "0" | "false" | "no" | "off"
+        )
+    })
+}
+
+fn current_surface_tool_gates() -> CurrentSurfaceToolGates {
+    let env = std::env::vars().collect::<HashMap<_, _>>();
+    current_surface_tool_gates_from_env_map(&env, cfg!(target_os = "windows"))
+}
+
+fn current_surface_tool_gates_from_env_map(
+    env: &HashMap<String, String>,
+    is_windows: bool,
+) -> CurrentSurfaceToolGates {
+    let is_internal_user = env
+        .get("USER_TYPE")
+        .is_some_and(|value| value.eq_ignore_ascii_case("ant"));
+    let powershell_env = env.get(CURRENT_SURFACE_POWERSHELL_ENV);
+
+    CurrentSurfaceToolGates {
+        config: is_internal_user,
+        sleep: env_truthy(env.get("PROACTIVE")) || env_truthy(env.get("KAIROS")),
+        workflow: env_truthy(env.get("WORKFLOW_SCRIPTS")),
+        powershell: is_windows
+            && if is_internal_user {
+                !env_defined_falsy(powershell_env)
+            } else {
+                env_truthy(powershell_env)
+            },
+    }
+}
+
+fn should_expose_registered_tool_with_gates(
+    name: &str,
+    resources_supported: bool,
+    tool_gates: CurrentSurfaceToolGates,
+) -> bool {
+    if RESOURCE_GATED_TOOL_NAMES.contains(&name) {
+        return resources_supported;
+    }
+
+    match name {
+        "Config" => tool_gates.config,
+        "Sleep" => tool_gates.sleep,
+        "Workflow" => tool_gates.workflow,
+        "PowerShell" => tool_gates.powershell,
+        _ => true,
+    }
+}
+
+fn should_expose_registered_tool(name: &str, resources_supported: bool) -> bool {
+    should_expose_registered_tool_with_gates(
+        name,
+        resources_supported,
+        current_surface_tool_gates(),
+    )
+}
+
+fn is_extension_prefixed_tool(name: &str) -> bool {
+    name.contains("__")
+}
+
+fn should_expose_tool_for_session(
+    name: &str,
+    session_type: Option<SessionType>,
+    resources_supported: bool,
+) -> bool {
+    should_expose_tool_for_session_with_gates(
+        name,
+        session_type,
+        resources_supported,
+        current_surface_tool_gates(),
+        false,
+        crate::tools::plan_mode_tool::current_plan_mode_active(),
+    )
+}
+
+fn should_expose_tool_for_session_with_gates(
+    name: &str,
+    session_type: Option<SessionType>,
+    resources_supported: bool,
+    tool_gates: CurrentSurfaceToolGates,
+    subagent_teammate_tools_enabled: bool,
+    plan_mode_active: bool,
+) -> bool {
+    if !should_expose_registered_tool_with_gates(name, resources_supported, tool_gates) {
+        return false;
+    }
+
+    if !matches!(session_type, Some(SessionType::SubAgent)) {
+        return true;
+    }
+
+    if is_extension_prefixed_tool(name) {
+        return true;
+    }
+
+    if name == "ExitPlanMode" && plan_mode_active {
+        return true;
+    }
+
+    SUBAGENT_ALLOWED_NATIVE_TOOL_NAMES.contains(&name)
+        || SUBAGENT_ALLOWED_COORDINATION_TOOL_NAMES.contains(&name)
+        || (subagent_teammate_tools_enabled && SUBAGENT_TEAMMATE_ALLOWED_TOOL_NAMES.contains(&name))
+}
+
+fn session_allows_subagent_teammate_tools(session: &Session) -> bool {
+    matches!(session.session_type, SessionType::SubAgent)
+        && (TeamMembershipState::from_session(session).is_some()
+            || TeamSessionState::from_session(session).is_some())
 }
 
 fn collect_string_values(value: &Value) -> Vec<String> {
@@ -273,6 +492,155 @@ fn extract_tool_result_metadata<T: serde::Serialize>(result: &T) -> Option<Value
         .and_then(|value| find_metadata(&value, 0))
 }
 
+fn native_tool_metadata_to_value(
+    metadata: std::collections::HashMap<String, Value>,
+) -> Option<Value> {
+    if metadata.is_empty() {
+        None
+    } else {
+        Some(Value::Object(metadata.into_iter().collect()))
+    }
+}
+
+fn native_tool_result_to_call_tool_result(result: crate::tools::ToolResult) -> CallToolResult {
+    let structured_content = native_tool_metadata_to_value(result.metadata);
+    let fallback_text = structured_content
+        .as_ref()
+        .and_then(|value| serde_json::to_string_pretty(value).ok());
+    let text = if result.success {
+        result
+            .output
+            .filter(|value| !value.is_empty())
+            .or_else(|| fallback_text.clone())
+            .unwrap_or_default()
+    } else {
+        result
+            .error
+            .or(result.output)
+            .filter(|value| !value.is_empty())
+            .or(fallback_text)
+            .unwrap_or_default()
+    };
+
+    CallToolResult {
+        content: vec![Content::text(text)],
+        structured_content,
+        is_error: Some(!result.success),
+        meta: None,
+    }
+}
+
+fn tool_surface_updated_from_call_tool_result(result: &CallToolResult) -> bool {
+    result
+        .structured_content
+        .as_ref()
+        .and_then(|value| value.get("tool_surface_updated"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn normalize_agent_optional_text(value: Option<String>) -> Option<String> {
+    let trimmed = value?.trim().to_string();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+fn require_agent_text(value: String, field_name: &str) -> Result<String, ErrorData> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(ErrorData::new(
+            ErrorCode::INVALID_PARAMS,
+            format!("{field_name} cannot be empty"),
+            None,
+        ));
+    }
+
+    Ok(trimmed.to_string())
+}
+
+fn normalize_agent_cwd(value: Option<String>) -> Result<Option<String>, ErrorData> {
+    let Some(cwd) = normalize_agent_optional_text(value) else {
+        return Ok(None);
+    };
+
+    let path = std::path::Path::new(&cwd);
+    if !path.is_absolute() {
+        return Err(ErrorData::new(
+            ErrorCode::INVALID_PARAMS,
+            "cwd must be an absolute path".to_string(),
+            None,
+        ));
+    }
+    if !path.is_dir() {
+        return Err(ErrorData::new(
+            ErrorCode::INVALID_PARAMS,
+            format!("cwd is not a directory: {cwd}"),
+            None,
+        ));
+    }
+
+    Ok(Some(cwd))
+}
+
+fn build_async_agent_call_result(
+    request: &CurrentAgentToolRequest,
+    response: &SpawnAgentResponse,
+    description: String,
+    prompt: String,
+) -> CallToolResult {
+    let mut structured = serde_json::Map::new();
+    structured.insert(
+        "status".to_string(),
+        Value::String("async_launched".to_string()),
+    );
+    structured.insert(
+        "agentId".to_string(),
+        Value::String(response.agent_id.clone()),
+    );
+    structured.insert("description".to_string(), Value::String(description));
+    structured.insert("prompt".to_string(), Value::String(prompt));
+    structured.insert(
+        "outputFile".to_string(),
+        response
+            .extra
+            .get("outputFile")
+            .or_else(|| response.extra.get("output_file"))
+            .cloned()
+            .unwrap_or_else(|| Value::String(String::new())),
+    );
+    structured.insert(
+        "canReadOutputFile".to_string(),
+        response
+            .extra
+            .get("canReadOutputFile")
+            .or_else(|| response.extra.get("can_read_output_file"))
+            .cloned()
+            .unwrap_or(Value::Bool(false)),
+    );
+    if let Some(name) = normalize_agent_optional_text(request.name.clone()) {
+        structured.insert("name".to_string(), Value::String(name));
+    }
+    if let Some(team_name) = normalize_agent_optional_text(request.team_name.clone()) {
+        structured.insert("teamName".to_string(), Value::String(team_name));
+    }
+    if let Some(agent_type) = normalize_agent_optional_text(request.subagent_type.clone()) {
+        structured.insert("agentType".to_string(), Value::String(agent_type));
+    }
+
+    CallToolResult {
+        content: vec![Content::text(format!(
+            "Agent launched: {}",
+            response.agent_id
+        ))],
+        structured_content: Some(Value::Object(structured)),
+        is_error: Some(false),
+        meta: None,
+    }
+}
+
 /// Context needed for the reply function
 pub struct ReplyContext {
     pub conversation: Conversation,
@@ -323,6 +691,7 @@ pub struct Agent {
     /// 如果未设置，会回退到全局 SessionManager（向后兼容）。
     pub(super) session_store: Option<Arc<dyn SessionStore>>,
     pub(super) thread_runtime_store: Arc<dyn ThreadRuntimeStore>,
+    pub(super) agent_control_tools: Option<AgentControlToolConfig>,
 }
 
 #[derive(Clone, Debug)]
@@ -836,8 +1205,11 @@ impl Agent {
 
         // Initialize ToolRegistry with all native tools (Requirements: 11.3, 11.4)
         let mut tool_registry = ToolRegistry::new();
-        let (file_read_history, _hook_manager) = register_default_tools(&mut tool_registry);
-        register_extension_resource_tools(&mut tool_registry, Arc::downgrade(&extension_manager));
+        let tool_config = ToolRegistrationConfig::new()
+            .with_ask_callback(default_ask_callback())
+            .with_extension_manager(Arc::downgrade(&extension_manager));
+        let (file_read_history, _hook_manager) =
+            register_all_tools(&mut tool_registry, tool_config);
 
         Self {
             provider: provider.clone(),
@@ -859,6 +1231,7 @@ impl Agent {
             file_read_history,
             session_store: None, // 默认使用全局 SessionManager
             thread_runtime_store: Arc::new(InMemoryThreadRuntimeStore::default()),
+            agent_control_tools: None,
         }
     }
 
@@ -942,12 +1315,17 @@ impl Agent {
         let (tool_tx, tool_rx) = mpsc::channel(32);
         let provider = Arc::new(Mutex::new(None));
         let extension_manager = Arc::new(ExtensionManager::new(provider.clone()));
+        let mut config = config;
+        let agent_control_tools = config.agent_control_tools.clone();
+        if config.ask_callback.is_none() {
+            config.ask_callback = Some(default_ask_callback());
+        }
+        config = config.with_extension_manager(Arc::downgrade(&extension_manager));
 
         // Initialize ToolRegistry with configured tools
         let mut tool_registry = ToolRegistry::new();
         let (file_read_history, _hook_manager) =
             crate::tools::register_all_tools(&mut tool_registry, config);
-        register_extension_resource_tools(&mut tool_registry, Arc::downgrade(&extension_manager));
 
         Self {
             provider: provider.clone(),
@@ -969,7 +1347,107 @@ impl Agent {
             file_read_history,
             session_store: None,
             thread_runtime_store: Arc::new(InMemoryThreadRuntimeStore::default()),
+            agent_control_tools,
         }
+    }
+
+    async fn try_dispatch_callback_backed_agent_tool(
+        &self,
+        arguments: Value,
+        session: &Session,
+    ) -> Option<Result<ToolCallResult, ErrorData>> {
+        let callbacks = self.agent_control_tools.as_ref()?;
+        let spawn_callback = callbacks.spawn_agent.clone()?;
+
+        let request: CurrentAgentToolRequest = match serde_json::from_value(arguments) {
+            Ok(request) => request,
+            Err(error) => {
+                return Some(Err(ErrorData::new(
+                    ErrorCode::INVALID_PARAMS,
+                    format!("Invalid parameters: {error}"),
+                    None,
+                )));
+            }
+        };
+
+        if normalize_agent_optional_text(request.mode.clone()).is_some() {
+            return Some(Err(ErrorData::new(
+                ErrorCode::INVALID_PARAMS,
+                "mode is not supported in the current runtime".to_string(),
+                None,
+            )));
+        }
+        if normalize_agent_optional_text(request.isolation.clone()).is_some() {
+            return Some(Err(ErrorData::new(
+                ErrorCode::INVALID_PARAMS,
+                "isolation is not supported in the current runtime".to_string(),
+                None,
+            )));
+        }
+        let name = normalize_agent_optional_text(request.name.clone());
+        let team_name = normalize_agent_optional_text(request.team_name.clone());
+        let cwd = match normalize_agent_cwd(request.cwd.clone()) {
+            Ok(cwd) => cwd,
+            Err(error) => return Some(Err(error)),
+        };
+        let should_use_callback =
+            request.run_in_background || name.is_some() || team_name.is_some() || cwd.is_some();
+        if !should_use_callback {
+            return None;
+        }
+        if team_name.is_some() && name.is_none() {
+            return Some(Err(ErrorData::new(
+                ErrorCode::INVALID_PARAMS,
+                "team_name requires name in the current runtime".to_string(),
+                None,
+            )));
+        }
+
+        let description = match require_agent_text(request.description.clone(), "description") {
+            Ok(description) => description,
+            Err(error) => return Some(Err(error)),
+        };
+        let prompt = match require_agent_text(request.prompt.clone(), "prompt") {
+            Ok(prompt) => prompt,
+            Err(error) => return Some(Err(error)),
+        };
+
+        let spawn_request = SpawnAgentRequest {
+            parent_session_id: session.id.clone(),
+            message: prompt.clone(),
+            name,
+            team_name,
+            agent_type: normalize_agent_optional_text(request.subagent_type.clone()),
+            model: normalize_agent_optional_text(request.model.clone()),
+            reasoning_effort: None,
+            fork_context: false,
+            blueprint_role_id: None,
+            blueprint_role_label: None,
+            profile_id: None,
+            profile_name: None,
+            role_key: None,
+            skill_ids: Vec::new(),
+            skill_directories: Vec::new(),
+            team_preset_id: None,
+            theme: None,
+            system_overlay: None,
+            output_contract: None,
+            cwd,
+        };
+
+        Some(
+            spawn_callback(spawn_request)
+                .await
+                .map(|response| {
+                    ToolCallResult::from(Ok(build_async_agent_call_result(
+                        &request,
+                        &response,
+                        description,
+                        prompt,
+                    )))
+                })
+                .map_err(|error| ErrorData::new(ErrorCode::INTERNAL_ERROR, error, None)),
+        )
     }
 
     /// Get a reference to the tool registry
@@ -1561,6 +2039,24 @@ impl Agent {
         messages
     }
 
+    async fn drain_user_messages(&self, session_config: &SessionConfig) -> Vec<Message> {
+        let mut messages = Vec::new();
+        let scope = session_config.runtime_scope();
+        for user_message in UserMessageManager::global()
+            .drain_messages_for_scope(&scope)
+            .await
+        {
+            if let Err(error) = self
+                .store_add_message(&session_config.id, &user_message)
+                .await
+            {
+                warn!("Failed to save user message to session: {}", error);
+            }
+            messages.push(user_message);
+        }
+        messages
+    }
+
     async fn prepare_reply_context(
         &self,
         unfixed_conversation: Conversation,
@@ -1792,8 +2288,15 @@ impl Agent {
     }
 
     pub async fn set_scheduler(&self, scheduler: Arc<dyn SchedulerTrait>) {
-        let mut scheduler_service = self.scheduler_service.lock().await;
-        *scheduler_service = Some(scheduler);
+        {
+            let mut scheduler_service = self.scheduler_service.lock().await;
+            *scheduler_service = Some(scheduler.clone());
+        }
+
+        let mut registry = self.tool_registry.write().await;
+        registry.register(Box::new(CronCreateTool::new(scheduler.clone())));
+        registry.register(Box::new(CronListTool::new(scheduler.clone())));
+        registry.register(Box::new(CronDeleteTool::new(scheduler)));
     }
 
     /// Get a reference count clone to the provider
@@ -2032,33 +2535,16 @@ impl Agent {
         cancellation_token: Option<CancellationToken>,
         session: &Session,
     ) -> (String, Result<ToolCallResult, ErrorData>) {
-        // Prevent subagents from creating other subagents
-        if session.session_type == SessionType::SubAgent && tool_call.name == SUBAGENT_TOOL_NAME {
+        // Prevent delegated agents from creating other agents
+        if session.session_type == SessionType::SubAgent && tool_call.name == AGENT_TOOL_NAME {
             return (
                 request_id,
                 Err(ErrorData::new(
                     ErrorCode::INVALID_REQUEST,
-                    "Subagents cannot create other subagents".to_string(),
+                    "Agents cannot create other agents".to_string(),
                     None,
                 )),
             );
-        }
-
-        if tool_call.name == PLATFORM_MANAGE_SCHEDULE_TOOL_NAME {
-            let arguments = tool_call
-                .arguments
-                .map(Value::Object)
-                .unwrap_or(Value::Object(serde_json::Map::new()));
-            let result = self
-                .handle_schedule_management(arguments, request_id.clone())
-                .await;
-            let wrapped_result = result.map(|content| CallToolResult {
-                content,
-                structured_content: None,
-                is_error: Some(false),
-                meta: None,
-            });
-            return (request_id, Ok(ToolCallResult::from(wrapped_result)));
         }
 
         if tool_call.name == FINAL_OUTPUT_TOOL_NAME {
@@ -2070,7 +2556,7 @@ impl Agent {
                     request_id,
                     Err(ErrorData::new(
                         ErrorCode::INTERNAL_ERROR,
-                        "Final output tool not defined".to_string(),
+                        "Structured output tool not defined".to_string(),
                         None,
                     )),
                 )
@@ -2078,7 +2564,19 @@ impl Agent {
         }
 
         debug!("WAITING_TOOL_START: {}", tool_call.name);
-        let result: ToolCallResult = if tool_call.name == SUBAGENT_TOOL_NAME {
+        let result: ToolCallResult = if tool_call.name == AGENT_TOOL_NAME {
+            let arguments = tool_call
+                .arguments
+                .clone()
+                .map(Value::Object)
+                .unwrap_or(Value::Object(serde_json::Map::new()));
+            if let Some(callback_result) = self
+                .try_dispatch_callback_backed_agent_tool(arguments.clone(), session)
+                .await
+            {
+                return (request_id, callback_result);
+            }
+
             let provider = match self.provider().await {
                 Ok(p) => p,
                 Err(_) => {
@@ -2098,12 +2596,6 @@ impl Agent {
                 TaskConfig::new(provider, &session.id, &session.working_dir, extensions);
             let sub_recipes = self.sub_recipes.lock().await.clone();
 
-            let arguments = tool_call
-                .arguments
-                .clone()
-                .map(Value::Object)
-                .unwrap_or(Value::Object(serde_json::Map::new()));
-
             handle_subagent_tool(
                 arguments,
                 task_config,
@@ -2119,20 +2611,31 @@ impl Agent {
                 None,
             )))
         } else {
-            // 参考 claude-code-open 架构：优先检查 tool_registry 中的原生工具
+            // 优先检查 tool_registry 中的原生工具
             // 原生工具直接在进程内执行，不需要 MCP 子进程
-            let is_native = self.tool_registry.read().await.contains(&tool_call.name);
+            let is_native = self
+                .tool_registry
+                .read()
+                .await
+                .contains_native(&tool_call.name);
 
             if is_native {
-                // 原生工具：直接通过 tool_registry 执行（类似 claude-code-open 的 toolRegistry.execute）
+                // 原生工具：直接通过 tool_registry 执行
                 let tool_name = tool_call.name.clone();
                 let params = tool_call
                     .arguments
                     .clone()
                     .map(Value::Object)
                     .unwrap_or(Value::Object(serde_json::Map::new()));
-                let context = crate::tools::context::ToolContext::new(session.working_dir.clone())
-                    .with_session_id(session.id.clone());
+                let mut context =
+                    crate::tools::context::ToolContext::new(session.working_dir.clone())
+                        .with_session_id(session.id.clone());
+                if let Ok(provider) = self.provider().await {
+                    context = context.with_provider(provider);
+                }
+                if let Some(token) = cancellation_token.clone() {
+                    context = context.with_cancellation_token(token);
+                }
 
                 let registry = self.tool_registry.read().await;
                 let execute_result = registry.execute(&tool_name, params, &context, None).await;
@@ -2140,8 +2643,7 @@ impl Agent {
 
                 match execute_result {
                     Ok(result) => {
-                        let text = result.output.unwrap_or_default();
-                        ToolCallResult::from(Ok(CallToolResult::success(vec![Content::text(text)])))
+                        ToolCallResult::from(Ok(native_tool_result_to_call_tool_result(result)))
                     }
                     Err(e) => ToolCallResult::from(Err(ErrorData::new(
                         ErrorCode::INTERNAL_ERROR,
@@ -2242,6 +2744,19 @@ impl Agent {
     }
 
     pub async fn subagents_enabled(&self) -> bool {
+        let session_type = self.current_session_type().await;
+        self.subagents_enabled_for_session_type(session_type).await
+    }
+
+    async fn current_session_type(&self) -> Option<SessionType> {
+        let session_id = self.extension_manager.get_context().await.session_id?;
+        self.store_get_session(&session_id, false)
+            .await
+            .ok()
+            .map(|session| session.session_type)
+    }
+
+    async fn subagents_enabled_for_session_type(&self, session_type: Option<SessionType>) -> bool {
         let config = crate::config::Config::global();
         let is_autonomous = config.get_aster_mode().unwrap_or(AsterMode::Auto) == AsterMode::Auto;
         if !is_autonomous {
@@ -2255,23 +2770,10 @@ impl Agent {
         {
             return false;
         }
-        if let Some(ref session_id) = self.extension_manager.get_context().await.session_id {
-            if matches!(
-                self.store_get_session(session_id, false)
-                    .await
-                    .ok()
-                    .map(|session| session.session_type),
-                Some(SessionType::SubAgent)
-            ) {
-                return false;
-            }
+        if matches!(session_type, Some(SessionType::SubAgent)) {
+            return false;
         }
-        !self
-            .extension_manager
-            .list_extensions()
-            .await
-            .map(|ext| ext.is_empty())
-            .unwrap_or(true)
+        true
     }
 
     pub async fn list_tools(&self, extension_name: Option<String>) -> Vec<Tool> {
@@ -2281,13 +2783,19 @@ impl Agent {
             .await
             .unwrap_or_default();
 
-        let subagents_enabled = self.subagents_enabled().await;
-        // 只在 scheduler 服务可用时才暴露 schedule 工具
-        if (extension_name.is_none() || extension_name.as_deref() == Some("platform"))
-            && self.scheduler_service.lock().await.is_some()
-        {
-            prefixed_tools.push(platform_tools::manage_schedule_tool());
-        }
+        let current_session = match self.extension_manager.get_context().await.session_id {
+            Some(session_id) => self.store_get_session(&session_id, false).await.ok(),
+            None => None,
+        };
+        let current_session_type = current_session.as_ref().map(|session| session.session_type);
+        let subagent_teammate_tools_enabled = current_session
+            .as_ref()
+            .is_some_and(session_allows_subagent_teammate_tools);
+        let subagents_enabled = self
+            .subagents_enabled_for_session_type(current_session_type)
+            .await;
+        let resources_supported = self.extension_manager.supports_resources().await;
+        let tool_gates = current_surface_tool_gates();
 
         if extension_name.is_none() {
             if let Some(final_output_tool) = self.final_output_tool.lock().await.as_ref() {
@@ -2303,6 +2811,14 @@ impl Agent {
             // 添加 tool_registry 中的原生工具（包括 SkillTool）
             let registry = self.tool_registry.read().await;
             for tool_def in registry.get_definitions() {
+                if !should_expose_registered_tool_with_gates(
+                    &tool_def.name,
+                    resources_supported,
+                    tool_gates,
+                ) {
+                    continue;
+                }
+
                 let tool = Tool::new(
                     tool_def.name,
                     tool_def.description,
@@ -2315,6 +2831,17 @@ impl Agent {
                 prefixed_tools.push(tool);
             }
         }
+
+        prefixed_tools.retain(|tool| {
+            should_expose_tool_for_session_with_gates(
+                &tool.name,
+                current_session_type,
+                resources_supported,
+                tool_gates,
+                subagent_teammate_tools_enabled,
+                crate::tools::plan_mode_tool::current_plan_mode_active(),
+            )
+        });
 
         prefixed_tools
     }
@@ -2944,6 +3471,9 @@ impl Agent {
                                         for msg in self.drain_elicitation_messages(&session_config).await {
                                             yield AgentEvent::Message(msg);
                                         }
+                                        for msg in self.drain_user_messages(&session_config).await {
+                                            yield AgentEvent::Message(msg);
+                                        }
 
                                         match item {
                                             ToolStreamItem::Result(output) => {
@@ -2951,6 +3481,13 @@ impl Agent {
                                                     && output.is_err()
                                                 {
                                                     all_install_successful = false;
+                                                }
+                                                if output
+                                                    .as_ref()
+                                                    .ok()
+                                                    .is_some_and(tool_surface_updated_from_call_tool_result)
+                                                {
+                                                    tools_updated = true;
                                                 }
                                                 if let Some(response_msg) = request_to_response_map.get(&request_id) {
                                                     let metadata = request_metadata.get(&request_id).and_then(|m| m.as_ref());
@@ -2966,6 +3503,9 @@ impl Agent {
 
                                     // check for remaining elicitation messages after all tools complete
                                     for msg in self.drain_elicitation_messages(&session_config).await {
+                                        yield AgentEvent::Message(msg);
+                                    }
+                                    for msg in self.drain_user_messages(&session_config).await {
                                         yield AgentEvent::Message(msg);
                                     }
 
@@ -3463,6 +4003,7 @@ impl Agent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agents::extension::PlatformExtensionContext;
     use crate::providers::base::{Provider, ProviderMetadata, ProviderUsage};
     use crate::providers::errors::ProviderError;
     use crate::session::{
@@ -4077,28 +4618,28 @@ mod tests {
 
         // Verify core native tools are registered
         assert!(
-            registry_guard.contains("bash"),
-            "bash tool should be registered"
+            registry_guard.contains("Bash"),
+            "Bash tool should be registered"
         );
         assert!(
-            registry_guard.contains("read"),
-            "read tool should be registered"
+            registry_guard.contains("Read"),
+            "Read tool should be registered"
         );
         assert!(
-            registry_guard.contains("write"),
-            "write tool should be registered"
+            registry_guard.contains("Write"),
+            "Write tool should be registered"
         );
         assert!(
-            registry_guard.contains("edit"),
-            "edit tool should be registered"
+            registry_guard.contains("Edit"),
+            "Edit tool should be registered"
         );
         assert!(
-            registry_guard.contains("glob"),
-            "glob tool should be registered"
+            registry_guard.contains("Glob"),
+            "Glob tool should be registered"
         );
         assert!(
-            registry_guard.contains("grep"),
-            "grep tool should be registered"
+            registry_guard.contains("Grep"),
+            "Grep tool should be registered"
         );
         assert!(
             registry_guard.contains("ListMcpResourcesTool"),
@@ -4108,11 +4649,27 @@ mod tests {
             registry_guard.contains("ReadMcpResourceTool"),
             "ReadMcpResourceTool should be registered"
         );
+        assert!(
+            registry_guard.contains("ToolSearch"),
+            "ToolSearch should be registered"
+        );
+        assert!(
+            registry_guard.contains("AskUserQuestion"),
+            "AskUserQuestion should be registered"
+        );
+        assert!(
+            registry_guard.contains("Config"),
+            "Config should be registered"
+        );
+        assert!(
+            registry_guard.contains("Sleep"),
+            "Sleep should be registered"
+        );
 
         // Verify tool count
         assert!(
-            registry_guard.native_tool_count() >= 8,
-            "Should have at least 8 native tools"
+            registry_guard.native_tool_count() >= 10,
+            "Should have at least 10 native tools"
         );
 
         Ok(())
@@ -4129,12 +4686,12 @@ mod tests {
 
         // Verify core native tools are registered
         assert!(
-            registry_guard.contains("bash"),
-            "bash tool should be registered"
+            registry_guard.contains("Bash"),
+            "Bash tool should be registered"
         );
         assert!(
-            registry_guard.contains("read"),
-            "read tool should be registered"
+            registry_guard.contains("Read"),
+            "Read tool should be registered"
         );
         assert!(
             registry_guard.contains("ListMcpResourcesTool"),
@@ -4144,8 +4701,631 @@ mod tests {
             registry_guard.contains("ReadMcpResourceTool"),
             "ReadMcpResourceTool should be registered"
         );
+        assert!(
+            registry_guard.contains("ToolSearch"),
+            "ToolSearch should be registered"
+        );
+        assert!(
+            registry_guard.contains("AskUserQuestion"),
+            "AskUserQuestion should be registered"
+        );
+        assert!(
+            registry_guard.contains("Config"),
+            "Config should be registered"
+        );
+        assert!(
+            registry_guard.contains("Sleep"),
+            "Sleep should be registered"
+        );
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_list_tools_includes_current_agent_tool_without_extensions() -> Result<()> {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let agent = Agent::new();
+        let session = SessionManager::create_session(
+            PathBuf::from("."),
+            "agent-tool-visibility".to_string(),
+            SessionType::User,
+        )
+        .await?;
+        agent
+            .update_provider(Arc::new(NativeOutputSchemaProvider), &session.id)
+            .await?;
+
+        assert!(agent.subagents_enabled().await);
+
+        let tools = agent.list_tools(None).await;
+        assert!(
+            tools.iter().any(|tool| tool.name == AGENT_TOOL_NAME),
+            "Agent tool should be visible once provider is ready, even without extensions"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_list_tools_excludes_legacy_agent_control_surface() -> Result<()> {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let agent = Agent::new();
+        let session = SessionManager::create_session(
+            PathBuf::from("."),
+            "agent-tool-legacy-surface".to_string(),
+            SessionType::User,
+        )
+        .await?;
+        agent
+            .update_provider(Arc::new(NativeOutputSchemaProvider), &session.id)
+            .await?;
+
+        let tools = agent.list_tools(None).await;
+        for legacy_name in [
+            "spawn_agent",
+            "send_input",
+            "wait_agent",
+            "resume_agent",
+            "close_agent",
+            "analyze_image",
+        ] {
+            assert!(
+                !tools.iter().any(|tool| tool.name == legacy_name),
+                "legacy tool surface should stay hidden: {legacy_name}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_current_surface_resource_helpers_are_visibility_gated() {
+        assert!(!should_expose_registered_tool(
+            "ListMcpResourcesTool",
+            false
+        ));
+        assert!(!should_expose_registered_tool("ReadMcpResourceTool", false));
+        assert!(should_expose_registered_tool("ListMcpResourcesTool", true));
+        assert!(should_expose_registered_tool("ReadMcpResourceTool", true));
+        assert!(should_expose_registered_tool("ToolSearch", false));
+    }
+
+    #[test]
+    fn test_current_surface_main_thread_tool_gates_match_reference_contract() {
+        let external_env = HashMap::new();
+        let external_gates = current_surface_tool_gates_from_env_map(&external_env, true);
+        assert!(!external_gates.config);
+        assert!(!external_gates.sleep);
+        assert!(!external_gates.workflow);
+        assert!(!external_gates.powershell);
+
+        let ant_env = HashMap::from([("USER_TYPE".to_string(), "ant".to_string())]);
+        let ant_gates = current_surface_tool_gates_from_env_map(&ant_env, true);
+        assert!(ant_gates.config);
+        assert!(!ant_gates.sleep);
+        assert!(!ant_gates.workflow);
+        assert!(ant_gates.powershell);
+
+        let external_powershell_env =
+            HashMap::from([(CURRENT_SURFACE_POWERSHELL_ENV.to_string(), "1".to_string())]);
+        let external_powershell_gates =
+            current_surface_tool_gates_from_env_map(&external_powershell_env, true);
+        assert!(external_powershell_gates.powershell);
+
+        let ant_powershell_disabled_env = HashMap::from([
+            ("USER_TYPE".to_string(), "ant".to_string()),
+            (CURRENT_SURFACE_POWERSHELL_ENV.to_string(), "0".to_string()),
+            ("PROACTIVE".to_string(), "true".to_string()),
+            ("WORKFLOW_SCRIPTS".to_string(), "yes".to_string()),
+        ]);
+        let ant_powershell_disabled_gates =
+            current_surface_tool_gates_from_env_map(&ant_powershell_disabled_env, true);
+        assert!(ant_powershell_disabled_gates.config);
+        assert!(ant_powershell_disabled_gates.sleep);
+        assert!(ant_powershell_disabled_gates.workflow);
+        assert!(!ant_powershell_disabled_gates.powershell);
+
+        let non_windows_env =
+            HashMap::from([(CURRENT_SURFACE_POWERSHELL_ENV.to_string(), "1".to_string())]);
+        let non_windows_gates = current_surface_tool_gates_from_env_map(&non_windows_env, false);
+        assert!(!non_windows_gates.powershell);
+    }
+
+    #[test]
+    fn test_current_surface_subagent_tool_visibility_matches_async_surface() {
+        assert!(should_expose_tool_for_session(
+            "Bash",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(should_expose_tool_for_session(
+            "ToolSearch",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(should_expose_tool_for_session(
+            FINAL_OUTPUT_TOOL_NAME,
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(should_expose_tool_for_session(
+            "mcp__docs__search",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(!should_expose_tool_for_session(
+            "TaskOutput",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(!should_expose_tool_for_session(
+            "TaskStop",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(!should_expose_tool_for_session(
+            "SendUserMessage",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(!should_expose_tool_for_session(
+            "SendMessage",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(!should_expose_tool_for_session(
+            "Config",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(!should_expose_tool_for_session(
+            "Sleep",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(!should_expose_tool_for_session(
+            "Workflow",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(!should_expose_tool_for_session(
+            "ListMcpResourcesTool",
+            Some(SessionType::SubAgent),
+            false
+        ));
+        assert!(!should_expose_tool_for_session(
+            AGENT_TOOL_NAME,
+            Some(SessionType::SubAgent),
+            false
+        ));
+    }
+
+    #[test]
+    fn test_current_surface_subagent_plan_mode_keeps_exit_plan_mode_visible() {
+        let tool_gates = CurrentSurfaceToolGates {
+            config: false,
+            sleep: false,
+            workflow: false,
+            powershell: false,
+        };
+
+        assert!(should_expose_tool_for_session_with_gates(
+            "ExitPlanMode",
+            Some(SessionType::SubAgent),
+            false,
+            tool_gates,
+            false,
+            true
+        ));
+        assert!(!should_expose_tool_for_session_with_gates(
+            "EnterPlanMode",
+            Some(SessionType::SubAgent),
+            false,
+            tool_gates,
+            false,
+            true
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_list_tools_hides_resource_helpers_without_resource_extensions() -> Result<()> {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let agent = Agent::new();
+        let session = SessionManager::create_session(
+            PathBuf::from("."),
+            "agent-resource-helper-visibility".to_string(),
+            SessionType::User,
+        )
+        .await?;
+        agent
+            .update_provider(Arc::new(NativeOutputSchemaProvider), &session.id)
+            .await?;
+
+        let tools = agent.list_tools(None).await;
+
+        assert!(
+            tools.iter().any(|tool| tool.name == "ToolSearch"),
+            "ToolSearch should stay visible on the current surface"
+        );
+        assert!(
+            !tools.iter().any(|tool| tool.name == "ListMcpResourcesTool"),
+            "resource helper should stay hidden until a resource-capable extension is active"
+        );
+        assert!(
+            !tools.iter().any(|tool| tool.name == "ReadMcpResourceTool"),
+            "resource helper should stay hidden until a resource-capable extension is active"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_list_tools_applies_current_surface_main_thread_gates() -> Result<()> {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let agent = Agent::new();
+        let session = SessionManager::create_session(
+            PathBuf::from("."),
+            "agent-main-thread-surface".to_string(),
+            SessionType::User,
+        )
+        .await?;
+        agent
+            .update_provider(Arc::new(NativeOutputSchemaProvider), &session.id)
+            .await?;
+
+        let tools = agent.list_tools(None).await;
+        let tool_gates = current_surface_tool_gates();
+
+        for (tool_name, expected_visible) in [
+            ("Config", tool_gates.config),
+            ("Sleep", tool_gates.sleep),
+            ("Workflow", tool_gates.workflow),
+            ("PowerShell", tool_gates.powershell),
+        ] {
+            assert_eq!(
+                tools.iter().any(|tool| tool.name == tool_name),
+                expected_visible,
+                "main-thread current surface visibility mismatch for {tool_name}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_list_tools_hides_main_thread_only_tools_for_subagent_sessions() -> Result<()> {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let agent = Agent::new();
+        let session = SessionManager::create_session(
+            PathBuf::from("."),
+            "agent-subagent-surface".to_string(),
+            SessionType::SubAgent,
+        )
+        .await?;
+        agent
+            .extension_manager
+            .set_context(PlatformExtensionContext {
+                session_id: Some(session.id.clone()),
+                extension_manager: Some(Arc::downgrade(&agent.extension_manager)),
+            })
+            .await;
+        agent
+            .update_provider(Arc::new(NativeOutputSchemaProvider), &session.id)
+            .await?;
+        agent
+            .add_final_output_tool(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "answer": { "type": "string" }
+                },
+                "required": ["answer"]
+            }))
+            .await?;
+
+        let tools = agent.list_tools(None).await;
+
+        for visible_name in [
+            "Bash",
+            "Read",
+            "Edit",
+            "Write",
+            "TaskCreate",
+            "TaskGet",
+            "TaskList",
+            "TaskUpdate",
+            "ToolSearch",
+            FINAL_OUTPUT_TOOL_NAME,
+            "EnterWorktree",
+            "ExitWorktree",
+        ] {
+            assert!(
+                tools.iter().any(|tool| tool.name == visible_name),
+                "subagent current surface should keep: {visible_name}"
+            );
+        }
+
+        for hidden_name in [
+            "TaskOutput",
+            "TaskStop",
+            "SendUserMessage",
+            "Config",
+            "Sleep",
+            "Workflow",
+            "AskUserQuestion",
+            "EnterPlanMode",
+            "ExitPlanMode",
+        ] {
+            assert!(
+                !tools.iter().any(|tool| tool.name == hidden_name),
+                "subagent current surface should hide: {hidden_name}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_list_tools_exposes_teammate_coordination_tools_for_team_subagents() -> Result<()>
+    {
+        use crate::execution::manager::AgentManager;
+        use crate::session::{
+            save_team_membership, save_team_state, TeamMember, TeamMembershipState,
+            TeamSessionState,
+        };
+
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let manager = AgentManager::new_with_thread_runtime_store(
+            None,
+            Arc::new(InMemoryThreadRuntimeStore::default()),
+        )
+        .await?;
+        let working_dir = tempfile::tempdir()?;
+        let lead = SessionManager::create_session(
+            working_dir.path().to_path_buf(),
+            "team-lead".to_string(),
+            SessionType::User,
+        )
+        .await?;
+        let child = SessionManager::create_session(
+            working_dir.path().to_path_buf(),
+            "team-child".to_string(),
+            SessionType::SubAgent,
+        )
+        .await?;
+
+        let mut team_state = TeamSessionState::new("delivery-team", lead.id.clone(), None, None);
+        team_state.add_or_update_member(TeamMember::teammate(
+            child.id.clone(),
+            "verifier".to_string(),
+            None,
+        ));
+        save_team_state(&lead.id, Some(team_state)).await?;
+        save_team_membership(
+            &child.id,
+            Some(TeamMembershipState {
+                team_name: "delivery-team".to_string(),
+                lead_session_id: lead.id.clone(),
+                agent_id: child.id.clone(),
+                name: "verifier".to_string(),
+                agent_type: None,
+            }),
+        )
+        .await?;
+
+        let child_agent = manager.get_or_create_agent(child.id.clone()).await?;
+        let tools = child_agent.list_tools(None).await;
+
+        for visible_name in [
+            "SendMessage",
+            "ListPeers",
+            "CronCreate",
+            "CronList",
+            "CronDelete",
+        ] {
+            assert!(
+                tools.iter().any(|tool| tool.name == visible_name),
+                "team subagent current surface should keep teammate tool: {visible_name}"
+            );
+        }
+
+        for hidden_name in ["TeamCreate", "TeamDelete", "SendUserMessage"] {
+            assert!(
+                !tools.iter().any(|tool| tool.name == hidden_name),
+                "team subagent current surface should still hide main-thread-only tool: {hidden_name}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_agent_tool_routes_async_current_surface_through_callbacks() -> Result<()> {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let captured = Arc::new(std::sync::Mutex::new(None::<SpawnAgentRequest>));
+        let captured_clone = captured.clone();
+        let spawn_agent_callback = Arc::new(move |request: SpawnAgentRequest| {
+            *captured_clone.lock().expect("capture lock") = Some(request.clone());
+            Box::pin(async move {
+                Ok(SpawnAgentResponse {
+                    agent_id: "agent-42".to_string(),
+                    nickname: Some("delegate".to_string()),
+                    extra: std::collections::BTreeMap::new(),
+                })
+            })
+                as Pin<Box<dyn Future<Output = Result<SpawnAgentResponse, String>> + Send>>
+        });
+
+        let agent =
+            Agent::with_tool_config(ToolRegistrationConfig::new().with_agent_control_tools(
+                AgentControlToolConfig::new().with_spawn_agent_callback(spawn_agent_callback),
+            ));
+        let session = SessionManager::create_session(
+            PathBuf::from("."),
+            "agent-callback-surface".to_string(),
+            SessionType::User,
+        )
+        .await?;
+        agent
+            .update_provider(Arc::new(NativeOutputSchemaProvider), &session.id)
+            .await?;
+
+        let arguments = serde_json::json!({
+            "description": "并行验证",
+            "prompt": "检查这个改动是否会影响子代理通信",
+            "name": "verifier",
+            "run_in_background": true
+        });
+        let tool_call = CallToolRequestParam {
+            name: AGENT_TOOL_NAME.into(),
+            arguments: Some(
+                arguments
+                    .as_object()
+                    .cloned()
+                    .expect("agent tool arguments should be an object"),
+            ),
+        };
+
+        let (_request_id, tool_result) = agent
+            .dispatch_tool_call(tool_call, "req-agent-callback".to_string(), None, &session)
+            .await;
+        let tool_result = tool_result.expect("agent dispatch should succeed");
+        let call_result = tool_result
+            .result
+            .await
+            .expect("callback-backed agent result");
+
+        assert_eq!(
+            call_result
+                .structured_content
+                .as_ref()
+                .and_then(|value| value.get("status"))
+                .and_then(Value::as_str),
+            Some("async_launched")
+        );
+        assert_eq!(
+            call_result
+                .structured_content
+                .as_ref()
+                .and_then(|value| value.get("agentId"))
+                .and_then(Value::as_str),
+            Some("agent-42")
+        );
+
+        let captured_request = captured
+            .lock()
+            .expect("capture lock")
+            .clone()
+            .expect("spawn callback should capture request");
+        assert_eq!(captured_request.parent_session_id, session.id);
+        assert_eq!(captured_request.message, "检查这个改动是否会影响子代理通信");
+        assert_eq!(captured_request.name.as_deref(), Some("verifier"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_agent_tool_routes_cwd_override_through_callbacks() -> Result<()> {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let captured = Arc::new(std::sync::Mutex::new(None::<SpawnAgentRequest>));
+        let captured_clone = captured.clone();
+        let spawn_agent_callback = Arc::new(move |request: SpawnAgentRequest| {
+            *captured_clone.lock().expect("capture lock") = Some(request.clone());
+            Box::pin(async move {
+                Ok(SpawnAgentResponse {
+                    agent_id: "agent-cwd".to_string(),
+                    nickname: Some("cwd-agent".to_string()),
+                    extra: std::collections::BTreeMap::new(),
+                })
+            })
+                as Pin<Box<dyn Future<Output = Result<SpawnAgentResponse, String>> + Send>>
+        });
+
+        let agent =
+            Agent::with_tool_config(ToolRegistrationConfig::new().with_agent_control_tools(
+                AgentControlToolConfig::new().with_spawn_agent_callback(spawn_agent_callback),
+            ));
+        let session = SessionManager::create_session(
+            PathBuf::from("."),
+            "agent-cwd-callback-surface".to_string(),
+            SessionType::User,
+        )
+        .await?;
+        agent
+            .update_provider(Arc::new(NativeOutputSchemaProvider), &session.id)
+            .await?;
+
+        let cwd = tempfile::tempdir()?;
+        let arguments = serde_json::json!({
+            "description": "隔离目录验证",
+            "prompt": "在自定义 cwd 中执行这个子任务",
+            "cwd": cwd.path().display().to_string()
+        });
+        let tool_call = CallToolRequestParam {
+            name: AGENT_TOOL_NAME.into(),
+            arguments: Some(
+                arguments
+                    .as_object()
+                    .cloned()
+                    .expect("agent tool arguments should be an object"),
+            ),
+        };
+
+        let (_request_id, tool_result) = agent
+            .dispatch_tool_call(tool_call, "req-agent-cwd".to_string(), None, &session)
+            .await;
+        let tool_result = tool_result.expect("agent dispatch should succeed");
+        let call_result = tool_result
+            .result
+            .await
+            .expect("callback-backed agent result");
+
+        assert_eq!(
+            call_result
+                .structured_content
+                .as_ref()
+                .and_then(|value| value.get("status"))
+                .and_then(Value::as_str),
+            Some("async_launched")
+        );
+
+        let captured_request = captured
+            .lock()
+            .expect("capture lock")
+            .clone()
+            .expect("spawn callback should capture request");
+        assert_eq!(
+            captured_request.cwd.as_deref(),
+            Some(cwd.path().to_string_lossy().as_ref())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_native_tool_result_to_call_tool_result_preserves_metadata_and_error_flag() {
+        let tool_result = crate::tools::ToolResult::error("failed")
+            .with_metadata("tool_surface_updated", Value::Bool(true))
+            .with_metadata("matches", serde_json::json!(["demo__tool"]));
+
+        let call_result = native_tool_result_to_call_tool_result(tool_result);
+
+        assert_eq!(call_result.is_error, Some(true));
+        assert_eq!(
+            call_result
+                .structured_content
+                .as_ref()
+                .and_then(|value| value.get("tool_surface_updated")),
+            Some(&Value::Bool(true))
+        );
+        assert!(tool_surface_updated_from_call_tool_result(&call_result));
     }
 
     #[tokio::test]

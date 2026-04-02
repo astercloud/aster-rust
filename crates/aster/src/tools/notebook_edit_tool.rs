@@ -7,7 +7,7 @@
 //! - 增强的错误处理和路径验证
 //! - 保留单元格元数据
 //!
-//! Requirements: 基于 Claude Agent SDK notebook.ts 中的 NotebookEditTool 实现
+//! Requirements: 基于当前工具面的 notebook 编辑语义实现
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
