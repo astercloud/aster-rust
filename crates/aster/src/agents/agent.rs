@@ -1383,6 +1383,11 @@ impl Agent {
         let mut tool_registry = ToolRegistry::new();
         let (file_read_history, _hook_manager) =
             crate::tools::register_all_tools(&mut tool_registry, config);
+        if let Some(scheduler) = scheduler.as_ref() {
+            tool_registry.register(Box::new(CronCreateTool::new(scheduler.clone())));
+            tool_registry.register(Box::new(CronListTool::new(scheduler.clone())));
+            tool_registry.register(Box::new(CronDeleteTool::new(scheduler.clone())));
+        }
 
         Self {
             provider: provider.clone(),
@@ -2532,12 +2537,17 @@ impl Agent {
         cancellation_token: Option<CancellationToken>,
         session: &Session,
     ) -> (String, Result<ToolCallResult, ErrorData>) {
-        if session.session_type == SessionType::SubAgent && tool_call.name == AGENT_TOOL_NAME {
+        let latest_session = self.store_get_session(&session.id, false).await.ok();
+        let effective_session = latest_session.as_ref().unwrap_or(session);
+
+        if effective_session.session_type == SessionType::SubAgent
+            && tool_call.name == AGENT_TOOL_NAME
+        {
             // Only team subagents keep the current surface needed for synchronous nested subagents.
             // Plain delegated workers still must not recursively spawn more agents.
-            if session_allows_subagent_teammate_tools(session) {
+            if session_allows_subagent_teammate_tools(effective_session) {
                 debug!(
-                    session_id = %session.id,
+                    session_id = %effective_session.id,
                     "Allowing Agent tool for team subagent current surface"
                 );
             } else {
@@ -2576,7 +2586,7 @@ impl Agent {
                 .map(Value::Object)
                 .unwrap_or(Value::Object(serde_json::Map::new()));
             if let Some(callback_result) = self
-                .try_dispatch_callback_backed_agent_tool(arguments.clone(), session)
+                .try_dispatch_callback_backed_agent_tool(arguments.clone(), effective_session)
                 .await
             {
                 return (request_id, callback_result);

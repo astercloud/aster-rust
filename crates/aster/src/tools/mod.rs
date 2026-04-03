@@ -505,6 +505,7 @@ mod tests {
     use crate::session::Session;
     use async_trait::async_trait;
     use chrono::{DateTime, Utc};
+    use serial_test::serial;
     use std::path::PathBuf;
 
     struct TestScheduler;
@@ -580,159 +581,165 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_register_default_tools() {
-        let mut registry = ToolRegistry::new();
-        let (_history, _hook_manager) = register_default_tools(&mut registry);
-        let tool_gates = current_surface_tool_gates();
+        temp_env::with_var(REMOTE_TRIGGER_GATE_ENV, None::<&str>, || {
+            let mut registry = ToolRegistry::new();
+            let (_history, _hook_manager) = register_default_tools(&mut registry);
+            let tool_gates = current_surface_tool_gates();
 
-        // Verify core tools are registered
-        assert!(registry.contains("Bash"));
-        assert!(registry.contains("Read"));
-        assert!(registry.contains("Write"));
-        assert!(registry.contains("Edit"));
-        assert!(registry.contains("Glob"));
-        assert!(registry.contains("Grep"));
-        assert_eq!(
-            registry.contains("Config"),
-            should_register_current_surface_tool("Config", tool_gates)
-        );
-        assert!(registry.contains("SendUserMessage"));
-        assert_eq!(
-            registry.contains("Sleep"),
-            should_register_current_surface_tool("Sleep", tool_gates)
-        );
-        assert_eq!(
-            registry.contains("PowerShell"),
-            should_register_current_surface_tool("PowerShell", tool_gates)
-                && PowerShellTool::is_runtime_available()
-        );
-        assert!(registry.contains("Skill"));
-        assert_eq!(
-            registry.contains("Workflow"),
-            should_register_current_surface_tool("Workflow", tool_gates)
-        );
-        assert!(registry.contains("TaskCreate"));
-        assert!(registry.contains("TaskList"));
-        assert!(registry.contains("TaskGet"));
-        assert!(registry.contains("TaskUpdate"));
-        assert!(registry.contains("TaskOutput"));
-        assert!(registry.contains("TaskStop"));
-        assert!(registry.contains("NotebookEdit"));
-        assert!(!registry.contains("CronCreate"));
-        assert!(!registry.contains("CronList"));
-        assert!(!registry.contains("CronDelete"));
-        assert!(!registry.contains("RemoteTrigger"));
-        assert!(registry.contains("EnterWorktree"));
-        assert!(registry.contains("ExitWorktree"));
-        assert!(registry.contains("EnterPlanMode"));
-        assert!(registry.contains("ExitPlanMode"));
-        assert!(registry.contains("WebFetch"));
-        assert!(registry.contains("WebSearch"));
-        assert!(!registry.contains("ToolSearch"));
-        assert!(!registry.contains("spawn_agent"));
-        assert!(!registry.contains("Agent"));
-        assert!(!registry.contains("SendMessage"));
-        assert!(!registry.contains("wait_agent"));
-        assert!(!registry.contains("resume_agent"));
-        assert!(!registry.contains("close_agent"));
-        assert!(!registry.contains("TeamCreate"));
-        assert!(!registry.contains("TeamDelete"));
-        assert!(!registry.contains("ListPeers"));
-        // AskUserQuestion and LSPTool should not be registered without callbacks
-        assert!(!registry.contains("AskUserQuestion"));
-        assert!(!registry.contains("LSP"));
+            // Verify core tools are registered
+            assert!(registry.contains("Bash"));
+            assert!(registry.contains("Read"));
+            assert!(registry.contains("Write"));
+            assert!(registry.contains("Edit"));
+            assert!(registry.contains("Glob"));
+            assert!(registry.contains("Grep"));
+            assert_eq!(
+                registry.contains("Config"),
+                should_register_current_surface_tool("Config", tool_gates)
+            );
+            assert!(registry.contains("SendUserMessage"));
+            assert_eq!(
+                registry.contains("Sleep"),
+                should_register_current_surface_tool("Sleep", tool_gates)
+            );
+            assert_eq!(
+                registry.contains("PowerShell"),
+                should_register_current_surface_tool("PowerShell", tool_gates)
+                    && PowerShellTool::is_runtime_available()
+            );
+            assert!(registry.contains("Skill"));
+            assert_eq!(
+                registry.contains("Workflow"),
+                should_register_current_surface_tool("Workflow", tool_gates)
+            );
+            assert!(registry.contains("TaskCreate"));
+            assert!(registry.contains("TaskList"));
+            assert!(registry.contains("TaskGet"));
+            assert!(registry.contains("TaskUpdate"));
+            assert!(registry.contains("TaskOutput"));
+            assert!(registry.contains("TaskStop"));
+            assert!(registry.contains("NotebookEdit"));
+            assert!(!registry.contains("CronCreate"));
+            assert!(!registry.contains("CronList"));
+            assert!(!registry.contains("CronDelete"));
+            assert!(!registry.contains("RemoteTrigger"));
+            assert!(registry.contains("EnterWorktree"));
+            assert!(registry.contains("ExitWorktree"));
+            assert!(registry.contains("EnterPlanMode"));
+            assert!(registry.contains("ExitPlanMode"));
+            assert!(registry.contains("WebFetch"));
+            assert!(registry.contains("WebSearch"));
+            assert!(!registry.contains("ToolSearch"));
+            assert!(!registry.contains("spawn_agent"));
+            assert!(!registry.contains("Agent"));
+            assert!(!registry.contains("SendMessage"));
+            assert!(!registry.contains("wait_agent"));
+            assert!(!registry.contains("resume_agent"));
+            assert!(!registry.contains("close_agent"));
+            assert!(!registry.contains("TeamCreate"));
+            assert!(!registry.contains("TeamDelete"));
+            assert!(!registry.contains("ListPeers"));
+            // AskUserQuestion and LSPTool should not be registered without callbacks
+            assert!(!registry.contains("AskUserQuestion"));
+            assert!(!registry.contains("LSP"));
+        });
     }
 
     #[test]
+    #[serial]
     fn test_register_all_tools_with_config() {
         use std::future::Future;
         use std::pin::Pin;
         use std::sync::Arc;
 
-        let mut registry = ToolRegistry::new();
+        temp_env::with_var(REMOTE_TRIGGER_GATE_ENV, None::<&str>, || {
+            let mut registry = ToolRegistry::new();
 
-        // Create mock callbacks
-        let ask_callback: AskCallback = Arc::new(|_request| {
-            Box::pin(async { Some(serde_json::json!("test response")) })
-                as Pin<Box<dyn Future<Output = Option<serde_json::Value>> + Send>>
-        });
-        let spawn_agent_callback: SpawnAgentCallback = Arc::new(|request| {
-            Box::pin(async move {
-                Ok(SpawnAgentResponse {
-                    agent_id: request.parent_session_id,
-                    nickname: Some("delegate".to_string()),
-                    extra: std::collections::BTreeMap::new(),
+            // Create mock callbacks
+            let ask_callback: AskCallback = Arc::new(|_request| {
+                Box::pin(async { Some(serde_json::json!("test response")) })
+                    as Pin<Box<dyn Future<Output = Option<serde_json::Value>> + Send>>
+            });
+            let spawn_agent_callback: SpawnAgentCallback = Arc::new(|request| {
+                Box::pin(async move {
+                    Ok(SpawnAgentResponse {
+                        agent_id: request.parent_session_id,
+                        nickname: Some("delegate".to_string()),
+                        extra: std::collections::BTreeMap::new(),
+                    })
                 })
-            })
-        });
+            });
 
-        let lsp_callback: LspCallback = Arc::new(|_operation, _path: PathBuf, _position| {
-            Box::pin(async { Ok(LspResult::Definition { locations: vec![] }) })
-                as Pin<Box<dyn Future<Output = Result<LspResult, String>> + Send>>
-        });
+            let lsp_callback: LspCallback = Arc::new(|_operation, _path: PathBuf, _position| {
+                Box::pin(async { Ok(LspResult::Definition { locations: vec![] }) })
+                    as Pin<Box<dyn Future<Output = Result<LspResult, String>> + Send>>
+            });
 
-        let config = ToolRegistrationConfig::new()
-            .with_ask_callback(ask_callback)
-            .with_lsp_callback(lsp_callback)
-            .with_pdf_enabled(true)
-            .with_agent_control_tools(
-                AgentControlToolConfig::new().with_spawn_agent_callback(spawn_agent_callback),
+            let config = ToolRegistrationConfig::new()
+                .with_ask_callback(ask_callback)
+                .with_lsp_callback(lsp_callback)
+                .with_pdf_enabled(true)
+                .with_agent_control_tools(
+                    AgentControlToolConfig::new().with_spawn_agent_callback(spawn_agent_callback),
+                );
+
+            let (_history, _hook_manager) = register_all_tools(&mut registry, config);
+            let tool_gates = current_surface_tool_gates();
+
+            // Verify all tools are registered
+            assert!(registry.contains("Bash"));
+            assert!(registry.contains("Read"));
+            assert!(registry.contains("Write"));
+            assert!(registry.contains("Edit"));
+            assert!(registry.contains("Glob"));
+            assert!(registry.contains("Grep"));
+            assert_eq!(
+                registry.contains("Config"),
+                should_register_current_surface_tool("Config", tool_gates)
             );
-
-        let (_history, _hook_manager) = register_all_tools(&mut registry, config);
-        let tool_gates = current_surface_tool_gates();
-
-        // Verify all tools are registered
-        assert!(registry.contains("Bash"));
-        assert!(registry.contains("Read"));
-        assert!(registry.contains("Write"));
-        assert!(registry.contains("Edit"));
-        assert!(registry.contains("Glob"));
-        assert!(registry.contains("Grep"));
-        assert_eq!(
-            registry.contains("Config"),
-            should_register_current_surface_tool("Config", tool_gates)
-        );
-        assert_eq!(
-            registry.contains("Sleep"),
-            should_register_current_surface_tool("Sleep", tool_gates)
-        );
-        assert!(registry.contains("SendUserMessage"));
-        assert_eq!(
-            registry.contains("PowerShell"),
-            should_register_current_surface_tool("PowerShell", tool_gates)
-                && PowerShellTool::is_runtime_available()
-        );
-        assert!(registry.contains("AskUserQuestion"));
-        assert!(registry.contains("LSP"));
-        assert!(registry.contains("Skill"));
-        assert_eq!(
-            registry.contains("Workflow"),
-            should_register_current_surface_tool("Workflow", tool_gates)
-        );
-        assert!(registry.contains("TaskCreate"));
-        assert!(registry.contains("TaskList"));
-        assert!(registry.contains("TaskGet"));
-        assert!(registry.contains("TaskUpdate"));
-        assert!(registry.contains("TaskOutput"));
-        assert!(registry.contains("TaskStop"));
-        assert!(registry.contains("NotebookEdit"));
-        assert!(!registry.contains("CronCreate"));
-        assert!(!registry.contains("CronList"));
-        assert!(!registry.contains("CronDelete"));
-        assert!(!registry.contains("RemoteTrigger"));
-        assert!(registry.contains("EnterWorktree"));
-        assert!(registry.contains("ExitWorktree"));
-        assert!(registry.contains("EnterPlanMode"));
-        assert!(registry.contains("ExitPlanMode"));
-        assert!(registry.contains("WebFetch"));
-        assert!(registry.contains("WebSearch"));
-        assert!(!registry.contains("spawn_agent"));
-        assert!(registry.contains("Agent"));
-        assert!(!registry.contains("SendMessage"));
-        assert!(!registry.contains("TeamCreate"));
-        assert!(!registry.contains("TeamDelete"));
-        assert!(!registry.contains("ListPeers"));
+            assert_eq!(
+                registry.contains("Sleep"),
+                should_register_current_surface_tool("Sleep", tool_gates)
+            );
+            assert!(registry.contains("SendUserMessage"));
+            assert_eq!(
+                registry.contains("PowerShell"),
+                should_register_current_surface_tool("PowerShell", tool_gates)
+                    && PowerShellTool::is_runtime_available()
+            );
+            assert!(registry.contains("AskUserQuestion"));
+            assert!(registry.contains("LSP"));
+            assert!(registry.contains("Skill"));
+            assert_eq!(
+                registry.contains("Workflow"),
+                should_register_current_surface_tool("Workflow", tool_gates)
+            );
+            assert!(registry.contains("TaskCreate"));
+            assert!(registry.contains("TaskList"));
+            assert!(registry.contains("TaskGet"));
+            assert!(registry.contains("TaskUpdate"));
+            assert!(registry.contains("TaskOutput"));
+            assert!(registry.contains("TaskStop"));
+            assert!(registry.contains("NotebookEdit"));
+            assert!(!registry.contains("CronCreate"));
+            assert!(!registry.contains("CronList"));
+            assert!(!registry.contains("CronDelete"));
+            assert!(!registry.contains("RemoteTrigger"));
+            assert!(registry.contains("EnterWorktree"));
+            assert!(registry.contains("ExitWorktree"));
+            assert!(registry.contains("EnterPlanMode"));
+            assert!(registry.contains("ExitPlanMode"));
+            assert!(registry.contains("WebFetch"));
+            assert!(registry.contains("WebSearch"));
+            assert!(!registry.contains("spawn_agent"));
+            assert!(registry.contains("Agent"));
+            assert!(!registry.contains("SendMessage"));
+            assert!(!registry.contains("TeamCreate"));
+            assert!(!registry.contains("TeamDelete"));
+            assert!(!registry.contains("ListPeers"));
+        });
     }
 
     #[test]
@@ -748,6 +755,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_register_all_tools_with_scheduler_and_gate_registers_current_cron_tools() {
         let mut registry = ToolRegistry::new();
         let config = ToolRegistrationConfig::new().with_scheduler(Arc::new(TestScheduler));
@@ -762,6 +770,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_register_all_tools_with_remote_trigger_gate_registers_remote_trigger_tool() {
         let mut registry = ToolRegistry::new();
 
