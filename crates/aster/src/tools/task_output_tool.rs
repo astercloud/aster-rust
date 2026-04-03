@@ -13,6 +13,7 @@ use std::time::Duration;
 
 /// TaskOutputTool 输入参数
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TaskOutputInput {
     /// 任务 ID
     pub task_id: String,
@@ -20,10 +21,6 @@ pub struct TaskOutputInput {
     pub block: Option<bool>,
     /// 等待超时时间（毫秒）
     pub timeout: Option<u64>,
-    /// 显示详细历史（扩展功能）
-    pub show_history: Option<bool>,
-    /// 限制输出行数
-    pub lines: Option<usize>,
 }
 
 /// TaskOutputTool - 查询任务输出和状态
@@ -69,9 +66,7 @@ TaskOutput 用于按 `task_id` 查询后台执行状态与日志。
 参数：
 - task_id: 任务 ID（必需）
 - block: 是否等待任务完成（默认 true）
-- timeout: 等待超时时间（毫秒，默认 30000）
-- show_history: 显示详细执行历史（默认 false）
-- lines: 限制输出行数（可选）"#
+- timeout: 等待超时时间（毫秒，默认 30000）"#
     }
 
     fn input_schema(&self) -> serde_json::Value {
@@ -89,17 +84,10 @@ TaskOutput 用于按 `task_id` 查询后台执行状态与日志。
                 "timeout": {
                     "type": "number",
                     "description": "等待超时时间（毫秒，默认 30000）"
-                },
-                "show_history": {
-                    "type": "boolean",
-                    "description": "显示详细执行历史（默认 false）"
-                },
-                "lines": {
-                    "type": "number",
-                    "description": "限制输出行数（可选）"
                 }
             },
-            "required": ["task_id"]
+            "required": ["task_id"],
+            "additionalProperties": false
         })
     }
 
@@ -113,7 +101,6 @@ TaskOutput 用于按 `task_id` 查询后台执行状态与日志。
 
         let block = input.block.unwrap_or(true);
         let timeout_ms = input.timeout.unwrap_or(30000);
-        let show_history = input.show_history.unwrap_or(false);
 
         // 检查任务是否存在
         if !self.task_manager.task_exists(&input.task_id).await {
@@ -187,26 +174,8 @@ TaskOutput 用于按 `task_id` 查询后台执行状态与日志。
         output.push(format!("输出文件: {}", output_file));
         output.push(format!("会话 ID: {}", state.session_id));
 
-        // 显示详细历史（扩展功能）
-        if show_history {
-            output.push("\n=== 执行历史 ===".to_string());
-            output.push("（注意：当前实现中 TaskManager 不维护详细历史记录）".to_string());
-            output.push(format!("任务创建: {}", format_instant(state.start_time)));
-            if let Some(end_time) = state.end_time {
-                output.push(format!(
-                    "任务结束: {} (状态: {})",
-                    format_instant(end_time),
-                    state.status
-                ));
-            }
-        }
-
         // 获取任务输出
-        match self
-            .task_manager
-            .get_output(&input.task_id, input.lines)
-            .await
-        {
+        match self.task_manager.get_output(&input.task_id, None).await {
             Ok(task_output) => {
                 output.push("\n=== 任务输出 ===".to_string());
                 if task_output.trim().is_empty() {
@@ -299,6 +268,11 @@ mod tests {
 
         assert_eq!(schema["type"], "object");
         assert!(schema["properties"]["task_id"].is_object());
+        assert!(schema["properties"]["block"].is_object());
+        assert!(schema["properties"]["timeout"].is_object());
+        assert!(schema["properties"]["show_history"].is_null());
+        assert!(schema["properties"]["lines"].is_null());
+        assert_eq!(schema["additionalProperties"], serde_json::json!(false));
         assert_eq!(schema["required"], serde_json::json!(["task_id"]));
     }
 
@@ -397,6 +371,20 @@ mod tests {
 
         let result = tool.execute(params, &context).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_task_output_tool_rejects_legacy_extra_fields() {
+        let tool = TaskOutputTool::new();
+        let context = create_test_context();
+
+        let params = serde_json::json!({
+            "task_id": "nonexistent-task",
+            "show_history": true
+        });
+
+        let result = tool.execute(params, &context).await;
+        assert!(matches!(result, Err(ToolError::InvalidParams(_))));
     }
 
     #[tokio::test]

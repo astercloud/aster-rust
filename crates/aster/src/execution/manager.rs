@@ -146,12 +146,12 @@ async fn get_or_create_agent_with_runtime(
     }
 
     let tool_config = ToolRegistrationConfig::new()
-        .with_agent_control_tools(build_agent_control_tool_config(runtime.clone()));
+        .with_agent_control_tools(build_agent_control_tool_config(runtime.clone()))
+        .with_scheduler(Arc::clone(&runtime.scheduler));
     let agent = Arc::new(
         Agent::with_tool_config(tool_config)
             .with_thread_runtime_store(Arc::clone(&runtime.thread_runtime_store)),
     );
-    agent.set_scheduler(Arc::clone(&runtime.scheduler)).await;
     agent
         .extension_manager
         .set_context(PlatformExtensionContext {
@@ -795,6 +795,7 @@ mod tests {
                 team_name: None,
                 agent_type: None,
                 model: None,
+                run_in_background: false,
                 reasoning_effort: None,
                 fork_context: false,
                 blueprint_role_id: None,
@@ -808,6 +809,8 @@ mod tests {
                 theme: None,
                 system_overlay: None,
                 output_contract: None,
+                mode: None,
+                isolation: None,
                 cwd: None,
             },
         )
@@ -876,6 +879,7 @@ mod tests {
                 team_name: Some(team_name),
                 agent_type: None,
                 model: None,
+                run_in_background: false,
                 reasoning_effort: None,
                 fork_context: false,
                 blueprint_role_id: None,
@@ -889,6 +893,8 @@ mod tests {
                 theme: None,
                 system_overlay: None,
                 output_contract: None,
+                mode: None,
+                isolation: None,
                 cwd: Some(temp_dir.path().display().to_string()),
             },
         )

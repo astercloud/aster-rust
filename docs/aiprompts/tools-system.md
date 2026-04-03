@@ -101,23 +101,23 @@ pub enum PermissionBehavior {
 
 ## 现代代理运行时工具
 
-当宿主注入现代 agent runtime callback 时，会额外注册这组 current tools：
+当宿主注入现代 agent runtime callback 时，当前实现不会直接额外注册 `spawn_agent / wait_agent / resume_agent / close_agent` 这类独立工具。真实 current surface 是：
 
 | 工具 | 模块 | 说明 |
 |------|------|------|
-| spawn_agent | `agent_control.rs` | 创建真实子代理会话并异步开始首条任务 |
+| Agent | `subagent_tool.rs` + `agent.rs` | 默认委派入口；在 callback-backed runtime 下会把 `run_in_background / name / team_name / cwd` 投影到真实子代理会话主链 |
 | SendMessage | `agent_control.rs` | 向子代理发送消息；在活跃 team 中支持按成员名字或 `*` 广播路由 |
-| wait_agent | `agent_control.rs` | 等待一个或多个子代理进入最终状态 |
-| resume_agent | `agent_control.rs` | 恢复已关闭的子代理 |
-| close_agent | `agent_control.rs` | 关闭子代理并回收其 team roster 成员 |
 
-默认 native tools 还会注册 current `Workflow`：
+通用注册入口会先按 current gate 决定是否暴露这组主线程工具：
 
 | 工具 | 模块 | 说明 |
 |------|------|------|
+| Config | `config_tool.rs` | 仅 internal user current surface 暴露 |
+| Sleep | `sleep_tool.rs` | 仅在 `PROACTIVE` / `KAIROS` gate 打开时暴露 |
+| PowerShell | `powershell_tool.rs` | 仅 Windows 且 current gate 允许时暴露 |
 | Workflow | `workflow_tool.rs` | 执行 workflow skill；只接受 `execution_mode=workflow` 的 skill，不再暴露旧的 workflow 示例 surface |
 
-当 `spawn_agent` 与 `SendMessage` 同时可用时，还会注册这组 team current tools：
+当 runtime 同时具备 `spawn_agent callback` 与 `SendInput callback` 时，还会注册这组 team current tools：
 
 | 工具 | 模块 | 说明 |
 |------|------|------|
@@ -141,17 +141,26 @@ let config = ToolRegistrationConfig::new()
 let (history, hook_manager) = register_all_tools(&mut registry, config);
 ```
 
+如果宿主希望走通用注册入口同时暴露 current cron tools，需要显式注入 scheduler：
+
+```rust
+let config = ToolRegistrationConfig::new()
+    .with_scheduler(scheduler)
+    .with_agent_control_tools(agent_control_tools);
+let (history, hook_manager) = register_all_tools(&mut registry, config);
+```
+
 在 Agent 默认构造路径里，还会额外注册与扩展工具面相关的 current native tools：
 - `Agent`（当前默认委派入口；旧的 `subagent` surface 不再暴露）
 - `AskUserQuestion`（默认通过 elicitation 回调桥接到用户输入流程）
-- `Config`
-- `Sleep`
+- `Config`（仍受 current gate 控制）
+- `Sleep`（仍受 current gate 控制）
 - `ToolSearch`
 - `ListMcpResourcesTool`
 - `ReadMcpResourceTool`
 - `StructuredOutput`（存在输出 schema 时动态注入，用于返回最终结构化结果）
 
-当 `Agent` 注入 scheduler 服务后，还会额外注册这组 current cron tools：
+当 `ToolRegistrationConfig` 或 `Agent` 注入 scheduler 服务后，还会额外注册这组 current cron tools：
 - `CronCreate`
 - `CronList`
 - `CronDelete`
@@ -160,6 +169,7 @@ let (history, hook_manager) = register_all_tools(&mut registry, config);
 - `TeamCreate` 写入 `team_session.v0`
 - 被注册进 team 的子代理会写入 `team_membership.v0`
 - `TaskCreate / TaskList / TaskGet / TaskUpdate` 会优先读取 team 名称作为共享 task list id
+- team 子代理会额外保留 `Agent` current surface，但只允许同步再派生子代理；不会继续开放后台 agent 或 teammate 再派生
 
 ## 工具上下文
 

@@ -136,15 +136,15 @@ pub fn create_subagent_tool(sub_recipes: &[SubRecipe]) -> Tool {
             },
             "run_in_background": {
                 "type": "boolean",
-                "description": "Whether to launch the agent in the background. Requires a callback-backed agent runtime; otherwise the tool falls back to foreground completion."
+                "description": "Whether to launch the agent in the background. Requires a callback-backed agent runtime. In the current foreground-only runtime, true is rejected."
             },
             "name": {
                 "type": "string",
-                "description": "Optional display name for the agent. Callback-backed runtimes also use it as the teammate routing name."
+                "description": "Optional display name for the agent. Callback-backed runtimes also use it as the teammate routing name. Team subagents can only spawn synchronous nested agents and must omit teammate fields."
             },
             "team_name": {
                 "type": "string",
-                "description": "Optional team name for teammate spawning. Requires `name` plus a callback-backed runtime with an existing team context."
+                "description": "Optional team name for teammate spawning. Requires `name` plus a callback-backed agent runtime with an existing team context. Team subagents must omit it."
             },
             "mode": {
                 "type": "string",
@@ -186,8 +186,9 @@ fn build_tool_description(sub_recipes: &[SubRecipe]) -> String {
         "Launch a new agent to handle complex multi-step tasks autonomously.\n\n\
          Provide a short `description` plus a detailed `prompt`.\n\
          `subagent_type` is optional: when it matches a local subrecipe, the runtime uses that specialized flow; otherwise it becomes a role hint for a general delegated agent.\n\n\
-         Without a callback-backed agent runtime, delegated agents execute in the foreground and return a structured completion payload when the agent finishes.\n\
-         When callback-backed agent control is available, the tool can launch async named or team-routed agents and honor `cwd` overrides.",
+         Without a callback-backed agent runtime, delegated agents execute only in the foreground. `run_in_background`, `team_name`, `mode`, and `isolation` are rejected, while `cwd` must be an absolute existing directory.\n\
+         When callback-backed agent control is available, top-level sessions can launch async named or team-routed agents and honor `cwd` overrides.\n\
+         Team subagents keep only the current synchronous nested-agent surface: they may call `Agent`, but must omit `run_in_background`, `name`, and `team_name`.",
     );
 
     if !sub_recipes.is_empty() {
@@ -864,6 +865,29 @@ mod tests {
             .unwrap()
             .contains("Available specialized agent types"));
         assert!(tool.description.as_ref().unwrap().contains("test_recipe"));
+        assert!(tool
+            .description
+            .as_ref()
+            .unwrap()
+            .contains("`run_in_background`, `team_name`, `mode`, and `isolation` are rejected"));
+        assert!(tool
+            .description
+            .as_ref()
+            .unwrap()
+            .contains("Team subagents keep only the current synchronous nested-agent surface"));
+
+        assert_eq!(
+            tool.input_schema["properties"]["run_in_background"]["description"].as_str(),
+            Some(
+                "Whether to launch the agent in the background. Requires a callback-backed agent runtime. In the current foreground-only runtime, true is rejected."
+            )
+        );
+        assert_eq!(
+            tool.input_schema["properties"]["team_name"]["description"].as_str(),
+            Some(
+                "Optional team name for teammate spawning. Requires `name` plus a callback-backed agent runtime with an existing team context. Team subagents must omit it."
+            )
+        );
     }
 
     #[test]

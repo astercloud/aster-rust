@@ -57,8 +57,9 @@ use crate::session::{
 use crate::tool_inspection::ToolInspectionManager;
 use crate::tool_monitor::RepetitionInspector;
 use crate::tools::{
-    register_all_tools, AgentControlToolConfig, AskTool, CronCreateTool, CronDeleteTool,
-    CronListTool, SharedFileReadHistory, SpawnAgentRequest, SpawnAgentResponse,
+    current_surface_tool_gates, register_all_tools, should_register_current_surface_tool,
+    AgentControlToolConfig, AskTool, CronCreateTool, CronDeleteTool, CronListTool,
+    CurrentSurfaceToolGates, SharedFileReadHistory, SpawnAgentRequest, SpawnAgentResponse,
     ToolRegistrationConfig, ToolRegistry, DEFAULT_ASK_TIMEOUT_SECS,
 };
 use crate::user_message_manager::UserMessageManager;
@@ -78,7 +79,6 @@ const DEFAULT_MAX_TURNS: u32 = 1000;
 const COMPACTION_THINKING_TEXT: &str = "aster is compacting the conversation...";
 const CONTEXT_COMPACTION_WARNING_TEXT: &str =
     "长对话和多次上下文压缩会降低模型准确性；如果后续结果开始漂移，建议新开会话。";
-const CURRENT_SURFACE_POWERSHELL_ENV: &str = "ASTER_USE_POWERSHELL_TOOL";
 const RESOURCE_GATED_TOOL_NAMES: [&str; 2] = ["ListMcpResourcesTool", "ReadMcpResourceTool"];
 const SUBAGENT_ALLOWED_NATIVE_TOOL_NAMES: [&str; 14] = [
     "Bash",
@@ -154,12 +154,12 @@ struct CurrentAgentToolRequest {
     cwd: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CurrentSurfaceToolGates {
-    config: bool,
-    sleep: bool,
-    workflow: bool,
-    powershell: bool,
+#[derive(Debug)]
+struct CallbackBackedAgentSpawn {
+    request: CurrentAgentToolRequest,
+    spawn_request: SpawnAgentRequest,
+    description: String,
+    prompt: String,
 }
 
 fn default_ask_callback() -> crate::tools::AskCallback {
@@ -220,51 +220,6 @@ fn build_reasoning_summary_sections(text: &str) -> Option<Vec<String>> {
     }
 }
 
-fn env_truthy(value: Option<&String>) -> bool {
-    value.is_some_and(|raw| {
-        matches!(
-            raw.trim().to_ascii_lowercase().as_str(),
-            "1" | "true" | "yes" | "on"
-        )
-    })
-}
-
-fn env_defined_falsy(value: Option<&String>) -> bool {
-    value.is_some_and(|raw| {
-        matches!(
-            raw.trim().to_ascii_lowercase().as_str(),
-            "0" | "false" | "no" | "off"
-        )
-    })
-}
-
-fn current_surface_tool_gates() -> CurrentSurfaceToolGates {
-    let env = std::env::vars().collect::<HashMap<_, _>>();
-    current_surface_tool_gates_from_env_map(&env, cfg!(target_os = "windows"))
-}
-
-fn current_surface_tool_gates_from_env_map(
-    env: &HashMap<String, String>,
-    is_windows: bool,
-) -> CurrentSurfaceToolGates {
-    let is_internal_user = env
-        .get("USER_TYPE")
-        .is_some_and(|value| value.eq_ignore_ascii_case("ant"));
-    let powershell_env = env.get(CURRENT_SURFACE_POWERSHELL_ENV);
-
-    CurrentSurfaceToolGates {
-        config: is_internal_user,
-        sleep: env_truthy(env.get("PROACTIVE")) || env_truthy(env.get("KAIROS")),
-        workflow: env_truthy(env.get("WORKFLOW_SCRIPTS")),
-        powershell: is_windows
-            && if is_internal_user {
-                !env_defined_falsy(powershell_env)
-            } else {
-                env_truthy(powershell_env)
-            },
-    }
-}
-
 fn should_expose_registered_tool_with_gates(
     name: &str,
     resources_supported: bool,
@@ -274,13 +229,7 @@ fn should_expose_registered_tool_with_gates(
         return resources_supported;
     }
 
-    match name {
-        "Config" => tool_gates.config,
-        "Sleep" => tool_gates.sleep,
-        "Workflow" => tool_gates.workflow,
-        "PowerShell" => tool_gates.powershell,
-        _ => true,
-    }
+    should_register_current_surface_tool(name, tool_gates)
 }
 
 fn should_expose_registered_tool(name: &str, resources_supported: bool) -> bool {
@@ -331,6 +280,10 @@ fn should_expose_tool_for_session_with_gates(
     }
 
     if name == "ExitPlanMode" && plan_mode_active {
+        return true;
+    }
+
+    if name == AGENT_TOOL_NAME && subagent_teammate_tools_enabled {
         return true;
     }
 
@@ -583,6 +536,109 @@ fn normalize_agent_cwd(value: Option<String>) -> Result<Option<String>, ErrorDat
     }
 
     Ok(Some(cwd))
+}
+
+fn parse_current_agent_tool_request(
+    arguments: Value,
+) -> Result<CurrentAgentToolRequest, ErrorData> {
+    serde_json::from_value(arguments).map_err(|error| {
+        ErrorData::new(
+            ErrorCode::INVALID_PARAMS,
+            format!("Invalid parameters: {error}"),
+            None,
+        )
+    })
+}
+
+fn prepare_callback_backed_agent_spawn(
+    request: CurrentAgentToolRequest,
+    session: &Session,
+) -> Result<Option<CallbackBackedAgentSpawn>, ErrorData> {
+    let mode = normalize_agent_optional_text(request.mode.clone());
+    if mode.is_some() {
+        return Err(ErrorData::new(
+            ErrorCode::INVALID_PARAMS,
+            "mode is not supported in the current runtime".to_string(),
+            None,
+        ));
+    }
+
+    let isolation = normalize_agent_optional_text(request.isolation.clone());
+    if isolation.is_some() {
+        return Err(ErrorData::new(
+            ErrorCode::INVALID_PARAMS,
+            "isolation is not supported in the current runtime".to_string(),
+            None,
+        ));
+    }
+
+    let name = normalize_agent_optional_text(request.name.clone());
+    let team_name = normalize_agent_optional_text(request.team_name.clone());
+    let cwd = normalize_agent_cwd(request.cwd.clone())?;
+    let team_subagent = session_allows_subagent_teammate_tools(session);
+    if team_subagent && request.run_in_background {
+        return Err(ErrorData::new(
+            ErrorCode::INVALID_PARAMS,
+            "Team subagents cannot spawn background agents in the current runtime".to_string(),
+            None,
+        ));
+    }
+    if team_subagent && (name.is_some() || team_name.is_some()) {
+        return Err(ErrorData::new(
+            ErrorCode::INVALID_PARAMS,
+            "Team subagents cannot spawn teammates in the current runtime; omit name and team_name"
+                .to_string(),
+            None,
+        ));
+    }
+
+    let should_use_callback = !team_subagent
+        && (request.run_in_background || name.is_some() || team_name.is_some() || cwd.is_some());
+    if !should_use_callback {
+        return Ok(None);
+    }
+    if team_name.is_some() && name.is_none() {
+        return Err(ErrorData::new(
+            ErrorCode::INVALID_PARAMS,
+            "team_name requires name in the current runtime".to_string(),
+            None,
+        ));
+    }
+
+    let description = require_agent_text(request.description.clone(), "description")?;
+    let prompt = require_agent_text(request.prompt.clone(), "prompt")?;
+    let spawn_request = SpawnAgentRequest {
+        parent_session_id: session.id.clone(),
+        message: prompt.clone(),
+        name,
+        team_name,
+        agent_type: normalize_agent_optional_text(request.subagent_type.clone()),
+        model: normalize_agent_optional_text(request.model.clone()),
+        run_in_background: request.run_in_background,
+        reasoning_effort: None,
+        fork_context: false,
+        blueprint_role_id: None,
+        blueprint_role_label: None,
+        profile_id: None,
+        profile_name: None,
+        role_key: None,
+        skill_ids: Vec::new(),
+        skill_directories: Vec::new(),
+        team_preset_id: None,
+        theme: None,
+        system_overlay: None,
+        output_contract: None,
+        mode,
+        isolation,
+        cwd,
+    };
+
+    Ok(Some(CallbackBackedAgentSpawn {
+        request,
+        spawn_request,
+        description,
+        prompt,
+    }))
 }
 
 fn build_async_agent_call_result(
@@ -1317,6 +1373,7 @@ impl Agent {
         let extension_manager = Arc::new(ExtensionManager::new(provider.clone()));
         let mut config = config;
         let agent_control_tools = config.agent_control_tools.clone();
+        let scheduler = config.scheduler.clone();
         if config.ask_callback.is_none() {
             config.ask_callback = Some(default_ask_callback());
         }
@@ -1340,7 +1397,7 @@ impl Agent {
             confirmation_rx: Mutex::new(confirm_rx),
             tool_result_tx: tool_tx,
             tool_result_rx: Arc::new(Mutex::new(tool_rx)),
-            scheduler_service: Mutex::new(None),
+            scheduler_service: Mutex::new(scheduler),
             retry_manager: RetryManager::new(),
             tool_inspection_manager: Self::create_default_tool_inspection_manager(),
             tool_registry: Arc::new(RwLock::new(tool_registry)),
@@ -1359,81 +1416,21 @@ impl Agent {
         let callbacks = self.agent_control_tools.as_ref()?;
         let spawn_callback = callbacks.spawn_agent.clone()?;
 
-        let request: CurrentAgentToolRequest = match serde_json::from_value(arguments) {
+        let request = match parse_current_agent_tool_request(arguments) {
             Ok(request) => request,
-            Err(error) => {
-                return Some(Err(ErrorData::new(
-                    ErrorCode::INVALID_PARAMS,
-                    format!("Invalid parameters: {error}"),
-                    None,
-                )));
-            }
-        };
-
-        if normalize_agent_optional_text(request.mode.clone()).is_some() {
-            return Some(Err(ErrorData::new(
-                ErrorCode::INVALID_PARAMS,
-                "mode is not supported in the current runtime".to_string(),
-                None,
-            )));
-        }
-        if normalize_agent_optional_text(request.isolation.clone()).is_some() {
-            return Some(Err(ErrorData::new(
-                ErrorCode::INVALID_PARAMS,
-                "isolation is not supported in the current runtime".to_string(),
-                None,
-            )));
-        }
-        let name = normalize_agent_optional_text(request.name.clone());
-        let team_name = normalize_agent_optional_text(request.team_name.clone());
-        let cwd = match normalize_agent_cwd(request.cwd.clone()) {
-            Ok(cwd) => cwd,
             Err(error) => return Some(Err(error)),
         };
-        let should_use_callback =
-            request.run_in_background || name.is_some() || team_name.is_some() || cwd.is_some();
-        if !should_use_callback {
-            return None;
-        }
-        if team_name.is_some() && name.is_none() {
-            return Some(Err(ErrorData::new(
-                ErrorCode::INVALID_PARAMS,
-                "team_name requires name in the current runtime".to_string(),
-                None,
-            )));
-        }
-
-        let description = match require_agent_text(request.description.clone(), "description") {
-            Ok(description) => description,
+        let prepared = match prepare_callback_backed_agent_spawn(request, session) {
+            Ok(Some(prepared)) => prepared,
+            Ok(None) => return None,
             Err(error) => return Some(Err(error)),
         };
-        let prompt = match require_agent_text(request.prompt.clone(), "prompt") {
-            Ok(prompt) => prompt,
-            Err(error) => return Some(Err(error)),
-        };
-
-        let spawn_request = SpawnAgentRequest {
-            parent_session_id: session.id.clone(),
-            message: prompt.clone(),
-            name,
-            team_name,
-            agent_type: normalize_agent_optional_text(request.subagent_type.clone()),
-            model: normalize_agent_optional_text(request.model.clone()),
-            reasoning_effort: None,
-            fork_context: false,
-            blueprint_role_id: None,
-            blueprint_role_label: None,
-            profile_id: None,
-            profile_name: None,
-            role_key: None,
-            skill_ids: Vec::new(),
-            skill_directories: Vec::new(),
-            team_preset_id: None,
-            theme: None,
-            system_overlay: None,
-            output_contract: None,
-            cwd,
-        };
+        let CallbackBackedAgentSpawn {
+            request,
+            spawn_request,
+            description,
+            prompt,
+        } = prepared;
 
         Some(
             spawn_callback(spawn_request)
@@ -2535,16 +2532,24 @@ impl Agent {
         cancellation_token: Option<CancellationToken>,
         session: &Session,
     ) -> (String, Result<ToolCallResult, ErrorData>) {
-        // Prevent delegated agents from creating other agents
         if session.session_type == SessionType::SubAgent && tool_call.name == AGENT_TOOL_NAME {
-            return (
-                request_id,
-                Err(ErrorData::new(
-                    ErrorCode::INVALID_REQUEST,
-                    "Agents cannot create other agents".to_string(),
-                    None,
-                )),
-            );
+            // Only team subagents keep the current surface needed for synchronous nested subagents.
+            // Plain delegated workers still must not recursively spawn more agents.
+            if session_allows_subagent_teammate_tools(session) {
+                debug!(
+                    session_id = %session.id,
+                    "Allowing Agent tool for team subagent current surface"
+                );
+            } else {
+                return (
+                    request_id,
+                    Err(ErrorData::new(
+                        ErrorCode::INVALID_REQUEST,
+                        "Agents cannot create other agents".to_string(),
+                        None,
+                    )),
+                );
+            }
         }
 
         if tool_call.name == FINAL_OUTPUT_TOOL_NAME {
@@ -4657,13 +4662,16 @@ mod tests {
             registry_guard.contains("AskUserQuestion"),
             "AskUserQuestion should be registered"
         );
-        assert!(
+        let tool_gates = current_surface_tool_gates();
+        assert_eq!(
             registry_guard.contains("Config"),
-            "Config should be registered"
+            should_register_current_surface_tool("Config", tool_gates),
+            "Config registration should match current surface gate"
         );
-        assert!(
+        assert_eq!(
             registry_guard.contains("Sleep"),
-            "Sleep should be registered"
+            should_register_current_surface_tool("Sleep", tool_gates),
+            "Sleep registration should match current surface gate"
         );
 
         // Verify tool count
@@ -4709,13 +4717,16 @@ mod tests {
             registry_guard.contains("AskUserQuestion"),
             "AskUserQuestion should be registered"
         );
-        assert!(
+        let tool_gates = current_surface_tool_gates();
+        assert_eq!(
             registry_guard.contains("Config"),
-            "Config should be registered"
+            should_register_current_surface_tool("Config", tool_gates),
+            "Config registration should match current surface gate"
         );
-        assert!(
+        assert_eq!(
             registry_guard.contains("Sleep"),
-            "Sleep should be registered"
+            should_register_current_surface_tool("Sleep", tool_gates),
+            "Sleep registration should match current surface gate"
         );
 
         Ok(())
@@ -4795,41 +4806,52 @@ mod tests {
     #[test]
     fn test_current_surface_main_thread_tool_gates_match_reference_contract() {
         let external_env = HashMap::new();
-        let external_gates = current_surface_tool_gates_from_env_map(&external_env, true);
+        let external_gates =
+            crate::tools::current_surface_tool_gates_from_env_map(&external_env, true);
         assert!(!external_gates.config);
         assert!(!external_gates.sleep);
         assert!(!external_gates.workflow);
         assert!(!external_gates.powershell);
 
         let ant_env = HashMap::from([("USER_TYPE".to_string(), "ant".to_string())]);
-        let ant_gates = current_surface_tool_gates_from_env_map(&ant_env, true);
+        let ant_gates = crate::tools::current_surface_tool_gates_from_env_map(&ant_env, true);
         assert!(ant_gates.config);
         assert!(!ant_gates.sleep);
         assert!(!ant_gates.workflow);
         assert!(ant_gates.powershell);
 
-        let external_powershell_env =
-            HashMap::from([(CURRENT_SURFACE_POWERSHELL_ENV.to_string(), "1".to_string())]);
+        let external_powershell_env = HashMap::from([(
+            crate::tools::CURRENT_SURFACE_POWERSHELL_ENV.to_string(),
+            "1".to_string(),
+        )]);
         let external_powershell_gates =
-            current_surface_tool_gates_from_env_map(&external_powershell_env, true);
+            crate::tools::current_surface_tool_gates_from_env_map(&external_powershell_env, true);
         assert!(external_powershell_gates.powershell);
 
         let ant_powershell_disabled_env = HashMap::from([
             ("USER_TYPE".to_string(), "ant".to_string()),
-            (CURRENT_SURFACE_POWERSHELL_ENV.to_string(), "0".to_string()),
+            (
+                crate::tools::CURRENT_SURFACE_POWERSHELL_ENV.to_string(),
+                "0".to_string(),
+            ),
             ("PROACTIVE".to_string(), "true".to_string()),
             ("WORKFLOW_SCRIPTS".to_string(), "yes".to_string()),
         ]);
-        let ant_powershell_disabled_gates =
-            current_surface_tool_gates_from_env_map(&ant_powershell_disabled_env, true);
+        let ant_powershell_disabled_gates = crate::tools::current_surface_tool_gates_from_env_map(
+            &ant_powershell_disabled_env,
+            true,
+        );
         assert!(ant_powershell_disabled_gates.config);
         assert!(ant_powershell_disabled_gates.sleep);
         assert!(ant_powershell_disabled_gates.workflow);
         assert!(!ant_powershell_disabled_gates.powershell);
 
-        let non_windows_env =
-            HashMap::from([(CURRENT_SURFACE_POWERSHELL_ENV.to_string(), "1".to_string())]);
-        let non_windows_gates = current_surface_tool_gates_from_env_map(&non_windows_env, false);
+        let non_windows_env = HashMap::from([(
+            crate::tools::CURRENT_SURFACE_POWERSHELL_ENV.to_string(),
+            "1".to_string(),
+        )]);
+        let non_windows_gates =
+            crate::tools::current_surface_tool_gates_from_env_map(&non_windows_env, false);
         assert!(!non_windows_gates.powershell);
     }
 
@@ -4907,6 +4929,8 @@ mod tests {
         let tool_gates = CurrentSurfaceToolGates {
             config: false,
             sleep: false,
+            cron: false,
+            remote_trigger: false,
             workflow: false,
             powershell: false,
         };
@@ -4926,6 +4950,27 @@ mod tests {
             tool_gates,
             false,
             true
+        ));
+    }
+
+    #[test]
+    fn test_current_surface_team_subagent_keeps_agent_visible_for_sync_nested_subagents() {
+        let tool_gates = CurrentSurfaceToolGates {
+            config: false,
+            sleep: false,
+            cron: false,
+            remote_trigger: false,
+            workflow: false,
+            powershell: false,
+        };
+
+        assert!(should_expose_tool_for_session_with_gates(
+            AGENT_TOOL_NAME,
+            Some(SessionType::SubAgent),
+            false,
+            tool_gates,
+            true,
+            false
         ));
     }
 
@@ -5122,6 +5167,7 @@ mod tests {
         let tools = child_agent.list_tools(None).await;
 
         for visible_name in [
+            AGENT_TOOL_NAME,
             "SendMessage",
             "ListPeers",
             "CronCreate",
@@ -5140,6 +5186,200 @@ mod tests {
                 "team subagent current surface should still hide main-thread-only tool: {hidden_name}"
             );
         }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_team_subagent_agent_tool_reaches_sync_nested_subagent_runtime() -> Result<()> {
+        use crate::execution::manager::AgentManager;
+        use crate::session::{
+            save_team_membership, save_team_state, TeamMember, TeamMembershipState,
+            TeamSessionState,
+        };
+
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let manager = AgentManager::new_with_thread_runtime_store(
+            None,
+            Arc::new(InMemoryThreadRuntimeStore::default()),
+        )
+        .await?;
+        let working_dir = tempfile::tempdir()?;
+        let lead = SessionManager::create_session(
+            working_dir.path().to_path_buf(),
+            "sync-team-lead".to_string(),
+            SessionType::User,
+        )
+        .await?;
+        let child = SessionManager::create_session(
+            working_dir.path().to_path_buf(),
+            "sync-team-child".to_string(),
+            SessionType::SubAgent,
+        )
+        .await?;
+
+        let mut team_state = TeamSessionState::new("delivery-team", lead.id.clone(), None, None);
+        team_state.add_or_update_member(TeamMember::teammate(
+            child.id.clone(),
+            "verifier".to_string(),
+            None,
+        ));
+        save_team_state(&lead.id, Some(team_state)).await?;
+        save_team_membership(
+            &child.id,
+            Some(TeamMembershipState {
+                team_name: "delivery-team".to_string(),
+                lead_session_id: lead.id.clone(),
+                agent_id: child.id.clone(),
+                name: "verifier".to_string(),
+                agent_type: None,
+            }),
+        )
+        .await?;
+
+        let child_agent = manager.get_or_create_agent(child.id.clone()).await?;
+        let tool_call = CallToolRequestParam {
+            name: AGENT_TOOL_NAME.into(),
+            arguments: Some(
+                serde_json::json!({
+                    "description": "继续拆解",
+                    "prompt": "同步执行下一层子任务"
+                })
+                .as_object()
+                .cloned()
+                .expect("agent tool arguments should be an object"),
+            ),
+        };
+
+        let (_request_id, tool_result) = child_agent
+            .dispatch_tool_call(tool_call, "req-team-sync-agent".to_string(), None, &child)
+            .await;
+        let error = match tool_result {
+            Ok(_) => panic!("missing provider should surface sync runtime path"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.code, ErrorCode::INTERNAL_ERROR);
+        assert_eq!(error.message, "Provider is required");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_team_subagent_agent_tool_rejects_background_and_teammate_spawn_fields(
+    ) -> Result<()> {
+        use crate::session::{
+            save_team_membership, save_team_state, TeamMember, TeamMembershipState,
+            TeamSessionState,
+        };
+
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let spawn_agent_callback = Arc::new(move |_request: SpawnAgentRequest| {
+            Box::pin(async move {
+                Ok(SpawnAgentResponse {
+                    agent_id: "agent-team-child".to_string(),
+                    nickname: Some("team-child".to_string()),
+                    extra: std::collections::BTreeMap::new(),
+                })
+            })
+                as Pin<Box<dyn Future<Output = Result<SpawnAgentResponse, String>> + Send>>
+        });
+        let agent =
+            Agent::with_tool_config(ToolRegistrationConfig::new().with_agent_control_tools(
+                AgentControlToolConfig::new().with_spawn_agent_callback(spawn_agent_callback),
+            ));
+        let working_dir = tempfile::tempdir()?;
+        let lead = SessionManager::create_session(
+            working_dir.path().to_path_buf(),
+            "team-guard-lead".to_string(),
+            SessionType::User,
+        )
+        .await?;
+        let child = SessionManager::create_session(
+            working_dir.path().to_path_buf(),
+            "team-guard-child".to_string(),
+            SessionType::SubAgent,
+        )
+        .await?;
+
+        let mut team_state = TeamSessionState::new("delivery-team", lead.id.clone(), None, None);
+        team_state.add_or_update_member(TeamMember::teammate(
+            child.id.clone(),
+            "verifier".to_string(),
+            None,
+        ));
+        save_team_state(&lead.id, Some(team_state)).await?;
+        save_team_membership(
+            &child.id,
+            Some(TeamMembershipState {
+                team_name: "delivery-team".to_string(),
+                lead_session_id: lead.id.clone(),
+                agent_id: child.id.clone(),
+                name: "verifier".to_string(),
+                agent_type: None,
+            }),
+        )
+        .await?;
+
+        let background_call = CallToolRequestParam {
+            name: AGENT_TOOL_NAME.into(),
+            arguments: Some(
+                serde_json::json!({
+                    "description": "后台校验",
+                    "prompt": "尝试启动后台 agent",
+                    "run_in_background": true
+                })
+                .as_object()
+                .cloned()
+                .expect("agent tool arguments should be an object"),
+            ),
+        };
+        let (_request_id, background_result) = agent
+            .dispatch_tool_call(
+                background_call,
+                "req-team-background".to_string(),
+                None,
+                &child,
+            )
+            .await;
+        let background_error = match background_result {
+            Ok(_) => panic!("team subagent background agent should be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(background_error.code, ErrorCode::INVALID_PARAMS);
+        assert_eq!(
+            background_error.message,
+            "Team subagents cannot spawn background agents in the current runtime"
+        );
+
+        let teammate_call = CallToolRequestParam {
+            name: AGENT_TOOL_NAME.into(),
+            arguments: Some(
+                serde_json::json!({
+                    "description": "派生 teammate",
+                    "prompt": "尝试再创建 teammate",
+                    "name": "nested",
+                    "team_name": "delivery-team"
+                })
+                .as_object()
+                .cloned()
+                .expect("agent tool arguments should be an object"),
+            ),
+        };
+        let (_request_id, teammate_result) = agent
+            .dispatch_tool_call(teammate_call, "req-team-nested".to_string(), None, &child)
+            .await;
+        let teammate_error = match teammate_result {
+            Ok(_) => panic!("team subagent teammate spawn should be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(teammate_error.code, ErrorCode::INVALID_PARAMS);
+        assert_eq!(
+            teammate_error.message,
+            "Team subagents cannot spawn teammates in the current runtime; omit name and team_name"
+        );
 
         Ok(())
     }

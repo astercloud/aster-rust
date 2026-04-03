@@ -80,7 +80,9 @@ struct AgentToolParams {
 - `description` + `prompt` 是必填
 - `subagent_type` 命中本地 `SubRecipe` 时走 specialized recipe
 - `subagent_type` 未命中时，不报错，而是作为 role hint 注入 prompt
-- `run_in_background` / `team_name` / `mode` / `isolation` / `cwd` 当前 runtime 暂不支持，会直接报参错
+- 未注入 callback-backed agent runtime 时，`run_in_background` / `team_name` / `mode` / `isolation` 会直接报参错；`cwd` 仅接受绝对目录
+- 注入 callback-backed agent runtime 后，`run_in_background` / `name` / `team_name` / `cwd` 会切到现代子代理会话主链
+- team 子代理虽然保留 `Agent` current surface，但只允许继续创建同步子代理；不允许再启动后台 agent，也不允许再派生 teammate
 
 ## 内部映射结构
 
@@ -183,17 +185,28 @@ Make sure your last message provides a comprehensive summary of:
 
 ## 限制
 
-1. **子 Agent 不能创建子 Agent**
+1. **普通子 Agent 不能递归创建新的 Agent**
    ```rust
-   if session.session_type == SessionType::SubAgent 
-      && tool_call.name == AGENT_TOOL_NAME {
-       return Err("Agents cannot create other agents");
+   if session.session_type == SessionType::SubAgent && tool_call.name == AGENT_TOOL_NAME {
+       if !session_allows_subagent_teammate_tools(session) {
+           return Err("Agents cannot create other agents");
+       }
    }
    ```
 
-2. **Gemini 模型不支持子 Agent**
+2. **team 子代理只允许同步再派生子代理**
+   ```rust
+   if team_subagent && request.run_in_background {
+       return Err("Team subagents cannot spawn background agents in the current runtime");
+   }
+   if team_subagent && (name.is_some() || team_name.is_some()) {
+       return Err("Team subagents cannot spawn teammates in the current runtime; omit name and team_name");
+   }
+   ```
 
-3. **非自动模式不支持子 Agent**
+3. **Gemini 模型不支持子 Agent**
+
+4. **非自动模式不支持子 Agent**
 
 ## 并行执行
 

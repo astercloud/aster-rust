@@ -52,6 +52,9 @@ impl AgentControlToolConfig {
 }
 
 pub fn register_agent_control_tools(registry: &mut ToolRegistry, config: &AgentControlToolConfig) {
+    if let Some(callback) = config.spawn_agent.clone() {
+        registry.register(Box::new(SpawnAgentTool::new(callback)));
+    }
     if let Some(callback) = config.send_input.clone() {
         registry.register(Box::new(SendInputTool::new(callback)));
     }
@@ -68,6 +71,8 @@ pub struct SpawnAgentRequest {
     #[serde(alias = "agent_type")]
     pub agent_type: Option<String>,
     pub model: Option<String>,
+    #[serde(default, alias = "run_in_background")]
+    pub run_in_background: bool,
     #[serde(alias = "reasoning_effort")]
     pub reasoning_effort: Option<String>,
     #[serde(alias = "fork_context")]
@@ -93,6 +98,10 @@ pub struct SpawnAgentRequest {
     pub system_overlay: Option<String>,
     #[serde(alias = "output_contract")]
     pub output_contract: Option<String>,
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
+    pub isolation: Option<String>,
     pub cwd: Option<String>,
 }
 
@@ -103,6 +112,33 @@ pub struct SpawnAgentResponse {
     pub nickname: Option<String>,
     #[serde(flatten, default)]
     pub extra: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentToolInput {
+    description: String,
+    prompt: String,
+    #[serde(default, alias = "subagent_type")]
+    subagent_type: Option<String>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default, alias = "run_in_background")]
+    run_in_background: bool,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default, alias = "team_name")]
+    team_name: Option<String>,
+    #[serde(default)]
+    mode: Option<String>,
+    #[serde(default)]
+    isolation: Option<String>,
+    #[serde(default, alias = "reasoning_effort")]
+    reasoning_effort: Option<String>,
+    #[serde(default, alias = "fork_context")]
+    fork_context: bool,
+    #[serde(default)]
+    cwd: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -137,6 +173,114 @@ fn normalize_required_text(value: &str, field_name: &str) -> Result<String, Tool
     }
 
     Ok(trimmed.to_string())
+}
+
+#[derive(Clone)]
+pub struct SpawnAgentTool {
+    callback: SpawnAgentCallback,
+}
+
+impl SpawnAgentTool {
+    pub fn new(callback: SpawnAgentCallback) -> Self {
+        Self { callback }
+    }
+}
+
+#[async_trait]
+impl Tool for SpawnAgentTool {
+    fn name(&self) -> &str {
+        "Agent"
+    }
+
+    fn description(&self) -> &str {
+        "Launch a new agent. 适合把独立子问题委派给新的协作成员；创建后可结合 SendMessage 与 ListPeers 继续协作。"
+    }
+
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "description": { "type": "string", "description": "3-5 个词的任务标题，用于展示与回顾。" },
+                "prompt": { "type": "string", "description": "发给子代理的完整任务说明。" },
+                "subagent_type": { "type": "string", "description": "可选子代理类型，例如 explorer / planner / executor。" },
+                "model": { "type": "string", "description": "可选模型覆盖。" },
+                "run_in_background": { "type": "boolean", "description": "是否在后台启动子代理。" },
+                "name": { "type": "string", "description": "可选名字；创建后可通过 SendMessage({to: name}) 继续沟通。" },
+                "team_name": { "type": "string", "description": "可选 team 名称；未传时沿用当前 team 上下文。" },
+                "mode": { "type": "string", "description": "可选权限模式；当前 runtime 是否支持由宿主决定。" },
+                "isolation": { "type": "string", "enum": ["worktree", "remote"], "description": "可选隔离模式；当前 runtime 是否支持由宿主决定。" },
+                "reasoning_effort": { "type": "string", "description": "可选推理强度覆盖。" },
+                "fork_context": { "type": "boolean", "description": "是否复制当前上下文给子代理。" },
+                "cwd": { "type": "string", "description": "可选工作目录绝对路径。" }
+            },
+            "required": ["description", "prompt"],
+            "additionalProperties": false
+        })
+    }
+
+    async fn execute(&self, params: Value, context: &ToolContext) -> Result<ToolResult, ToolError> {
+        let input: AgentToolInput = serde_json::from_value(params)
+            .map_err(|error| ToolError::invalid_params(format!("Agent 参数无效: {error}")))?;
+        let description = normalize_required_text(&input.description, "description")?;
+        let prompt = normalize_required_text(&input.prompt, "prompt")?;
+        let parent_session_id = normalize_required_text(&context.session_id, "session_id")?;
+        let response = (self.callback)(SpawnAgentRequest {
+            parent_session_id,
+            message: prompt.clone(),
+            name: normalize_optional_text(input.name),
+            team_name: normalize_optional_text(input.team_name),
+            agent_type: normalize_optional_text(input.subagent_type),
+            model: normalize_optional_text(input.model),
+            run_in_background: input.run_in_background,
+            reasoning_effort: normalize_optional_text(input.reasoning_effort),
+            fork_context: input.fork_context,
+            blueprint_role_id: None,
+            blueprint_role_label: None,
+            profile_id: None,
+            profile_name: None,
+            role_key: None,
+            skill_ids: Vec::new(),
+            skill_directories: Vec::new(),
+            team_preset_id: None,
+            theme: None,
+            system_overlay: None,
+            output_contract: None,
+            mode: normalize_optional_text(input.mode),
+            isolation: normalize_optional_text(input.isolation),
+            cwd: normalize_optional_text(input.cwd),
+        })
+        .await
+        .map_err(ToolError::execution_failed)?;
+
+        let mut metadata = serde_json::Map::new();
+        metadata.insert(
+            "agentId".to_string(),
+            Value::String(response.agent_id.clone()),
+        );
+        metadata.insert(
+            "description".to_string(),
+            Value::String(description.clone()),
+        );
+        metadata.insert("prompt".to_string(), Value::String(prompt));
+        if let Some(name) = response
+            .nickname
+            .clone()
+            .or_else(|| normalize_optional_text(Some(description.clone())))
+        {
+            metadata.insert("name".to_string(), Value::String(name));
+        }
+        if !response.extra.is_empty() {
+            metadata.insert(
+                "extra".to_string(),
+                serde_json::to_value(response.extra).unwrap_or(Value::Null),
+            );
+        }
+
+        Ok(
+            ToolResult::success(format!("Agent launched: {}", response.agent_id))
+                .with_metadata("agent", Value::Object(metadata)),
+        )
+    }
 }
 
 #[derive(Clone)]
@@ -355,8 +499,54 @@ mod tests {
         register_agent_control_tools(&mut registry, &config);
 
         assert!(!registry.contains("spawn_agent"));
+        assert!(registry.contains("Agent"));
         assert!(!registry.contains("SendMessage"));
         assert!(!registry.contains("wait_agent"));
+    }
+
+    #[tokio::test]
+    async fn test_agent_tool_accepts_current_surface() {
+        let tool = SpawnAgentTool::new(Arc::new(|request| {
+            Box::pin(async move {
+                assert_eq!(request.parent_session_id, "parent-session");
+                assert_eq!(request.message, "请检查测试失败原因");
+                assert_eq!(request.agent_type.as_deref(), Some("explorer"));
+                assert_eq!(request.name.as_deref(), Some("diag"));
+                assert_eq!(request.team_name.as_deref(), Some("alpha"));
+                assert!(request.run_in_background);
+                assert_eq!(request.mode.as_deref(), Some("plan"));
+                assert_eq!(request.isolation.as_deref(), Some("worktree"));
+                assert_eq!(request.cwd.as_deref(), Some("/tmp/workspace"));
+                Ok(SpawnAgentResponse {
+                    agent_id: "agent-42".to_string(),
+                    nickname: Some("diag".to_string()),
+                    extra: BTreeMap::new(),
+                })
+            })
+        }));
+
+        let result = tool
+            .execute(
+                serde_json::json!({
+                    "description": "排查失败",
+                    "prompt": "请检查测试失败原因",
+                    "subagent_type": "explorer",
+                    "name": "diag",
+                    "team_name": "alpha",
+                    "run_in_background": true,
+                    "mode": "plan",
+                    "isolation": "worktree",
+                    "cwd": "/tmp/workspace"
+                }),
+                &create_test_context(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.output.as_deref(), Some("Agent launched: agent-42"));
+        assert_eq!(result.metadata["agent"]["agentId"], "agent-42");
+        assert_eq!(result.metadata["agent"]["name"], "diag");
+        assert_eq!(result.metadata["agent"]["description"], "排查失败");
     }
 
     #[tokio::test]

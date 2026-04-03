@@ -1,7 +1,7 @@
 {
   "name": "aster-app",
   "productName": "Aster",
-  "version": "1.19.0",
+  "version": "0.26.0",
   "description": "Aster App",
   "engines": {
     "node": "^24.0.0"

@@ -55,6 +55,7 @@ pub struct TaskCreateInput {
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct TaskListInput {}
 
 #[derive(Debug, Clone, Deserialize)]
@@ -206,6 +207,14 @@ fn task_status_label(status: &TaskBoardItemStatus) -> &'static str {
         TaskBoardItemStatus::InProgress => "in_progress",
         TaskBoardItemStatus::Completed => "completed",
     }
+}
+
+fn is_internal_task(task: &TaskBoardItem) -> bool {
+    task.metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get("_internal"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 fn build_harness_snapshot(state: &TaskBoardState) -> Vec<Value> {
@@ -481,8 +490,13 @@ impl Tool for TaskListTool {
 
         let task_list_id = resolve_task_list_id(context).await;
         let state = load_task_board_state(&self.storage, &task_list_id, context).await;
+        let visible_tasks = state
+            .items
+            .iter()
+            .filter(|task| !is_internal_task(task))
+            .collect::<Vec<_>>();
 
-        if state.items.is_empty() {
+        if visible_tasks.is_empty() {
             return Ok(ToolResult::success("No tasks found")
                 .with_metadata("task_list_id", json!(task_list_id))
                 .with_metadata("task_list", json!([]))
@@ -492,12 +506,12 @@ impl Tool for TaskListTool {
         let resolved_task_ids = state
             .items
             .iter()
+            .filter(|task| !is_internal_task(task))
             .filter(|task| task.status == TaskBoardItemStatus::Completed)
             .map(|task| task.id.clone())
             .collect::<HashSet<_>>();
 
-        let lines = state
-            .items
+        let lines = visible_tasks
             .iter()
             .map(|task| {
                 let owner = task
@@ -537,13 +551,24 @@ impl Tool for TaskListTool {
 
         Ok(ToolResult::success(lines.join("\n"))
             .with_metadata("task_list_id", json!(task_list_id))
-            .with_metadata("task_list", json!(build_harness_snapshot(&state)))
+            .with_metadata(
+                "task_list",
+                json!(visible_tasks
+                    .iter()
+                    .map(|task| {
+                        json!({
+                            "id": task.id.clone(),
+                            "content": task.subject.clone(),
+                            "status": task_status_label(&task.status),
+                        })
+                    })
+                    .collect::<Vec<_>>()),
+            )
             .with_metadata(
                 "tasks",
-                json!(state
-                    .items
+                json!(visible_tasks
                     .iter()
-                    .map(build_task_metadata)
+                    .map(|task| build_task_metadata(task))
                     .collect::<Vec<_>>()),
             ))
     }
@@ -1038,5 +1063,64 @@ mod tests {
             .await
             .expect("list should succeed");
         assert_eq!(list_result.output.unwrap_or_default(), "No tasks found");
+    }
+
+    #[tokio::test]
+    async fn test_task_list_tool_rejects_unknown_fields() {
+        let storage = Arc::new(TaskListStorage::new());
+        let list_tool = TaskListTool::with_storage(storage);
+        let context = create_test_context();
+
+        let result = list_tool
+            .execute(json!({ "unexpected": true }), &context)
+            .await;
+        assert!(matches!(result, Err(ToolError::InvalidParams(_))));
+    }
+
+    #[tokio::test]
+    async fn test_task_list_tool_hides_internal_tasks() {
+        let storage = Arc::new(TaskListStorage::new());
+        let create_tool = TaskCreateTool::with_storage(storage.clone());
+        let list_tool = TaskListTool::with_storage(storage);
+        let context = create_test_context();
+
+        create_tool
+            .execute(
+                json!({
+                    "subject": "用户可见任务",
+                    "description": "应该正常展示"
+                }),
+                &context,
+            )
+            .await
+            .expect("visible task should succeed");
+
+        create_tool
+            .execute(
+                json!({
+                    "subject": "内部任务",
+                    "description": "不应暴露给 TaskList",
+                    "metadata": {
+                        "_internal": true
+                    }
+                }),
+                &context,
+            )
+            .await
+            .expect("internal task should succeed");
+
+        let list_result = list_tool
+            .execute(json!({}), &context)
+            .await
+            .expect("list should succeed");
+        let output = list_result.output.unwrap_or_default();
+
+        assert!(output.contains("用户可见任务"));
+        assert!(!output.contains("内部任务"));
+        assert_eq!(
+            list_result.metadata["task_list"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(list_result.metadata["tasks"].as_array().unwrap().len(), 1);
     }
 }
