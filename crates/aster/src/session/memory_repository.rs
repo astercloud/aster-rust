@@ -39,6 +39,33 @@ pub(crate) struct MemoryRepository<'a> {
     pool: &'a Pool<Sqlite>,
 }
 
+fn normalize_fts_query(raw: &str) -> Option<String> {
+    let mut normalized = String::with_capacity(raw.len());
+    let mut last_was_space = false;
+
+    for ch in raw.chars() {
+        if ch.is_alphanumeric() {
+            for lowered in ch.to_lowercase() {
+                normalized.push(lowered);
+            }
+            last_was_space = false;
+            continue;
+        }
+
+        if !last_was_space && !normalized.is_empty() {
+            normalized.push(' ');
+            last_was_space = true;
+        }
+    }
+
+    let normalized = normalized.trim();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized.to_string())
+    }
+}
+
 impl<'a> MemoryRepository<'a> {
     pub(crate) fn new(pool: &'a Pool<Sqlite>) -> Self {
         Self { pool }
@@ -216,27 +243,13 @@ impl<'a> MemoryRepository<'a> {
         categories: &[MemoryCategory],
     ) -> Result<Vec<MemorySearchRow>> {
         let trimmed_query = query.trim();
-        let mut query_builder = if trimmed_query.is_empty() {
-            QueryBuilder::<Sqlite>::new(
-                r#"
-                SELECT
-                    m.id,
-                    m.session_id,
-                    m.category,
-                    m.abstract_text,
-                    m.overview_text,
-                    m.content_text,
-                    m.content_hash,
-                    m.source_start_ts,
-                    m.source_end_ts,
-                    m.created_at,
-                    m.updated_at,
-                    0.0 as score
-                FROM memories m
-                WHERE 1 = 1
-            "#,
-            )
-        } else {
+        let search_query = normalize_fts_query(trimmed_query);
+
+        if !trimmed_query.is_empty() && search_query.is_none() {
+            return Ok(Vec::new());
+        }
+
+        let mut query_builder = if search_query.is_some() {
             QueryBuilder::<Sqlite>::new(
                 r#"
                 SELECT
@@ -257,10 +270,30 @@ impl<'a> MemoryRepository<'a> {
                 WHERE memories_fts MATCH
             "#,
             )
+        } else {
+            QueryBuilder::<Sqlite>::new(
+                r#"
+                SELECT
+                    m.id,
+                    m.session_id,
+                    m.category,
+                    m.abstract_text,
+                    m.overview_text,
+                    m.content_text,
+                    m.content_hash,
+                    m.source_start_ts,
+                    m.source_end_ts,
+                    m.created_at,
+                    m.updated_at,
+                    0.0 as score
+                FROM memories m
+                WHERE 1 = 1
+            "#,
+            )
         };
 
-        if !trimmed_query.is_empty() {
-            query_builder.push_bind(trimmed_query);
+        if let Some(ref search_query) = search_query {
+            query_builder.push_bind(search_query);
         }
 
         if let Some(scope) = session_scope {
@@ -282,7 +315,7 @@ impl<'a> MemoryRepository<'a> {
             separated.push_unseparated(")");
         }
 
-        if trimmed_query.is_empty() {
+        if search_query.is_none() {
             query_builder.push(" ORDER BY m.updated_at DESC ");
         } else {
             query_builder.push(" ORDER BY score ASC, m.updated_at DESC ");
@@ -399,5 +432,23 @@ impl<'a> MemoryRepository<'a> {
                 message: "memory tables are missing".to_string(),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_fts_query;
+
+    #[test]
+    fn normalize_fts_query_sanitizes_fts_control_characters() {
+        assert_eq!(
+            normalize_fts_query(r#"  @Bot  foo@example.com  (Error:42) OR  "#),
+            Some("bot foo example com error 42 or".to_string())
+        );
+    }
+
+    #[test]
+    fn normalize_fts_query_discards_symbol_only_input() {
+        assert_eq!(normalize_fts_query("@@@ !!!"), None);
     }
 }

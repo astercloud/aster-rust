@@ -18,6 +18,7 @@ use crate::providers::toolshim::{
 };
 
 use crate::agents::code_execution_extension::EXTENSION_NAME as CODE_EXECUTION_EXTENSION;
+use crate::agents::subagent_tool::AGENT_TOOL_NAME;
 #[cfg(test)]
 use crate::session::SessionType;
 use crate::session::{SessionManager, SessionStore, TokenStatsUpdate};
@@ -161,6 +162,8 @@ impl Agent {
             tools.retain(|tool| tool.name.starts_with(&code_exec_prefix));
         }
 
+        let subagents_enabled = tools.iter().any(|tool| tool.name == AGENT_TOOL_NAME);
+
         // Stable tool ordering is important for multi session prompt caching.
         tools.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -185,7 +188,7 @@ impl Agent {
             .with_extension_and_tool_counts(extension_count, tool_count)
             .with_code_execution_mode(code_execution_active)
             .with_hints(working_dir)
-            .with_enable_subagents(self.subagents_enabled().await)
+            .with_enable_subagents(subagents_enabled)
             .with_session_prompt(session_prompt.map(|s| s.to_string()))
             .build();
 

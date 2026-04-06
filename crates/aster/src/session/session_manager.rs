@@ -30,6 +30,14 @@ use utoipa::ToSchema;
 pub const CURRENT_SCHEMA_VERSION: i32 = 7;
 pub const SESSIONS_FOLDER: &str = "sessions";
 pub const DB_NAME: &str = "sessions.db";
+const AUTO_SESSION_NAME_PLACEHOLDERS: &[&str] = &[
+    "",
+    "新对话",
+    "New Session",
+    "未命名会话",
+    "Untitled Session",
+    "Untitled",
+];
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -378,30 +386,28 @@ impl SessionManager {
 
     pub async fn maybe_update_name(id: &str, provider: Arc<dyn Provider>) -> Result<()> {
         let session = Self::get_session(id, true).await?;
+        let conversation = session
+            .conversation
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("No messages found"))?;
 
-        if session.user_set_name {
+        Self::maybe_update_name_for_session(&session, &conversation, provider).await
+    }
+
+    pub async fn maybe_update_name_for_session(
+        session: &Session,
+        conversation: &Conversation,
+        provider: Arc<dyn Provider>,
+    ) -> Result<()> {
+        if !should_attempt_session_name_generation(session, conversation) {
             return Ok(());
         }
 
-        let conversation = session
-            .conversation
-            .ok_or_else(|| anyhow::anyhow!("No messages found"))?;
-
-        let user_message_count = conversation
-            .messages()
-            .iter()
-            .filter(|m| matches!(m.role, Role::User))
-            .count();
-
-        if user_message_count <= MSG_COUNT_FOR_SESSION_NAME_GENERATION {
-            let name = provider.generate_session_name(&conversation).await?;
-            Self::update_session(id)
-                .system_generated_name(name)
-                .apply()
-                .await
-        } else {
-            Ok(())
-        }
+        let name = provider.generate_session_name(conversation).await?;
+        Self::update_session(&session.id)
+            .system_generated_name(name)
+            .apply()
+            .await
     }
 
     pub async fn search_chat_history(
@@ -596,6 +602,37 @@ impl Session {
         self.conversation = None;
         self
     }
+}
+
+fn is_auto_session_name_placeholder(name: &str) -> bool {
+    let trimmed = name.trim();
+    AUTO_SESSION_NAME_PLACEHOLDERS.iter().any(|placeholder| {
+        if placeholder.is_empty() {
+            trimmed.is_empty()
+        } else if placeholder.is_ascii() {
+            trimmed.eq_ignore_ascii_case(placeholder)
+        } else {
+            trimmed == *placeholder
+        }
+    })
+}
+
+fn should_auto_generate_session_name(session: &Session) -> bool {
+    !session.user_set_name && is_auto_session_name_placeholder(&session.name)
+}
+
+fn should_attempt_session_name_generation(session: &Session, conversation: &Conversation) -> bool {
+    if !should_auto_generate_session_name(session) {
+        return false;
+    }
+
+    let user_message_count = conversation
+        .messages()
+        .iter()
+        .filter(|message| matches!(message.role, Role::User))
+        .count();
+
+    user_message_count > 0 && user_message_count <= MSG_COUNT_FOR_SESSION_NAME_GENERATION
 }
 
 impl sqlx::FromRow<'_, sqlx::sqlite::SqliteRow> for Session {
@@ -2011,6 +2048,68 @@ mod tests {
         assert_eq!(imported.working_dir, PathBuf::from("/tmp/test"));
     }
 
+    fn build_test_session(name: &str, user_set_name: bool) -> Session {
+        Session {
+            id: "session-test".to_string(),
+            working_dir: PathBuf::from("."),
+            name: name.to_string(),
+            user_set_name,
+            ..Session::default()
+        }
+    }
+
+    fn build_user_only_conversation(message_count: usize) -> Conversation {
+        Conversation::new_unvalidated((0..message_count).map(|index| {
+            Message::new(
+                Role::User,
+                chrono::Utc::now().timestamp_millis() + index as i64,
+                vec![MessageContent::text(format!("message-{index}"))],
+            )
+        }))
+    }
+
+    #[test]
+    fn should_auto_generate_session_name_only_for_placeholder_titles() {
+        assert!(should_auto_generate_session_name(&build_test_session(
+            "新对话",
+            false
+        )));
+        assert!(should_auto_generate_session_name(&build_test_session(
+            "New Session",
+            false
+        )));
+        assert!(!should_auto_generate_session_name(&build_test_session(
+            "首页性能优化",
+            false
+        )));
+        assert!(!should_auto_generate_session_name(&build_test_session(
+            "新对话",
+            true
+        )));
+    }
+
+    #[test]
+    fn should_attempt_session_name_generation_only_when_placeholder_still_pending() {
+        let placeholder_session = build_test_session("新对话", false);
+        let titled_session = build_test_session("首页性能优化", false);
+        let conversation = build_user_only_conversation(1);
+        let long_conversation =
+            build_user_only_conversation(MSG_COUNT_FOR_SESSION_NAME_GENERATION + 1);
+
+        assert!(should_attempt_session_name_generation(
+            &placeholder_session,
+            &conversation
+        ));
+        assert!(!should_attempt_session_name_generation(
+            &titled_session,
+            &conversation
+        ));
+        assert!(!should_attempt_session_name_generation(
+            &placeholder_session,
+            &long_conversation
+        ));
+    }
+
     #[tokio::test]
     async fn test_memory_commit_and_search() {
         let temp_dir = TempDir::new().unwrap();
@@ -2071,6 +2170,56 @@ mod tests {
             .await
             .unwrap();
         assert!(!hits.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_retrieve_context_memories_accepts_at_mentions_in_query() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_memory_at_query.db");
+        let storage = Arc::new(SessionStorage::create(&db_path).await.unwrap());
+
+        let session = storage
+            .create_session(
+                PathBuf::from("/tmp/test-memory-at-query"),
+                "Memory At Query".to_string(),
+                SessionType::User,
+            )
+            .await
+            .unwrap();
+
+        storage
+            .add_message(
+                &session.id,
+                &Message {
+                    id: None,
+                    role: Role::User,
+                    created: chrono::Utc::now().timestamp_millis(),
+                    content: vec![MessageContent::text(
+                        "When the user writes @bot, keep running the workflow and finish regression validation.",
+                    )],
+                    metadata: Default::default(),
+                },
+            )
+            .await
+            .unwrap();
+
+        let report = storage
+            .commit_session(&session.id, CommitOptions::default())
+            .await
+            .unwrap();
+        assert!(report.memories_created >= 1);
+
+        let memories = storage
+            .retrieve_context_memories(&session.id, "@bot workflow regression validation", 5)
+            .await
+            .unwrap();
+
+        assert!(!memories.is_empty());
+        assert!(memories.iter().any(|memory| {
+            memory.content.contains("@bot")
+                && memory.content.contains("workflow")
+                && memory.content.contains("regression validation")
+        }));
     }
 
     #[tokio::test]

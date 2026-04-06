@@ -1626,6 +1626,16 @@ impl Agent {
         session_config: &SessionConfig,
         input_text: Option<String>,
     ) -> Result<TurnRuntime> {
+        self.create_turn_runtime_for_session_id(&session.id, session_config, input_text)
+            .await
+    }
+
+    async fn create_turn_runtime_for_session_id(
+        &self,
+        session_id: &str,
+        session_config: &SessionConfig,
+        input_text: Option<String>,
+    ) -> Result<TurnRuntime> {
         let turn_id = session_config
             .turn_id
             .as_ref()
@@ -1663,7 +1673,7 @@ impl Agent {
         let thread_id = session_config.resolved_thread_id().to_string();
         let turn = TurnRuntime::new(
             turn_id,
-            session.id.clone(),
+            session_id.to_string(),
             thread_id,
             input_text,
             session_config.turn_context.clone(),
@@ -1892,6 +1902,19 @@ impl Agent {
         input_text: Option<String>,
     ) -> Result<TurnRuntime> {
         let session_config = session_config.clone().with_runtime_defaults();
+        let thread_id = session_config.resolved_thread_id().to_string();
+
+        if self
+            .thread_runtime_store
+            .get_thread(&thread_id)
+            .await?
+            .is_some()
+        {
+            return self
+                .create_turn_runtime_for_session_id(&session_config.id, &session_config, input_text)
+                .await;
+        }
+
         let session = self.store_get_session(&session_config.id, false).await?;
         self.ensure_thread_runtime(&session, &session_config)
             .await?;
@@ -2537,7 +2560,30 @@ impl Agent {
         cancellation_token: Option<CancellationToken>,
         session: &Session,
     ) -> (String, Result<ToolCallResult, ErrorData>) {
-        let latest_session = self.store_get_session(&session.id, false).await.ok();
+        if tool_call.name == FINAL_OUTPUT_TOOL_NAME {
+            return if let Some(final_output_tool) = self.final_output_tool.lock().await.as_mut() {
+                let result = final_output_tool.execute_tool_call(tool_call.clone()).await;
+                (request_id, Ok(result))
+            } else {
+                (
+                    request_id,
+                    Err(ErrorData::new(
+                        ErrorCode::INTERNAL_ERROR,
+                        "Structured output tool not defined".to_string(),
+                        None,
+                    )),
+                )
+            };
+        }
+
+        let needs_current_surface_session = tool_call.name == AGENT_TOOL_NAME
+            && (session.session_type == SessionType::SubAgent
+                || self.agent_control_tools.is_some());
+        let latest_session = if needs_current_surface_session {
+            self.store_get_session(&session.id, false).await.ok()
+        } else {
+            None
+        };
         let effective_session = latest_session.as_ref().unwrap_or(session);
 
         if effective_session.session_type == SessionType::SubAgent
@@ -2560,22 +2606,6 @@ impl Agent {
                     )),
                 );
             }
-        }
-
-        if tool_call.name == FINAL_OUTPUT_TOOL_NAME {
-            return if let Some(final_output_tool) = self.final_output_tool.lock().await.as_mut() {
-                let result = final_output_tool.execute_tool_call(tool_call.clone()).await;
-                (request_id, Ok(result))
-            } else {
-                (
-                    request_id,
-                    Err(ErrorData::new(
-                        ErrorCode::INTERNAL_ERROR,
-                        "Structured output tool not defined".to_string(),
-                        None,
-                    )),
-                )
-            };
         }
 
         debug!("WAITING_TOOL_START: {}", tool_call.name);
@@ -3254,13 +3284,20 @@ impl Agent {
         self.reset_retry_attempts().await;
 
         let provider = self.provider().await?;
-        let session_id = session_config.id.clone();
-        let working_dir = session.working_dir.clone();
+        let session_for_name = session.clone().without_messages();
+        let conversation_for_name = conversation.clone();
         tokio::spawn(async move {
-            if let Err(e) = SessionManager::maybe_update_name(&session_id, provider).await {
+            if let Err(e) = SessionManager::maybe_update_name_for_session(
+                &session_for_name,
+                &conversation_for_name,
+                provider,
+            )
+            .await
+            {
                 warn!("Failed to generate session description: {}", e);
             }
         });
+        let working_dir = session.working_dir.clone();
 
         Ok(Box::pin(async_stream::try_stream! {
             let _ = reply_span.enter();
@@ -4022,20 +4059,209 @@ mod tests {
     use crate::providers::base::{Provider, ProviderMetadata, ProviderUsage};
     use crate::providers::errors::ProviderError;
     use crate::session::{
-        initialize_shared_thread_runtime_store, InMemoryThreadRuntimeStore, SessionManager,
-        SessionType, TurnContextOverride,
+        extension_data::ExtensionData, initialize_shared_thread_runtime_store, ChatHistoryMatch,
+        CommitOptions, CommitReport, InMemoryThreadRuntimeStore, MemoryCategory, MemoryHealth,
+        MemoryRecord, MemorySearchResult, MemoryStats, SessionInsights, SessionManager,
+        SessionStore, SessionType, TokenStatsUpdate, TurnContextOverride,
     };
     use async_trait::async_trait;
     use futures::StreamExt;
     use rmcp::model::Tool;
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
 
     struct NativeOutputSchemaProvider;
 
     struct ModelAwareNativeOutputSchemaProvider;
     struct ContextLengthExceededProvider;
+
+    struct CountingSessionStore {
+        get_session_calls: AtomicUsize,
+        session: Mutex<Session>,
+    }
+
+    impl CountingSessionStore {
+        fn new(session: Session) -> Self {
+            Self {
+                get_session_calls: AtomicUsize::new(0),
+                session: Mutex::new(session),
+            }
+        }
+
+        fn get_session_calls(&self) -> usize {
+            self.get_session_calls.load(Ordering::SeqCst)
+        }
+
+        fn current_session(&self, include_messages: bool) -> Session {
+            let mut session = self.session.lock().expect("锁测试 session").clone();
+            if !include_messages {
+                session.conversation = None;
+            }
+            session
+        }
+    }
+
+    #[async_trait]
+    impl SessionStore for CountingSessionStore {
+        async fn create_session(
+            &self,
+            _working_dir: PathBuf,
+            _name: String,
+            _session_type: SessionType,
+        ) -> Result<Session> {
+            Ok(self.current_session(true))
+        }
+
+        async fn get_session(&self, _id: &str, include_messages: bool) -> Result<Session> {
+            self.get_session_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(self.current_session(include_messages))
+        }
+
+        async fn add_message(&self, _session_id: &str, _message: &Message) -> Result<()> {
+            Ok(())
+        }
+
+        async fn replace_conversation(
+            &self,
+            _session_id: &str,
+            _conversation: &Conversation,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        async fn list_sessions(&self) -> Result<Vec<Session>> {
+            Ok(vec![self.current_session(false)])
+        }
+
+        async fn list_sessions_by_types(&self, _types: &[SessionType]) -> Result<Vec<Session>> {
+            Ok(vec![self.current_session(false)])
+        }
+
+        async fn delete_session(&self, _id: &str) -> Result<()> {
+            Ok(())
+        }
+
+        async fn get_insights(&self) -> Result<SessionInsights> {
+            Ok(SessionInsights {
+                total_sessions: 1,
+                total_tokens: 0,
+            })
+        }
+
+        async fn export_session(&self, _id: &str) -> Result<String> {
+            Ok("{}".to_string())
+        }
+
+        async fn import_session(&self, _json: &str) -> Result<Session> {
+            Ok(self.current_session(true))
+        }
+
+        async fn copy_session(&self, _session_id: &str, _new_name: String) -> Result<Session> {
+            Ok(self.current_session(true))
+        }
+
+        async fn truncate_conversation(&self, _session_id: &str, _timestamp: i64) -> Result<()> {
+            Ok(())
+        }
+
+        async fn update_session_name(
+            &self,
+            _session_id: &str,
+            _name: String,
+            _user_set: bool,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        async fn update_extension_data(
+            &self,
+            _session_id: &str,
+            _extension_data: ExtensionData,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        async fn update_token_stats(
+            &self,
+            _session_id: &str,
+            _stats: TokenStatsUpdate,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        async fn update_provider_config(
+            &self,
+            _session_id: &str,
+            _provider_name: Option<String>,
+            _model_config: Option<crate::model::ModelConfig>,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        async fn update_recipe(
+            &self,
+            _session_id: &str,
+            _recipe: Option<crate::recipe::Recipe>,
+            _user_recipe_values: Option<HashMap<String, String>>,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        async fn search_chat_history(
+            &self,
+            _query: &str,
+            _limit: Option<usize>,
+            _after_date: Option<chrono::DateTime<chrono::Utc>>,
+            _before_date: Option<chrono::DateTime<chrono::Utc>>,
+            _exclude_session_id: Option<String>,
+        ) -> Result<Vec<ChatHistoryMatch>> {
+            Ok(Vec::new())
+        }
+
+        async fn commit_session(&self, _id: &str, _options: CommitOptions) -> Result<CommitReport> {
+            Ok(CommitReport {
+                session_id: "counting-test-store".to_string(),
+                messages_scanned: 0,
+                memories_created: 0,
+                memories_merged: 0,
+                source_start_ts: None,
+                source_end_ts: None,
+                warnings: Vec::new(),
+            })
+        }
+
+        async fn search_memories(
+            &self,
+            _query: &str,
+            _limit: Option<usize>,
+            _session_scope: Option<&str>,
+            _categories: Option<Vec<MemoryCategory>>,
+        ) -> Result<Vec<MemorySearchResult>> {
+            Ok(Vec::new())
+        }
+
+        async fn retrieve_context_memories(
+            &self,
+            _session_id: &str,
+            _query: &str,
+            _limit: usize,
+        ) -> Result<Vec<MemoryRecord>> {
+            Ok(Vec::new())
+        }
+
+        async fn memory_stats(&self) -> Result<MemoryStats> {
+            Ok(MemoryStats::default())
+        }
+
+        async fn memory_health(&self) -> Result<MemoryHealth> {
+            Ok(MemoryHealth {
+                healthy: true,
+                message: "counting test store".to_string(),
+            })
+        }
+    }
 
     #[async_trait]
     impl Provider for NativeOutputSchemaProvider {
@@ -4291,6 +4517,183 @@ mod tests {
             )),
             "应生成显式的 file artifact runtime item"
         );
+    }
+
+    #[tokio::test]
+    async fn test_ensure_runtime_turn_initialized_reuses_existing_thread_without_reloading_session()
+    {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let store = Arc::new(CountingSessionStore::new(Session {
+            id: "session-runtime-cache".to_string(),
+            working_dir: PathBuf::from("/tmp/runtime-cache"),
+            name: "runtime cache".to_string(),
+            user_set_name: false,
+            session_type: SessionType::User,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            extension_data: ExtensionData::default(),
+            total_tokens: None,
+            input_tokens: None,
+            output_tokens: None,
+            accumulated_total_tokens: None,
+            accumulated_input_tokens: None,
+            accumulated_output_tokens: None,
+            schedule_id: None,
+            recipe: None,
+            user_recipe_values: None,
+            conversation: Some(Conversation::default()),
+            message_count: 0,
+            provider_name: None,
+            model_config: None,
+        }));
+
+        let agent = Agent::new_with_required_shared_thread_runtime_store()
+            .expect("初始化 agent 失败")
+            .with_session_store(store.clone());
+        let session_config = SessionConfig {
+            id: "session-runtime-cache".to_string(),
+            thread_id: Some("thread-runtime-cache".to_string()),
+            turn_id: Some("turn-runtime-cache".to_string()),
+            schedule_id: None,
+            max_turns: None,
+            retry_config: None,
+            system_prompt: None,
+            include_context_trace: None,
+            turn_context: None,
+        };
+
+        agent
+            .ensure_runtime_turn_initialized(&session_config, Some("第一次初始化".to_string()))
+            .await
+            .expect("首次初始化 turn runtime 失败");
+        agent
+            .ensure_runtime_turn_initialized(&session_config, None)
+            .await
+            .expect("二次初始化 turn runtime 失败");
+
+        assert_eq!(store.get_session_calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_prepare_tools_and_prompt_reuses_listed_tools_for_subagent_prompt_flag() {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let store = Arc::new(CountingSessionStore::new(Session {
+            id: "session-prompt-surface".to_string(),
+            working_dir: PathBuf::from("/tmp/prompt-surface"),
+            name: "prompt surface".to_string(),
+            user_set_name: false,
+            session_type: SessionType::User,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            extension_data: ExtensionData::default(),
+            total_tokens: None,
+            input_tokens: None,
+            output_tokens: None,
+            accumulated_total_tokens: None,
+            accumulated_input_tokens: None,
+            accumulated_output_tokens: None,
+            schedule_id: None,
+            recipe: None,
+            user_recipe_values: None,
+            conversation: Some(Conversation::default()),
+            message_count: 0,
+            provider_name: None,
+            model_config: None,
+        }));
+
+        let agent = Agent::new_with_required_shared_thread_runtime_store()
+            .expect("初始化 agent 失败")
+            .with_session_store(store.clone());
+        agent
+            .extension_manager
+            .set_context(PlatformExtensionContext {
+                session_id: Some("session-prompt-surface".to_string()),
+                extension_manager: Some(Arc::downgrade(&agent.extension_manager)),
+            })
+            .await;
+
+        let working_dir = std::env::current_dir().expect("读取当前目录失败");
+        agent
+            .prepare_tools_and_prompt(
+                &working_dir,
+                None,
+                &crate::model::ModelConfig::new("test-model").expect("model config"),
+            )
+            .await
+            .expect("准备 tools 与 prompt 失败");
+
+        assert_eq!(store.get_session_calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_dispatch_tool_call_skips_session_reload_for_non_agent_tools() -> Result<()> {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let store = Arc::new(CountingSessionStore::new(Session {
+            id: "session-tool-dispatch".to_string(),
+            working_dir: PathBuf::from("/tmp/tool-dispatch"),
+            name: "tool dispatch".to_string(),
+            user_set_name: false,
+            session_type: SessionType::User,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            extension_data: ExtensionData::default(),
+            total_tokens: None,
+            input_tokens: None,
+            output_tokens: None,
+            accumulated_total_tokens: None,
+            accumulated_input_tokens: None,
+            accumulated_output_tokens: None,
+            schedule_id: None,
+            recipe: None,
+            user_recipe_values: None,
+            conversation: Some(Conversation::default()),
+            message_count: 0,
+            provider_name: None,
+            model_config: None,
+        }));
+
+        let agent = Agent::new_with_required_shared_thread_runtime_store()
+            .expect("初始化 agent 失败")
+            .with_session_store(store.clone());
+        agent
+            .add_final_output_tool(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "answer": { "type": "string" }
+                },
+                "required": ["answer"]
+            }))
+            .await?;
+
+        let session = store.current_session(false);
+        let tool_call = CallToolRequestParam {
+            name: FINAL_OUTPUT_TOOL_NAME.into(),
+            arguments: Some(
+                serde_json::json!({
+                    "answer": "ok"
+                })
+                .as_object()
+                .cloned()
+                .expect("final output arguments should be an object"),
+            ),
+        };
+
+        let (_request_id, tool_result) = agent
+            .dispatch_tool_call(tool_call, "req-final-output".to_string(), None, &session)
+            .await;
+
+        let tool_result = tool_result.expect("final output dispatch should succeed");
+        let call_result = tool_result
+            .result
+            .await
+            .expect("final output should resolve successfully");
+        assert_eq!(call_result.is_error, Some(false));
+        assert_eq!(store.get_session_calls(), 0);
+
+        Ok(())
     }
 
     #[tokio::test]
