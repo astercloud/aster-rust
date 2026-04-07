@@ -1,21 +1,23 @@
-# Release v0.27.1
+# Release v0.27.2
 
-## 🔧 改进
+## Fixes
 
-### 版本元数据同步
+### Agent session type hint reuse
 
-这次补丁版本主要用于同步发布元数据，确保各端显示版本和包版本保持一致：
+This patch release includes a focused runtime fix in `crates/aster/src/agents/agent.rs`:
 
-- **工作区版本升级到 `0.27.1`**：更新 Rust workspace 的统一版本号
-- **crate 间显式依赖同步到 `0.27.1`**：保证本地 path 依赖的版本元数据一致
-- **桌面端版本信息同步**：更新 `ui/desktop/package.json` 与 OpenAPI 文档中的版本字段
-- **`Cargo.lock` 随版本一起收敛**：工作区包版本元数据全部刷新到 `0.27.1`
+- remember the current `SessionType` after loading or initializing the runtime session
+- reuse that hint when preparing tools and prompts
+- avoid redundant session-store reloads during reply and runtime preparation paths
+- add regression tests covering runtime initialization and reply flows
 
-## 📦 发布说明
+## Release notes
 
-- 这是一个补丁版本发布，主要包含版本号和发布元数据同步
-- 本次未引入额外运行时功能改动
+- workspace version metadata is updated to `0.27.2`
+- local crate dependency versions are aligned to `0.27.2`
+- desktop package metadata and generated OpenAPI version are aligned to `0.27.2`
+- lockfiles are refreshed together with the release validation flow
 
 ---
 
-**完整变更**: v0.27.0...v0.27.1
+**Full Changelog**: v0.27.1...v0.27.2

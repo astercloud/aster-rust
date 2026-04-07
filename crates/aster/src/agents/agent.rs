@@ -721,6 +721,7 @@ pub struct Agent {
     pub(super) provider: SharedProvider,
 
     pub extension_manager: Arc<ExtensionManager>,
+    pub(super) session_type_hint: RwLock<Option<SessionType>>,
     pub(super) sub_recipes: Mutex<HashMap<String, SubRecipe>>,
     pub(super) session_output_schema: Arc<Mutex<Option<Value>>>,
     pub(super) final_output_tool: Arc<Mutex<Option<FinalOutputTool>>>,
@@ -1270,6 +1271,7 @@ impl Agent {
         Self {
             provider: provider.clone(),
             extension_manager,
+            session_type_hint: RwLock::new(None),
             sub_recipes: Mutex::new(HashMap::new()),
             session_output_schema: Arc::new(Mutex::new(None)),
             final_output_tool: Arc::new(Mutex::new(None)),
@@ -1392,6 +1394,7 @@ impl Agent {
         Self {
             provider: provider.clone(),
             extension_manager,
+            session_type_hint: RwLock::new(None),
             sub_recipes: Mutex::new(HashMap::new()),
             session_output_schema: Arc::new(Mutex::new(None)),
             final_output_tool: Arc::new(Mutex::new(None)),
@@ -1831,6 +1834,7 @@ impl Agent {
     ) -> Result<BoxStream<'_, Result<AgentEvent>>> {
         let session_config = session_config.with_runtime_defaults();
         let session = self.store_get_session(&session_config.id, true).await?;
+        self.remember_session_type_hint(session.session_type).await;
         let conversation = session
             .conversation
             .clone()
@@ -1916,6 +1920,7 @@ impl Agent {
         }
 
         let session = self.store_get_session(&session_config.id, false).await?;
+        self.remember_session_type_hint(session.session_type).await;
         self.ensure_thread_runtime(&session, &session_config)
             .await?;
         self.create_turn_runtime(&session, &session_config, input_text)
@@ -2793,12 +2798,33 @@ impl Agent {
         self.subagents_enabled_for_session_type(session_type).await
     }
 
+    async fn remember_session_type_hint(&self, session_type: SessionType) {
+        let mut session_type_hint = self.session_type_hint.write().await;
+        if session_type_hint.as_ref() == Some(&session_type) {
+            return;
+        }
+        *session_type_hint = Some(session_type);
+    }
+
+    async fn session_type_hint(&self) -> Option<SessionType> {
+        *self.session_type_hint.read().await
+    }
+
     async fn current_session_type(&self) -> Option<SessionType> {
+        if let Some(session_type) = self.session_type_hint().await {
+            return Some(session_type);
+        }
+
         let session_id = self.extension_manager.get_context().await.session_id?;
-        self.store_get_session(&session_id, false)
+        let session_type = self
+            .store_get_session(&session_id, false)
             .await
             .ok()
-            .map(|session| session.session_type)
+            .map(|session| session.session_type);
+        if let Some(session_type) = session_type {
+            self.remember_session_type_hint(session_type).await;
+        }
+        session_type
     }
 
     async fn subagents_enabled_for_session_type(&self, session_type: Option<SessionType>) -> bool {
@@ -2828,11 +2854,24 @@ impl Agent {
             .await
             .unwrap_or_default();
 
-        let current_session = match self.extension_manager.get_context().await.session_id {
-            Some(session_id) => self.store_get_session(&session_id, false).await.ok(),
-            None => None,
+        let hinted_session_type = self.session_type_hint().await;
+        let current_session = match (
+            self.extension_manager.get_context().await.session_id,
+            hinted_session_type,
+        ) {
+            (Some(session_id), Some(SessionType::SubAgent)) | (Some(session_id), None) => {
+                let current_session = self.store_get_session(&session_id, false).await.ok();
+                if let Some(session) = current_session.as_ref() {
+                    self.remember_session_type_hint(session.session_type).await;
+                }
+                current_session
+            }
+            _ => None,
         };
-        let current_session_type = current_session.as_ref().map(|session| session.session_type);
+        let current_session_type = current_session
+            .as_ref()
+            .map(|session| session.session_type)
+            .or(hinted_session_type);
         let subagent_teammate_tools_enabled = current_session
             .as_ref()
             .is_some_and(session_allows_subagent_teammate_tools);
@@ -3075,6 +3114,7 @@ impl Agent {
             }
         }
         let session = self.store_get_session(&session_config.id, true).await?;
+        self.remember_session_type_hint(session.session_type).await;
         let conversation = session
             .conversation
             .clone()
@@ -4625,6 +4665,135 @@ mod tests {
             .expect("准备 tools 与 prompt 失败");
 
         assert_eq!(store.get_session_calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_prepare_tools_and_prompt_reuses_session_type_hint_after_runtime_init() {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let store = Arc::new(CountingSessionStore::new(Session {
+            id: "session-runtime-hint".to_string(),
+            working_dir: PathBuf::from("/tmp/runtime-hint"),
+            name: "runtime hint".to_string(),
+            user_set_name: false,
+            session_type: SessionType::User,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            extension_data: ExtensionData::default(),
+            total_tokens: None,
+            input_tokens: None,
+            output_tokens: None,
+            accumulated_total_tokens: None,
+            accumulated_input_tokens: None,
+            accumulated_output_tokens: None,
+            schedule_id: None,
+            recipe: None,
+            user_recipe_values: None,
+            conversation: Some(Conversation::default()),
+            message_count: 0,
+            provider_name: None,
+            model_config: None,
+        }));
+
+        let agent = Agent::new_with_required_shared_thread_runtime_store()
+            .expect("初始化 agent 失败")
+            .with_session_store(store.clone());
+        let session_config = SessionConfig {
+            id: "session-runtime-hint".to_string(),
+            thread_id: Some("thread-runtime-hint".to_string()),
+            turn_id: Some("turn-runtime-hint".to_string()),
+            schedule_id: None,
+            max_turns: None,
+            retry_config: None,
+            system_prompt: None,
+            include_context_trace: None,
+            turn_context: None,
+        };
+
+        agent
+            .ensure_runtime_turn_initialized(&session_config, Some("首次初始化".to_string()))
+            .await
+            .expect("初始化 turn runtime 失败");
+
+        let working_dir = std::env::current_dir().expect("读取当前目录失败");
+        agent
+            .prepare_tools_and_prompt(
+                &working_dir,
+                None,
+                &crate::model::ModelConfig::new("test-model").expect("model config"),
+            )
+            .await
+            .expect("准备 tools 与 prompt 失败");
+
+        assert_eq!(store.get_session_calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_reply_reuses_session_type_hint_after_loading_session() -> Result<()> {
+        initialize_shared_thread_runtime_store(Arc::new(InMemoryThreadRuntimeStore::default()));
+
+        let store = Arc::new(CountingSessionStore::new(Session {
+            id: "session-reply-hint".to_string(),
+            working_dir: PathBuf::from("/tmp/reply-hint"),
+            name: "reply hint".to_string(),
+            user_set_name: false,
+            session_type: SessionType::User,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            extension_data: ExtensionData::default(),
+            total_tokens: None,
+            input_tokens: None,
+            output_tokens: None,
+            accumulated_total_tokens: None,
+            accumulated_input_tokens: None,
+            accumulated_output_tokens: None,
+            schedule_id: None,
+            recipe: None,
+            user_recipe_values: None,
+            conversation: Some(Conversation::default()),
+            message_count: 0,
+            provider_name: None,
+            model_config: None,
+        }));
+
+        let agent = Agent::new_with_required_shared_thread_runtime_store()
+            .expect("初始化 agent 失败")
+            .with_session_store(store.clone());
+        agent
+            .extension_manager
+            .set_context(PlatformExtensionContext {
+                session_id: Some("session-reply-hint".to_string()),
+                extension_manager: Some(Arc::downgrade(&agent.extension_manager)),
+            })
+            .await;
+        agent
+            .update_provider(Arc::new(NativeOutputSchemaProvider), "session-reply-hint")
+            .await?;
+
+        let session_config = SessionConfig {
+            id: "session-reply-hint".to_string(),
+            thread_id: Some("thread-reply-hint".to_string()),
+            turn_id: Some("turn-reply-hint".to_string()),
+            schedule_id: None,
+            max_turns: None,
+            retry_config: None,
+            system_prompt: None,
+            include_context_trace: None,
+            turn_context: None,
+        };
+
+        let mut stream = agent
+            .reply(Message::user().with_text("继续处理"), session_config, None)
+            .await?;
+
+        while let Some(event) = stream.next().await {
+            if event.is_err() {
+                break;
+            }
+        }
+
+        assert_eq!(store.get_session_calls(), 1);
+        Ok(())
     }
 
     #[tokio::test]
